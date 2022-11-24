@@ -1,0 +1,20 @@
+pip3 install thorpy pygame
+http://www.thorpy.org/documentation/userguide/elements.html
+Raspbian may need sudo apt install libsdl2-mixer-2.0-0
+
+
+# Running graphical app on local display remotely via ssh
+# Disable mouse driver, including OS touch mouse emulation
+export SDL_FBDEV=/dev/fb0
+export SDL_MOUSEDRV=/dev/null
+sudo ./app.py
+
+# Enable more memory for video driver in performance options
+# Set it for 128Mb to allow 800x600 driver to work in framebuffer (non-X) mode
+sudo raspi-config
+
+
+# Checking touchscreen device on the commandline
+hexdump /dev/input/event0
+evtest
+

@@ -1,0 +1,3 @@
+wget --post-data="{\"mac-address\":\"$(cat /sys/class/net/wlan0/address)\", \"ip-address\":\"$(hostname -I)\", i\"time-of-report\":\"$(date)\"}" --header='Content-Type:application/json' http://35.163.134.93/new_report -O /dev/null
+
+

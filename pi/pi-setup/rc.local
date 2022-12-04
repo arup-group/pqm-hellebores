@@ -19,7 +19,7 @@ fi
 
 # Run script on /boot/pifinder, if it exists
 if [ -f "/boot/pifinder" ]; then
-  source /boot/pifinder
+  . /boot/pifinder
 fi
 
 exit 0

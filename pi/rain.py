@@ -1,42 +1,36 @@
 #!/usr/bin/env python3
 
-
 import math
 import random
+import time
+
 
 BUFFER_LENGTH = 8192
 FREQ = 60.0
-DELTA_T = 0.000294       # derived from (reciprocal of) sample rate
-ROLLOVER = 1000000       # we make N where N * DELTA_T is an integer
+SAMPLE_RATE = 15625
 
 index = 0
+delta_t_ns = 1000000000.0/SAMPLE_RATE   
 
 
-def make_capture():
-    frame = []
-    global index
-    for s in range(0, BUFFER_LENGTH):
-        t = DELTA_T * index
-        v1 = int(1500.0*math.sin(2.0*math.pi*FREQ*t) + 100.0*(random.random() - 0.5)) << 8
-        v2 = int(1500.0*math.sin(2.0*math.pi*FREQ*t) + 100.0*(random.random() - 0.5)) << 8
-        v3 = int(1500.0*math.sin(2.0*math.pi*FREQ*t) + 100.0*(random.random() - 0.5)) << 8
-        v4 = int(1500.0*math.sin(2.0*math.pi*FREQ*t) + 100.0*(random.random() - 0.5)) << 8
-        frame.append((index % 65536, v1, v2, v3, v4))
-        # we make sure when we rollover the index, the result of the 'sin' function
-        # is not affected, so there is no discontinuity in the generator
-        if index < ROLLOVER:
-            index = index + 1
-        else:
-            index = 0
-    return frame
-
+    
+def get_sample(t):
+    t = t/1000000000.0
+    c1 = int(25000.0*math.sin(2.0*math.pi*FREQ*t) + 100.0*(random.random()-0.5))
+    c2 = int(8000.0*math.sin(2.0*math.pi*FREQ*t) + 50.0*(random.random()-0.5))
+    c3 = int(12000.0*math.sin(2.0*math.pi*FREQ*t) + 50.0*(random.random()-0.5))
+    c4 = int(2000.0*math.sin(2.0*math.pi*FREQ*t) + 10.0*(random.random()-0.5))
+    # the '& 0xffff' truncates negative numbers to fit in 16 bits
+    return (index & 0xffff, c1 & 0xffff, c2 & 0xffff, c3 & 0xffff, c4 & 0xffff)
 
 def main():
+    global index
     while 1:
-        frame = make_capture()
-        for e in frame:
-            print('{:5d} {:8d} {:8d} {:8d} {:8d}'.format(*e))
-
+        t_ns = time.monotonic_ns()        # high resolution time check
+        t_sample_ns = index*delta_t_ns    # next sample time
+        if t_ns >= index*delta_t_ns:
+            print('{:04x} {:04x} {:04x} {:04x} {:04x}'.format(*get_sample(t_sample_ns)))
+            index = index+1
 
 
 if __name__ == '__main__':

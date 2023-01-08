@@ -161,7 +161,9 @@ def display_update(ch, acq):
 
 def write_out():
     for i in range(BUFFER_SIZE):
-        print('{:04x} {:04x} {:04x} {:04x} {:04x}'.format(i, *ring_buffer[i]))
+        print('{:04x} {:02x}{:02x} {:02x}{:02x} {:02x}{:02x} {:02x}{:02x}'.format(i,\
+                  ring_buffer[i][0], ring_buffer[i][1], ring_buffer[i][2], ring_buffer[i][3],\
+                  ring_buffer[i][4], ring_buffer[i][5], ring_buffer[i][6], ring_buffer[i][7]))
 
 
 def main():

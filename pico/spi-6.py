@@ -4,7 +4,7 @@ import gc
 from machine import Pin
 import _thread
 
-BUFFER_SIZE = 8192
+BUFFER_SIZE = 1024
 
 # pin and SPI setup
 led = machine.Pin(25, Pin.OUT)
@@ -135,8 +135,10 @@ def adc_read_handler(dr_adc):
     in_ptr = (in_ptr + 1) % BUFFER_SIZE
     
 def simple_handler(dr_adc):
-    global in_ptr
-    in_ptr = (in_ptr + 1) % BUFFER_SIZE
+    # do nothing
+    1
+    # global in_ptr
+    # in_ptr = (in_ptr + 1) % BUFFER_SIZE
     
     
 def initialise():
@@ -158,8 +160,8 @@ def display_update(ch, acq):
 
 
 def write_out():
-    for i in ring_buffer[BUFFER_SIZE]:
-        print('{:04x} {:04x} {:04x} {:04x} {:04x}', i, *ring_buffer[i])
+    for i in range(BUFFER_SIZE):
+        print('{:04x} {:04x} {:04x} {:04x} {:04x}'.format(i, *ring_buffer[i]))
 
 
 def main():
@@ -187,19 +189,23 @@ def main():
         if in_ptr == 0:
             # stop reading ADC
             dr_adc.irq(trigger = Pin.IRQ_FALLING, handler = simple_handler)
-            # illuminate the indicator LED
+            # enable GC and illuminate the indicator LED
             boardled.value(1)
+            gc.enable()
             # print the buffer contents
             write_out()  
-            # recover memory if required
-            if gc.mem_alloc() > 50000:
-                gc.collect()  # manual collection
+            # disable GC
+            gc.disable()
             boardled.value(0)
             # re-enable ADC reads
             dr_adc.irq(trigger = Pin.IRQ_FALLING, handler = adc_read_handler)
 
 # Buffer memory visible to both threads
-ring_buffer = [bytearray(8)] * BUFFER_SIZE
+# pre-charge it with references to byte arrays
+ring_buffer = []
+for i in range(BUFFER_SIZE):
+    ring_buffer.append([bytearray(8)])
+    
 in_ptr = 0
 out_ptr = 0
 

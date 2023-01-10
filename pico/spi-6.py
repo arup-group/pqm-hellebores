@@ -73,7 +73,8 @@ def setup_adc(spi, cs, reset):
     # Set the gain configuration register 0x0b
     # 3 bits per channel (12 LSB in all)
     # binary codes 101=32x, 100=16x, 011=8x, 010=4x, 001=2x, 000=1x
-    # for ch3 use 0x0a in second byte
+    # XXXXXXXX XXXX---- --------
+    # channel ->   3332 22111000 
     print("Setting gain register 0x0b to 0x00, 0x00, 0x00.")
     set_and_verify_adc_register(spi, cs, 0x0b, bytes([0x00,0x00,0x00]))
     time.sleep(1)
@@ -206,7 +207,7 @@ def main():
 # pre-charge it with references to byte arrays
 ring_buffer = []
 for i in range(BUFFER_SIZE):
-    ring_buffer.append([bytearray(8)])
+    ring_buffer.append(bytearray(8))
     
 in_ptr = 0
 out_ptr = 0

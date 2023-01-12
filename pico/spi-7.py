@@ -1,7 +1,7 @@
 import time
 import machine
 import gc
-import base64
+import binascii
 from machine import Pin
 import _thread
 
@@ -132,8 +132,9 @@ def convert_to_channels(acq):
 
 # interrupt handler for data ready pin
 def adc_read_handler(dr_adc):
-    global ring_buffer, in_ptr
-    spi_adc.readinto(ring_buffer[in_ptr*8 : in_ptr*8+8])
+    global read_buffer, ring_buffer, in_ptr
+    spi_adc.readinto(read_buffer)
+    ring_buffer[in_ptr*8 : in_ptr*8+8] = read_buffer
     in_ptr = (in_ptr + 1) % BUFFER_SIZE
     
 def simple_handler(dr_adc):
@@ -179,14 +180,14 @@ def main():
     
     while True:
         # until we have 2 cores working, cannot print out while sampling, so
-        # every circulation of the buffer, stop sampling and print it out
+        # every circulation of the buffer, stop sampling and print all of it out
         if in_ptr == 0:
             # stop reading ADC
             dr_adc.irq(trigger = Pin.IRQ_FALLING, handler = simple_handler)
             # illuminate the indicator LED
             boardled.value(1)
             # print the buffer contents
-            print(base64.b64encode(ring_buffer))
+            print(binascii.hexlify(ring_buffer))
             gc.collect()
             boardled.value(0)
             # re-enable ADC reads
@@ -199,7 +200,8 @@ def main():
 # Buffer memory visible to both threads
 # single contiguous mutable bytearray
 ring_buffer = bytearray(BUFFER_SIZE * 8)
-    
+read_buffer = bytearray(8)
+
 in_ptr = 0
 out_ptr = 0
 

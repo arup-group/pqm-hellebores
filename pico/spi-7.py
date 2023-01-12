@@ -139,9 +139,6 @@ def adc_read_handler(dr_adc):
 def simple_handler(dr_adc):
     # do nothing
     1
-    # global in_ptr
-    # in_ptr = (in_ptr + 1) % BUFFER_SIZE
-    
     
 def initialise():
     # configure the ADC
@@ -161,6 +158,7 @@ def display_update(ch, acq):
 
 
 def main():
+    global ring_buffer, in_ptr, out_ptr
     # waiting in case of lock up, opportunity to cancel
     print('PICO starting up.')
     time.sleep(1)
@@ -182,7 +180,7 @@ def main():
     while True:
         # until we have 2 cores working, cannot print out while sampling, so
         # every circulation of the buffer, stop sampling and print it out
-        if in_ptr == 0
+        if in_ptr == 0:
             # stop reading ADC
             dr_adc.irq(trigger = Pin.IRQ_FALLING, handler = simple_handler)
             # illuminate the indicator LED

@@ -172,7 +172,7 @@ def main():
     
     # configure the interrupt handler
     # bind the handler to a falling edge transition on the DR pin
-    dr_adc.irq(trigger = Pin.IRQ_FALLING, handler = adc_read_handler)
+    dr_adc.irq(trigger = Pin.IRQ_FALLING, handler = adc_read_handler, hard=True)
     
     #  disable automatic garbage collection to improve performance
     gc.disable()
@@ -198,8 +198,9 @@ def main():
 
 
 # Buffer memory visible to both threads
-# single contiguous mutable bytearray
+# single contiguous mutable bytearray for previous samples
 ring_buffer = bytearray(BUFFER_SIZE * 8)
+# temporary buffer for one sample
 read_buffer = bytearray(8)
 
 in_ptr = 0

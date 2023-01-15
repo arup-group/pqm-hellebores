@@ -86,11 +86,11 @@ def setup_adc(spi, cs, reset):
     time.sleep(1)
 
     # Set the configuration register CONFIG0 at 0x0d
-    print("Setting configuration register CONFIG0 at 0x0d to 0x24, 0x60, 0x50.")
+    print("Setting configuration register CONFIG0 at 0x0d to 0x24, 0x40, 0x50.")
     # 1st byte sets various ADC modes
     # 2nd byte sets OSR, for sampling speed: 0x20 = 15.625kSa/s, 0x40 = 7.8125kSa/s, 0x60 = 3.90625kSa/s
     # 3rd byte sets temperature coefficient (leave as default 0x50)
-    set_and_verify_adc_register(spi, cs, 0x0d, bytes([0x24,0x60,0x50]))
+    set_and_verify_adc_register(spi, cs, 0x0d, bytes([0x24,0x40,0x50]))
     time.sleep(1)
 
     # Set the configuration register CONFIG1 at 0x0e
@@ -135,7 +135,7 @@ def adc_read_handler(dr_adc):
     global read_buffer, ring_buffer, in_ptr
     spi_adc.readinto(read_buffer)
     ring_buffer[in_ptr*8 : in_ptr*8+8] = read_buffer
-    in_ptr = (in_ptr + 1) % BUFFER_SIZE
+    in_ptr = (in_ptr + 1) & 0b1111111111    # % BUFFER_SIZE
     
 def simple_handler(dr_adc):
     # do nothing
@@ -175,7 +175,8 @@ def main():
     dr_adc.irq(trigger = Pin.IRQ_FALLING, handler = adc_read_handler, hard=True)
     
     #  disable automatic garbage collection to improve performance
-    gc.disable()
+    # may not need to do this anymore now that we have hard interrupts
+    # gc.disable()
 
     
     while True:
@@ -188,7 +189,7 @@ def main():
             boardled.value(1)
             # print the buffer contents
             print(binascii.hexlify(ring_buffer))
-            gc.collect()
+            # gc.collect()
             boardled.value(0)
             # re-enable ADC reads
             dr_adc.irq(trigger = Pin.IRQ_FALLING, handler = adc_read_handler)

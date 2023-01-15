@@ -10,7 +10,7 @@ def main():
     for line in sys.stdin:
         try:
             # tweak: remove 2 characters at the beginning and 3 from the end of line
-            line = line[2:-3]
+            line = line[4:-7]
             for i in range(0, len(line), 16):
                 print('{:04x} {} {} {} {}'.format(i//16 , line[i : i+4],\
                                                           line[i+4 : i+8],\

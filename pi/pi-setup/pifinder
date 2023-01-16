@@ -1,5 +1,7 @@
 # wait a bit, to allow wifi time to connect
-sleep 30
+sleep 60
+# echo address to the console
+echo My address is $(hostname -I)
 # send a status message to the pi-finder server
 wget --post-data="{\"mac-address\":\"$(cat /sys/class/net/wlan0/address)\", \"ipv4-address\":\"$(hostname -I | cut -d ' ' -f 1)\", \"ipv6-address\":\"$(hostname -I | cut -d ' ' -f 2)\", \"time-of-report\":\"$(date)\"}" --header='Content-Type:application/json' http://35.163.134.93/new_report -O /dev/null
 

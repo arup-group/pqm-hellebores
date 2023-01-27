@@ -4,6 +4,8 @@ import gc
 import binascii
 from machine import Pin
 import _thread
+import sys
+
 
 BUFFER_SIZE = 1024   # samples
 
@@ -129,7 +131,6 @@ def convert_to_channels(acq):
         signed_int[i] = binary_to_signed_int(ch)
     return (raw, signed_int)           
 
-
 # interrupt handler for data ready pin
 def adc_read_handler(dr_adc):
     global read_buffer, ring_buffer, in_ptr
@@ -163,6 +164,10 @@ def main():
     # waiting in case of lock up, opportunity to cancel
     print('PICO starting up.')
     time.sleep(1)
+    print('Tell me a command.')
+    command = sys.stdin.readline()
+    print('You typed ' + command)
+    time.sleep(1)
     print('Waiting for 10 seconds...')
     time.sleep(10)
     print('Now continuing with setup.')
@@ -173,6 +178,9 @@ def main():
     # configure the interrupt handler
     # bind the handler to a falling edge transition on the DR pin
     dr_adc.irq(trigger = Pin.IRQ_FALLING, handler = adc_read_handler, hard=True)
+
+    # ******* MAKE ANOTHER irq HANDLER HERE, TO LISTEN FOR THE CM/SM* PIN CHANGING POLARITY
+    # dr_cmsm.irq(trigger = Pin.IRQ_HIGH, handler = adc_read_handler, hard=True)
     
     #  disable automatic garbage collection to improve performance
     # may not need to do this anymore now that we have hard interrupts

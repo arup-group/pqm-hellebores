@@ -9,11 +9,15 @@ import gc
 # https://bytesnbits.co.uk/multi-thread-coding-on-the-raspberry-pi-pico-in-micropython/
 
 BUFFER_SIZE = 64   # number of samples, actual buffer bytes is this *8 bytes per sample
+# 16 bits for one acquisition, 4 channels
+# 2 bytes for one acquisition, 8 bytes for 4 channels (8 bits per byte).
+# BUFFER_SIZE refers to the number of samples, not the amount of memory.
+# amount of memory required in bytes is BUFFER_SIZE * 8.
 
 
 # These variables are in global namespace and are available to both CPU cores
 led = machine.Pin(25, machine.Pin.OUT)
-ring_buffer = bytearray(BUFFER_SIZE * 8)
+ring_buffer = bytearray(BUFFER_SIZE * 8)  # 256 bytes of memory
 in_ptr = 0             # buffer pointer used for charging the buffer
 print_signal = ''      # flag variable to indicate which portion of the buffer to print
 running = True         # flag variable to indicate if the program has terminated
@@ -31,9 +35,9 @@ def generate_data():
         in_ptr = (in_ptr+8) % (BUFFER_SIZE*8)
         sample_value = (sample_value+1) % 65536
         # Indicate to the other thread when it's time to print
-        if in_ptr == BUFFER_SIZE*4:
+        if in_ptr == BUFFER_SIZE*4:   # in_ptr == 128, print out 0->128 bytes, or 0->31 samples
             print_signal = 'a'
-        elif in_ptr == 0:
+        elif in_ptr == 0:             # in_ptr == 0, print out 128->255, or 32->63 samples
             print_signal = 'b'
         #time.sleep(0.005)
 

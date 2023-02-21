@@ -8,6 +8,12 @@ import signal
 import json
 
 
+# set up constants
+freq = 50
+sample_rate = 1000
+sample_period_ns = 1000000000.0/sample_rate
+
+
 def get_settings():
     global freq, sample_rate, sample_period_ns
     try:
@@ -16,11 +22,9 @@ def get_settings():
         f.close()
         freq = js['frequency']
         sample_rate = js['sample_rate']
+        sample_period_ns = 1000000000.0/sample_rate
     except:
         print("rain.py, get_settings(): couldn't read settings.json, using defaults.", file=sys.stderr)
-        freq = 50
-        sample_rate = 1000
-    sample_period_ns = 1000000000.0/sample_rate
    
 
 def settings_handler(signum, frame):
@@ -38,13 +42,12 @@ def get_sample(i, t, f):
     return (i & 0xffff, c1 & 0xffff, c2 & 0xffff, c3 & 0xffff, c4 & 0xffff)
 
 def main():
-    global freq, sample_rate, sample_period_ns
-
-    # read settings, or set defaults
+    # read settings or set defaults into global variables 
     get_settings()
 
-    # set up handler for an incoming signal indicating change(s) to config settings
-    signal.signal(signal.SIGUSR1, settings_handler)
+    # if we receive 'SIGUSR1' signal (on linux) updated settings will be read from settings.json
+    if sys.platform == 'linux':
+        signal.signal(signal.SIGUSR1, settings_handler)
 
     # we use high resolution system clock to figure out when to print out
     # the next sample iteration

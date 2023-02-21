@@ -9,6 +9,8 @@ import json
 
 
 # set up constants
+
+# new comment
 freq = 50
 sample_rate = 1000
 sample_period_ns = 1000000000.0/sample_rate

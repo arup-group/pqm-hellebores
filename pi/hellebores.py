@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# 
+# figlet
 #  _          _ _      _                                       
 # | |__   ___| | | ___| |__   ___  _ __ ___  ___   _ __  _   _ 
 # | '_ \ / _ \ | |/ _ \ '_ \ / _ \| '__/ _ \/ __| | '_ \| | | |
@@ -32,30 +32,48 @@ TEXT_SIZE = (100,12)
 
 pygame.init()
 pygame.display.set_caption('pqm-hellebores')
-strings = ['Running', 'This.', 'is', 'some', 'test text', '12345678']
+
+# text message cell enumerations
+T_RUNSTOP = 0
+T_WFS = 1
+T_UNDEF2 = 2
+T_UNDEF3 = 3
+T_UNDEF4 = 4
+T_UNDEF5 = 5
 
 
 def initialise_buttons():
-    global buttons
     buttons = []
     for s in ['Run/Stop', 'Mode', 'Logging', 'Scales', 'Options', 'About']:
         button = thorpy.make_button(s)
         button.set_size(BUTTON_SIZE)
         buttons.append(button)
+    return buttons
+
 
 def initialise_texts():
-    global texts
     texts = []
     for s in range(0,7):
-        text = thorpy.make_text('1234567890')
+        text = thorpy.make_text('123456789')  # the dummy text here allocates pixels
         text.set_size(TEXT_SIZE)
         texts.append(text)
+    return texts
 
 
-def initialise_uibox():
-    global buttons, texts
- 
-    # create the user interface object
+# update text message string
+def set_text_string(item, value):
+    set_text_string.texts[item].set_text(value)
+# initialise local variable, assigned in main()
+set_text_string.texts = []
+
+
+def clear_texts():
+    for t in set_text_string.texts:
+        t.set_text('')
+
+
+def initialise_uibox(buttons, texts):
+    # create the user interface object, and add reactions to it
     uibox = thorpy.Box(elements=[*buttons, *texts])
     uibox.add_reaction(thorpy.Reaction(reacts_to=thorpy.constants.THORPY_EVENT, \
                        reac_func=start_stop_reaction, \
@@ -88,26 +106,20 @@ def start_stop_reaction(event):
    global capturing
    if capturing == True:
        capturing = False
-       strings[0] = 'Stopped'
+       set_text_string(T_RUNSTOP, "Stopped")
    else:
        capturing = True
-       strings[0] = 'Running'
-
+       set_text_string(T_RUNSTOP, "Running")
+       
 
 def about_box_reaction(event):
-   thorpy.launch_blocking_alert(title="This is an about box!",
-                               text="This is the text..",
+   thorpy.launch_blocking_alert(title="hellebores.py",
+                               text="Power quality meter, v0.01",
                                ok_text="Ok, I've read",
                                font_size=12,
                                font_color=(255,0,0))
 
 
-# update text message strings, called periodically
-def set_text_strings(texts, strings):
-    i=0
-    for s in strings:
-        texts[i].set_text(s)
-        i=i+1
 
 
 def get_capture(points1, points2, points3):
@@ -131,6 +143,7 @@ def to_screen_coordinates(points1, points2, points3):
         plot2.append((t, 400-int(points2[t][1])))
         plot3.append((t, 250-int(0.05*points3[t][1])))
     return plot1, plot2, plot3
+
 
 def open_fifo():
     try:
@@ -163,60 +176,71 @@ def process_events(menu):
         menu.react(event)
 
 
-def refresh_lines(screen):
-    # update line data
-    plot1, plot2, plot3 = to_screen_coordinates(*get_capture([],[],[]))
-
-    # regenerate display 
+def draw_lines(screen, lines):
+    # draw updated lines 
     screen.fill(GRAY)
-    pygame.draw.lines(screen, GREEN, False, plot1, 2)
-    pygame.draw.lines(screen, YELLOW, False, plot2, 2)
-    pygame.draw.lines(screen, MAGENTA, False, plot3, 2)
+    pygame.draw.lines(screen, GREEN, False, lines[0], 2)
+    pygame.draw.lines(screen, YELLOW, False, lines[1], 2)
+    pygame.draw.lines(screen, MAGENTA, False, lines[2], 2)
+    
+
+def refresh_lines():
+    # update line data
+    line1, line2, line3 = to_screen_coordinates(*get_capture([],[],[]))
+    return (line1, line2, line3)
 
 
-def refresh_information_box():
-    global strings, texts, seconds, frames
-
+def refresh_wfs():
     # refresh the information box every second
     new_seconds = int(time.time())
-    if new_seconds != seconds:
-        seconds = new_seconds
-        strings[1] = str(frames) + ' wfm/s'
-        set_text_strings(texts, strings)
-        frames = 0 
+    if new_seconds != refresh_wfs.seconds:
+        refresh_wfs.seconds = new_seconds
+        set_text_string(T_WFS, str(refresh_wfs.frames) + ' wfm/s')
+        refresh_wfs.frames = 0 
 
     # this allows us to see the number of waveform updates/second
-    frames = frames + 1
+    refresh_wfs.frames = refresh_wfs.frames + 1
+    
+refresh_wfs.frames=0
+refresh_wfs.seconds=int(time.time())
 
 
 
 def main():
-    global buttons, texts, capturing, running, seconds, frames
+    global capturing, running
 
     # initialise UI
-    screen = pygame.display.set_mode(SCREEN)       # flags=pygame.FULLSCREEN
-    initialise_buttons()
-    initialise_texts()
-    uibox = initialise_uibox()
-    menu = initialise_dispatching(uibox, screen)
+    screen    = pygame.display.set_mode(SCREEN)       # flags=pygame.FULLSCREEN
+    buttons   = initialise_buttons()
+    texts     = initialise_texts()
+    uibox     = initialise_uibox(buttons, texts)
+    menu      = initialise_dispatching(uibox, screen)
 
-    # initialise flags and variables
-    running = True
-    capturing = True
-    frames = 0
-    seconds = int(time.time())
+    # set a local variable at set_text_string() to point to texts
+    set_text_string.texts = texts
+    # now set up the initial text states
+    clear_texts()
+    set_text_string(T_RUNSTOP, "Running")
+    
+    # initialise flags
+    running = True          # the loop will run continuously until this is set to False
+    capturing = True        # allow/stop update of the lines on the screen
 
 #    f = open_fifo()
-
     while running:
         process_events(menu)
-        if capturing: 
-            refresh_lines(screen)
-        refresh_information_box()
-
-        # update the display
+        
+        # update information
+        if capturing:
+            lines = refresh_lines()
+        refresh_wfs()
+        
+        # redraw the buffer
+        draw_lines(screen, lines)
         uibox.blit()
-        # uibox.update()
+        # uibox.update()  # enable this only if required
+        
+        # update the display
         pygame.display.update()
 
     pygame.quit()

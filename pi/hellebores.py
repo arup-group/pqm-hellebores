@@ -23,7 +23,10 @@ BLUE = (0, 0, 255)
 GREEN = (0, 255, 0)
 YELLOW = (255, 255, 0)
 MAGENTA = (255, 0, 255)
-GRAY = (150, 150, 150)
+CYAN = (0, 255, 255)
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+GRAY = (75, 75, 75)
 PI_SCREEN_SIZE = (800,480)
 SCOPE_BOX_SIZE = (700,480)
 CONTROLS_BOX_SIZE = (100,480)
@@ -60,27 +63,28 @@ def initialise_buttons():
     return buttons
 
 
-def initialise_texts():
+class Texts:
+    # array of thorpy text objects
     texts = []
-    for s in range(0,7):
-        # the dummy text here is needed to allocate pixels
-        # and to make all the text left aligned
-        text = thorpy.make_text('XXXXXXXXX')  
-        text.set_size(TEXT_SIZE)
-        texts.append(text)
-    return texts
 
+    def __init__(self):
+        for s in range(0,7):
+            # the dummy text here is needed to allocate pixels
+            # and to make all the text left aligned
+            t = thorpy.make_text('XXXXXXXXX')  
+            t.set_size(TEXT_SIZE)
+            self.texts.append(t)
 
-# update text message string
-def set_text_string(item, value):
-    set_text_string.texts[item].set_text(value)
-# initialise local variable, re-assigned in main()
-set_text_string.texts = []
+    def get_texts(self):
+        return self.texts
 
+    # update text message string
+    def set_text(self, item, value):
+        self.texts[item].set_text(value)
 
-def clear_texts():
-    for t in set_text_string.texts:
-        t.set_text('')
+    def clear_texts(self):
+        for t in self.texts:
+            t.set_text('')
 
 
 def initialise_uibox(buttons, texts):
@@ -107,9 +111,10 @@ def initialise_dispatching(uibox, screen):
     for element in menu.get_population():
         element.surface = screen
 
-    # We do not actually launch the menu because it creates a hidden
-    # event loop, while we need to have a free running loop in this application.
-    # Instead, we process events manually inside the main() function.
+    # We do not actually launch the menu because it creates an embedded
+    # event loop, while we need to have a free running loop in this application,
+    # to maximise the display refresh rate.
+    # So instead, we process events manually inside the main() function.
     #menu.play() #launch the menu
     return menu
 
@@ -118,10 +123,10 @@ def start_stop_reaction(event):
    global capturing
    if capturing == True:
        capturing = False
-       set_text_string(T_RUNSTOP, "Stopped")
+       texts.set_text(T_RUNSTOP, "Stopped")
    else:
        capturing = True
-       set_text_string(T_RUNSTOP, "Running")
+       texts.set_text(T_RUNSTOP, "Running")
        
 
 def about_box_reaction(event):
@@ -130,54 +135,6 @@ def about_box_reaction(event):
                                ok_text="Ok, I've read",
                                font_size=12,
                                font_color=(255,0,0))
-
-
-
-
-def get_capture(points1, points2, points3):
-    T_DIV = 0.005    # standard scope time/div
-    FREQ = 60.0
-    for s in range(0, SCOPE_BOX_SIZE[0]):
-        t = T_DIV*10.0*s/SCOPE_BOX_SIZE[0]
-        points1.append((s, 50.0*math.sin(2.0*math.pi*FREQ*t) + 20.0*(random.random() - 0.5)))
-        points2.append((s, 50.0*math.sin(2.0*math.pi*FREQ*t) + 20.0*(random.random() - 0.5)))
-        points3.append((s, points1[s][1]*points2[s][1]))
-    return points1, points2, points3
-
-
-def to_screen_coordinates(points1, points2, points3):
-    plot1 = []
-    plot2 = []
-    plot3 = []
-    for t in range(0, len(points1)):
-        # invert y axis in plot coordinates, which increase from top of the display downwards
-        plot1.append((t, 100-int(points1[t][1])))
-        plot2.append((t, 400-int(points2[t][1])))
-        plot3.append((t, 250-int(0.05*points3[t][1])))
-    return plot1, plot2, plot3
-
-
-def open_fifo():
-    try:
-        f = open(CAPTURE_BUFFER, "r")
-        return f
-    except:
-        print("Couldn't open the fifo capture_buffer")
-        sys.exit(1)
-
-
-def get_capture_from_file(f):
-    FRAME_LENGTH = 540
-    counter = 0
-    frame = []
-    try:
-        while counter<=FRAME_LENGTH:
-            i, v1, v2, v3, v4 = readline(f).split()
-            frame.append((i,v1,v2,v3,v4)) 
-            counter = counter+1
-    except:
-        print("Couldn't read from capture buffer.")
-    return frame
 
 
 def process_events(menu):
@@ -191,23 +148,18 @@ def process_events(menu):
 def draw_lines(screen, lines):
     # draw updated lines 
     screen.fill(GRAY)
-    pygame.draw.lines(screen, GREEN, False, lines[0], 2)
-    pygame.draw.lines(screen, YELLOW, False, lines[1], 2)
-    pygame.draw.lines(screen, MAGENTA, False, lines[2], 2)
+    # can handle up to six lines
+    colours = [ GREEN, YELLOW, MAGENTA, CYAN, RED, BLUE ]
+    for i in range(len(lines)):
+        pygame.draw.lines(screen, colours[i], False, lines[i], 2)
     
-
-def refresh_lines():
-    # update line data
-    line1, line2, line3 = to_screen_coordinates(*get_capture([],[],[]))
-    return (line1, line2, line3)
-
 
 def refresh_wfs():
     # refresh the information box every second
     t = int(time.time())
     if t != refresh_wfs.seconds:
         refresh_wfs.seconds = t
-        set_text_string(T_WFS, str(refresh_wfs.frames) + ' wfm/s')
+        texts.set_text(T_WFS, str(refresh_wfs.frames) + ' wfm/s')
         refresh_wfs.frames = 0 
     refresh_wfs.frames = refresh_wfs.frames + 1
     
@@ -220,8 +172,26 @@ def get_screen_hardware_size():
     return i.current_w, i.current_h
 
 
+def read_points(f):
+    ps = []
+    tp = 0 
+    while True:
+        ws = f.readline().split()
+        t = int(ws[0])
+        if t < tp:
+            break
+        ws = ws[1:]
+        for i in range(len(ws)):
+            try:
+                ps[i].append((t, int(ws[i])))   # extend an existing line
+            except IndexError:
+                ps.append( [(t, int(ws[i]))] )  # add another line
+        tp = t
+    return ps
+
+    
 def main():
-    global capturing, running
+    global capturing, running, texts
 
     # initialise UI
     # fullscreen on Pi, but not on laptop
@@ -230,35 +200,33 @@ def main():
     else:
         screen    = pygame.display.set_mode(PI_SCREEN_SIZE)
     buttons   = initialise_buttons()
-    texts     = initialise_texts()
-    uibox     = initialise_uibox(buttons, texts)
+    texts     = Texts()
+    uibox     = initialise_uibox(buttons, texts.get_texts())
     menu      = initialise_dispatching(uibox, screen)
 
-    # set a local variable at set_text_string() to point to texts
-    set_text_string.texts = texts
     # now set up the initial text states
-    clear_texts()
-    set_text_string(T_RUNSTOP, "Running")
+    texts.clear_texts()
+    texts.set_text(T_RUNSTOP, "Running")
     
     # initialise flags
     running = True          # the loop will run continuously until this is set to False
     capturing = True        # allow/stop update of the lines on the screen
 
-#    f = open_fifo()
     while running:
         process_events(menu)
         
         # update information
         if capturing:
-            lines = refresh_lines()
+            lines = read_points(sys.stdin)
         refresh_wfs()
         
         # redraw the buffer
         draw_lines(screen, lines)
-        uibox.blit()
         # uibox.update()  # enable this only if required
+        uibox.blit()
         
         # update the display
+        # this flips the newly drawn buffer into the framebuffer (screen)
         pygame.display.update()
 
     pygame.quit()

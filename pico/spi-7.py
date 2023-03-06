@@ -30,7 +30,13 @@ spi_adc = machine.SPI(0,
                   mosi = machine.Pin(3),
                   miso = machine.Pin(0))
 
-
+def reset_adc_chip():
+    reset_adc.value(0)
+    time.sleep(0.1)
+    reset_adc.value(1)
+    
+    
+    
 def write_bytes(spi, cs, addr, bs):
     cs.value(0)
     spi.write(bytes([addr & 0b11111110]) + bs) # for writing, make sure lowest bit is cleared
@@ -68,10 +74,7 @@ def setup_adc(spi, cs, reset):
     cs_adc.value(1)
     
     # reset the adc
-    reset_adc.value(0)
-    time.sleep(0.1)
-    reset_adc.value(1)
-    time.sleep(0.1)
+    reset_adc_chip()
    
     # Set the gain configuration register 0x0b
     # 3 bits per channel (12 LSB in all)
@@ -163,10 +166,6 @@ def main():
     global ring_buffer, in_ptr, out_ptr
     # waiting in case of lock up, opportunity to cancel
     print('PICO starting up.')
-    time.sleep(1)
-    print('Tell me a command.')
-    command = sys.stdin.readline()
-    print('You typed ' + command)
     time.sleep(1)
     print('Waiting for 10 seconds...')
     time.sleep(10)

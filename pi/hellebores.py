@@ -15,6 +15,7 @@ import pygame
 import time
 import random
 import sys
+import select
 
 
 CAPTURE_BUFFER = '/tmp/capture_buffer'    # this is a fifo that we read data from
@@ -150,8 +151,9 @@ def draw_lines(screen, lines):
     screen.fill(GRAY)
     # can handle up to six lines
     colours = [ GREEN, YELLOW, MAGENTA, CYAN, RED, BLUE ]
-    for i in range(len(lines)):
-        pygame.draw.lines(screen, colours[i], False, lines[i], 2)
+    if lines:
+        for i in range(len(lines)):
+            pygame.draw.lines(screen, colours[i], False, lines[i], 2)
     
 
 def refresh_wfs():
@@ -172,10 +174,25 @@ def get_screen_hardware_size():
     return i.current_w, i.current_h
 
 
+def is_data_available(f, t):
+    # f file object, t time in seconds
+    # timeout check (NB unfortunately this test won't work on Windows)
+    if sys.platform == 'linux':
+        # wait at most 't' seconds for new data to appear
+        r, _, _ = select.select( [f], [], [], t)
+        if len(r) == 0:   
+            return False
+    else:
+        return True
+    
+    
 def read_points(f):
     ps = []
-    tp = 0 
-    while True:
+    tp = 0
+    # the loop will exit and the points list is returned if
+    # (a) there is no more data to read, or
+    # (b) if the time coordinate 'goes backwards'
+    while is_data_available(f, 0.1):
         ws = f.readline().split()
         t = int(ws[0])
         if t < tp:

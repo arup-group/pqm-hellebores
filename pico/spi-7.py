@@ -80,9 +80,22 @@ def setup_adc(spi, cs, reset):
     # 3 bits per channel (12 LSB in all)
     # binary codes 101=32x, 100=16x, 011=8x, 010=4x, 001=2x, 000=1x
     # XXXXXXXX XXXX---- --------
-    # channel ->   3332 22111000 
-    print("Setting gain register 0x0b to 0x00, 0x00, 0x00.")
-    set_and_verify_adc_register(spi, cs, 0x0b, bytes([0x00,0x00,0x00]))
+    # channel ->   3332 22111000
+    GAIN1  = 0b000
+    GAIN2  = 0b001
+    GAIN4  = 0b010
+    GAIN8  = 0b011
+    GAIN16 = 0b100
+    GAIN32 = 0b101
+    gain0 = GAIN32
+    gain1 = GAIN32
+    gain2 = GAIN32
+    gain3 = GAIN1
+    gains_combined = (gain3 << 9) + (gain2 << 6) + (gain1 << 3) + gain0
+    gain_lsb = gains_combined & 0b11111111
+    gain_hsb = gains_combined >> 8
+    print("Setting gain register 0x0b to 0x00, " + hex(gain_hsb) + ", " + hex(gain_lsb) + ".")
+    set_and_verify_adc_register(spi, cs, 0x0b, bytes([0x00, gain_hsb, gain_lsb]))
     time.sleep(1)
     
     # Set the status and communication register 0x0c

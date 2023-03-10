@@ -112,11 +112,11 @@ def initialise_dispatching(uibox, screen):
     for element in menu.get_population():
         element.surface = screen
 
-    # We do not actually launch the menu because it creates an embedded
+    # We do not actually launch the menu (menu.play()) because it creates an embedded
     # event loop, while we need to have a free running loop in this application,
     # to maximise the display refresh rate.
     # So instead, we process events manually inside the main() function.
-    #menu.play() #launch the menu
+    #menu.play()
     return menu
 
 
@@ -176,15 +176,15 @@ def get_screen_hardware_size():
 
 def is_data_available(f, t):
     # f file object, t time in seconds
-    # timeout check (NB unfortunately this test won't work on Windows)
+    # unfortunately this test won't work on windows, so we return a default response
+    is_available = True
     if sys.platform == 'linux':
         # wait at most 't' seconds for new data to appear
         r, _, _ = select.select( [f], [], [], t)
         if len(r) == 0:   
-            return False
-    else:
-        return True
-    
+           is_available = False 
+    return is_available
+ 
     
 def read_points(f):
     ps = []

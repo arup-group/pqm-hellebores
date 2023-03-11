@@ -7,6 +7,9 @@ import _thread
 import sys
 
 
+# Buffer memory visible to both threads
+BUFFER_SIZE = 256          # number of samples in a buffer
+BUFFER_SIZE_BIT_MASK = BUFFER_SIZE * 8 - 1    # bit mask to circulate the buffer pointer
 
 
 # pin and SPI setup
@@ -18,10 +21,11 @@ cs_adc = machine.Pin(1, Pin.OUT)
 #sdi_adc = machine.Pin(3, Pin.OUT)
 reset_adc = machine.Pin(5, Pin.OUT)
 dr_adc = machine.Pin(4, Pin.IN)
+reset_me = machine.Pin(14, Pin.IN)
 
 
 spi_adc = machine.SPI(0,
-                  baudrate = 8000000,
+                  baudrate = 6000000,
                   polarity = 0,
                   phase = 0,
                   bits = 8,
@@ -92,7 +96,7 @@ def setup_adc(spi, cs, reset):
     # 1st byte sets various ADC modes
     # 2nd byte sets OSR, for sampling speed: 0x20 = 15.625kSa/s, 0x40 = 7.8125kSa/s, 0x60 = 3.90625kSa/s
     # 3rd byte sets temperature coefficient (leave as default 0x50)
-    set_and_verify_adc_register(spi, cs, 0x0d, bytes([0x24,0x40,0x50]))
+    set_and_verify_adc_register(spi, cs, 0x0d, bytes([0x24,0x60,0x50]))
     time.sleep(1)
 
     # Set the configuration register CONFIG1 at 0x0e
@@ -101,85 +105,56 @@ def setup_adc(spi, cs, reset):
     time.sleep(1)
     
     
-def read_all_adcs(spi, cs, dr):
-    cs.value(0)
-    spi.write(bytes([0b01000001]))
-    acq = spi.read(8)   # bring back all readings (8 bytes)
-    cs.value(1)
-    return acq
-
-
-def value_gauge(v, low, high):
-    # scale readings over 50 characters
-    out = '|'
-    v_pos = round((v - low)/(high - low) * 50)
-    for i in range(0, v_pos):
-        out = out + '-'
-    out = out + '>'
-    for i in range(v_pos+1, 51):
-        out = out + ' '
-    out = out + '|'
-    return out
-
-def convert_to_channels(acq):
-    raw = [0,0,0,0]
-    signed_int = [0,0,0,0]
-    # split up and process the readings
-    for i in range(0,4):
-        ch = acq[i*2 : i*2+2]
-        raw[i] = int.from_bytes(ch, 'big')
-        signed_int[i] = binary_to_signed_int(ch)
-    return (raw, signed_int)           
-
 # interrupt handler for data ready pin
 def adc_read_handler(dr_adc):
-    global read_buffer, writing_buffer, in_ptr
-    spi_adc.readinto(read_buffer)
-    writing_buffer[in_ptr*8 : in_ptr*8+8] = read_buffer
-    in_ptr = (in_ptr + 1) & 512    # % BUFFER_SIZE*8
+    global spi_buffer, active_buffer, in_ptr
+    spi_adc.readinto(spi_buffer)
+    active_buffer[in_ptr : in_ptr+8] = spi_buffer
+    in_ptr = (in_ptr + 8) & BUFFER_SIZE_BIT_MASK    # % BUFFER_SIZE * 8
+
+
+# interrupt handler for reset pin (commanded from Pi)    
+def pico_restart(reset_me):
+    machine.reset()
     
-def simple_handler(dr_adc):
-    # do nothing
-    1
     
 def initialise():
     # configure the ADC
     setup_adc(spi_adc, cs_adc, reset_adc)
 
-    # command ADC to repeatedly read ADC registers, by holding CS* low
-    # spi read commands will successively read these registers
-    cs_adc.value(0)
-    spi_adc.write(bytes([0b01000001]))
-
-
-def display_update(ch, acq):
-    # convert to signed integers
-    r, s = convert_to_channels(acq)
-    # print state of selected channel to console
-    print(f'CH{ch} ' + value_gauge(s[ch], -32768, 32767) + f' {r[ch]:04x} {s[ch]:5d}', end='\r')
-
 
 # This function runs in Core 1
 def print_data():
-    global buffer1, buffer2, print_signal, running, led
+    global buffer1, buffer2, print_signal, running, for_real
+    last_print_signal = 0
     while running == True:
-        # Print the correct portion of buffer
-        if print_signal == 'b1':
-            print_signal = ''
+        if print_signal == last_print_signal:
+            continue
+        # print signal has changed
+        last_print_signal = print_signal
+        if print_signal == 1:
             boardled.on()
-            sys.stdout.write(binascii.hexlify(buffer1))
+            if for_real == True:
+                sys.stdout.buffer.write(buffer1)
+            else:
+                sys.stdout.write('1')
+            time.sleep(0.3)
             boardled.off()
-        elif print_signal == 'b2':
-            print_signal = ''
+        elif print_signal == 2:
             boardled.on()
-            sys.stdout.write(binascii.hexlify(buffer2))
+            if for_real == True:
+                sys.stdout.buffer.write(buffer2)
+            else:
+                sys.stdout.write('2')
+            time.sleep(0.3)
             boardled.off()
         # There may be issues with automatic GC on Core 1
-        gc.collect()
+        # let's not allocate memory here
+        # gc.collect()
 
 
 def main():
-    global buffer1, buffer2, print_signal, writing_buffer, in_ptr, running
+    global buffer1, buffer2, print_signal, active_buffer, spi_buffer, in_ptr, running, for_real
     # waiting in case of lock up, opportunity to cancel
     print('PICO starting up.')
     time.sleep(1)
@@ -188,85 +163,65 @@ def main():
     print('Now continuing with setup.')
     
     # configure the ADC
+    print('Initialising ADC...')
     initialise()
- 
-    # fill ring buffers with dummy data
-    for i in range(len(buffer1)):
-        buffer1[i] = i % 256
-        buffer2[i] = (i+50) % 256
+
+    time.sleep(5)
+    print('Allocating bytearray buffers and setting flags...')    
+    # two contiguous mutable bytearrays for samples
+    buffer1 = bytearray(BUFFER_SIZE * 8)  # 2 bytes per channel, 4 channels
+    buffer2 = bytearray(BUFFER_SIZE * 8)
+    active_buffer = buffer1     # pointer to the currently active buffer
+
+    spi_buffer = bytearray(8)   # temporary buffer for reading one sample via SPI
+    in_ptr = 0                  # buffer cell pointer
+    running = True              # flag for stopping the program in both cores
+    print_signal = 0            # flag for core 0 to tell core 1 that it's time to print a buffer
+    for_real = False            # flag to optionally run the program without trashing the terminal with binary data
 
     # the printing runs in parallel with the acquisition
     _thread.start_new_thread(print_data, ())  # Start Core 1 (printing)
    
-    # configure the interrupt handler
-    # bind the handler to a falling edge transition on the DR pin
-    dr_adc.irq(trigger = Pin.IRQ_FALLING, handler = adc_read_handler, hard=True)
+    print('Setting up hardware interrupts...')
+    # configure the interrupt handlers
+    # bind the sampler handler to a falling edge transition on the DR pin
+    dr_adc.irq(trigger = Pin.IRQ_FALLING, handler = adc_read_handler, hard=False)
+    # bind the reset handler to a falling edge transition on the RESET ME pin
+    reset_me.irq(trigger = Pin.IRQ_FALLING, handler = pico_restart, hard=True)
+    time.sleep(5)
 
-     
+    # command ADC to repeatedly refresh ADC registers, by holding CS* low
+    # pico will successively read these registers
+    # each time the DR* pin is activated
+    cs_adc.value(0)
+    spi_adc.write(bytes([0b01000001]))
+
+    print('Entering main loop...')
     while running == True:
-        # until we have 2 cores working, cannot print out while sampling, so
-        # every circulation of the buffer, stop sampling and print all of it out
-        # print raw binary data
-        # loop through every 2-byte integer value in the buffer, and convert to 4x hex characters
-        #for i in range(0,BUFFER_SIZE*8,2):
-        #    j = i*4
-        #    v = current_buffer[i]*256 + current_buffer[i+1]   # get integer from 2 bytes
-        #    output_buffer[j:j+3] = hex_mapper[v:v+3]          # copy hex bytestring from appropriate offset
 
         if in_ptr == 0:
-            # stop reading ADC
-            # dr_adc.irq(trigger = Pin.IRQ_FALLING, handler = simple_handler)
-            # illuminate the indicator LED
-            #boardled.value(1)
-            # print the buffer contents
-            #sys.stdout.write(binascii.hexlify(reading_buffer))
-            # flip the buffers
-            if writing_buffer == buffer1:
-                writing_buffer = buffer2
-                print_signal = 'b1'
+            # time to flip the buffers and print
+            if active_buffer == buffer1:
+                active_buffer = buffer2
+                print_signal = 1
             else:
-                writing_buffer = buffer1
-                print_signal = 'b2'
-            # gc.collect()
-            #boardled.value(0)
-            # re-enable ADC reads
-            #dr_adc.irq(trigger = Pin.IRQ_FALLING, handler = adc_read_handler)
+                active_buffer = buffer1
+                print_signal = 2
+
             # now wait until in_ptr has advanced
             while in_ptr == 0:
                 1
 
  
 
-# Buffer memory visible to both threads
-BUFFER_SIZE = 64   # samples
-# two contiguous mutable bytearrays for samples
-buffer1 = bytearray(BUFFER_SIZE * 8)  # 2 bytes per channel, 4 channels
-buffer2 = bytearray(BUFFER_SIZE * 8)
-writing_buffer = buffer1
-#output_buffer = bytearray(BUFFER_SIZE * 8 * 2)
-#hex_mapper = bytearray(65536 * 2)
-
-
-#for i in range(65536):
-#    hex_mapper[i*2:i*2+3] = [ h+39 if h>57 else h for h in [ ((i & 0xf000) >> 12) + 48, \
-#                                                             ((i & 0x0f00) >> 8) + 48, \
-#                                                             ((i & 0x00f0) >> 4) + 48, \
-#                                                             (i & 0x000f) + 48 ]]
-
-# temporary buffer for one sample
-read_buffer = bytearray(8)
-
-in_ptr = 0
-out_ptr = 0
-running = True
-print_signal = ''
-
 # run from here
 if __name__ == '__main__':
     try:
         main()
-    except KeyboardInterrupt:
+    except:
         print('Interrupted -- re-enabling auto garbage collector.')
+        running = False
+        cs_adc.value(1)
         gc.enable()
         
 

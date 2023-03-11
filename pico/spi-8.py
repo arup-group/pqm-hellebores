@@ -16,12 +16,12 @@ B2 = BUFFER_SIZE // 2      # beginning of 2nd half
 
 
 # pin and SPI setup
-led = machine.Pin(25, Pin.OUT)
-boardled = machine.Pin(15, Pin.OUT)
+led = machine.Pin(25, Pin.OUT)             # this is the led on the Pico
+boardled = machine.Pin(15, Pin.OUT)        # this is the 'buffer' LED on the PCB
 cs_adc = machine.Pin(1, Pin.OUT)
-#sck_adc = machine.Pin(2, Pin.OUT)
-#sdo_adc = machine.Pin(0, Pin.IN)
-#sdi_adc = machine.Pin(3, Pin.OUT)
+sck_adc = machine.Pin(2, Pin.OUT)
+sdi_adc = machine.Pin(3, Pin.OUT)
+sdo_adc = machine.Pin(0, Pin.IN)
 reset_adc = machine.Pin(5, Pin.OUT)
 dr_adc = machine.Pin(4, Pin.IN)
 reset_me = machine.Pin(14, Pin.IN)
@@ -33,9 +33,9 @@ spi_adc = machine.SPI(0,
                   phase = 0,
                   bits = 8,
                   firstbit = machine.SPI.MSB,
-                  sck = machine.Pin(2),
-                  mosi = machine.Pin(3),
-                  miso = machine.Pin(0))
+                  sck = sck_adc,
+                  mosi = sdi_adc,
+                  miso = sdo_adc)
 
 
 def write_bytes(spi, cs, addr, bs):
@@ -121,11 +121,26 @@ def adc_read_handler(dr_adc):
 
 # This function and loop runs on Core 1
 def sample_data():
+    global spi_buffer, ring_buffer, in_ptr
+    print('Core 1 starting, hello...')
+    spi_buffer = bytearray(8)   # temporary buffer for reading one sample via SPI
+    ring_buffer = bytearray(BUFFER_SIZE * 8)  # 2 bytes per channel, 4 channels
+    in_ptr = 0                  # buffer cell pointer
+
     # bind the sampler handler to a falling edge transition on the DR pin
     dr_adc.irq(trigger = Pin.IRQ_FALLING, handler = adc_read_handler, hard=False)
+
+    # now command ADC to repeatedly refresh ADC registers, by holding CS* low
+    # pico will successively read these registers
+    # each time the DR* pin is activated
+    cs_adc.value(0)
+    spi_adc.write(bytes([0b01000001]))
+
     # a do nothing loop now runs in idle time until the program is stopped
     while running == True:
         1
+    # stop sampling
+    cs_adc.value(1)    
         
         
 # interrupt handler for reset pin (commanded from Pi)    
@@ -157,7 +172,9 @@ def print_buffer(buffer_section):
 
 
 def main():
-    global ring_buffer, spi_buffer, in_ptr, running
+    global in_ptr, running
+    running = True
+    in_ptr = 0
     # waiting in case of lock up, opportunity to cancel
     print('PICO starting up.')
     time.sleep(1)
@@ -170,14 +187,6 @@ def main():
     initialise()
     time.sleep(1)
 
-    print('Allocating bytearray buffers and setting flags...')    
-    # two contiguous mutable bytearrays for samples
-    ring_buffer = bytearray(BUFFER_SIZE * 8)  # 2 bytes per channel, 4 channels
-    spi_buffer = bytearray(8)   # temporary buffer for reading one sample via SPI
-    in_ptr = 0                  # buffer cell pointer
-    running = True              # flag for stopping the program in both cores
-    time.sleep(1)
-
     print('Setting up RESET interrupt...')
     # configure the interrupt handlers
     # bind the reset handler to a falling edge transition on the RESET ME pin
@@ -188,15 +197,7 @@ def main():
     print('Starting the sampling process on Core 1...')
     _thread.start_new_thread(sample_data, ())  # Start Core 1 (sampling)
     time.sleep(1)
-    
-    # now command ADC to repeatedly refresh ADC registers, by holding CS* low
-    # pico will successively read these registers
-    # each time the DR* pin is activated
-    print("Commanding ADC to start sampling...")
-    cs_adc.value(0)
-    spi_adc.write(bytes([0b01000001]))
-    time.sleep(1)
-    
+        
     print('Entering main loop...')
     while running == True:
 
@@ -208,7 +209,7 @@ def main():
             print_buffer(1)
             while in_ptr == B2:
                 1
- 
+
 
 # run from here
 if __name__ == '__main__':

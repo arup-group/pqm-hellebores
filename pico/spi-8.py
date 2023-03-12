@@ -9,22 +9,24 @@ import sys
 DEBUG_MODE = True
 
 # Buffer memory
-BUFFER_SIZE = 512                            # number of samples in a buffer
+# Advantage if this is a power of two, so that the buffer pointer can 'flip' its MSB
+# to indicate to the print function which 'half' of the buffer is safe to print
+BUFFER_SIZE = 256                            # number of samples in a buffer
 BUFFER_SIZE_BIT_MASK = BUFFER_SIZE * 8 - 1   # bit mask to circulate the buffer pointer
 BUFFER_START_A = 0                           # beginning of 1st half of ring buffer
 BUFFER_START_B = (BUFFER_SIZE * 8) // 2      # beginning of 2nd half
 
 
 # pin and SPI setup
-led = machine.Pin(25, Pin.OUT)             # this is the led on the Pico
-boardled = machine.Pin(15, Pin.OUT)        # this is the 'buffer' LED on the PCB
-cs_adc = machine.Pin(1, Pin.OUT)
-sck_adc = machine.Pin(2, Pin.OUT)
-sdi_adc = machine.Pin(3, Pin.OUT)
-sdo_adc = machine.Pin(0, Pin.IN)
-reset_adc = machine.Pin(5, Pin.OUT)
-dr_adc = machine.Pin(4, Pin.IN)
-reset_me = machine.Pin(14, Pin.IN)
+pico_led     = machine.Pin(25, Pin.OUT)    # this is the led on the Pico
+board_led    = machine.Pin(15, Pin.OUT)    # this is the 'buffer' LED on the PCB
+cs_adc       = machine.Pin(1, Pin.OUT)
+sck_adc      = machine.Pin(2, Pin.OUT)
+sdi_adc      = machine.Pin(3, Pin.OUT)
+sdo_adc      = machine.Pin(0, Pin.IN)
+reset_adc    = machine.Pin(5, Pin.OUT)
+dr_adc       = machine.Pin(4, Pin.IN)
+reset_me     = machine.Pin(14, Pin.IN)
 
 
 spi_adc = machine.SPI(0,
@@ -70,19 +72,20 @@ def setup_adc(spi, cs, reset):
     time.sleep(0.1)
     reset_adc.value(1)
     time.sleep(0.1)
-   
     # Set the gain configuration register 0x0b
     # 3 bits per channel (12 LSB in all)
     # binary codes 101=32x, 100=16x, 011=8x, 010=4x, 001=2x, 000=1x
     # XXXXXXXX XXXX---- --------
     # channel ->   3332 22111000 
-    print("Setting gain register 0x0b to 0x00, 0x00, 0x00.")
-    set_and_verify_adc_register(spi, cs, 0x0b, bytes([0x00,0x00,0x00]))
+    bs = [0x00, 0x00, 0x00]
+    print('Setting gain register at 0b to {:02x} {:02x} {:02x}'.format(*bs))
+    set_and_verify_adc_register(spi, cs, 0x0b, bytes(bs))
     time.sleep(1)
     
     # Set the status and communication register 0x0c
-    print("Setting status and communication register STATUSCOM at 0x0c to 0x88, 0x00, 0x0f.")
-    set_and_verify_adc_register(spi, cs, 0x0c, bytes([0x88,0x00,0x0f]))
+    bs = [0x88, 0x00, 0x0f]
+    print('Setting status and communication register STATUSCOM at 0c to {:02x} {:02x} {:02x}'.format(*bs))
+    set_and_verify_adc_register(spi, cs, 0x0c, bytes(bs))
     time.sleep(1)
 
     # Set the configuration register CONFIG0 at 0x0d
@@ -97,20 +100,17 @@ def setup_adc(spi, cs, reset):
     # 0xc0 = 488 Sa/s
     # 0xe0 = 244 Sa/s
     # 3rd byte sets temperature coefficient (leave as default 0x50)
-    b1 = 0x24
+    bs = [0x24, 0x60, 0x50]
     if DEBUG_MODE == True:
-        b2 = 0xe0    # slow
-    else:
-        b2 = 0x60    # fast
-    b3 = 0x50
-    print('Setting configuration register CONFIG0 at 0x0d to ' \
-          + hex(b1) + ' ' + hex(b2) + ' ' + hex(b3))
-    set_and_verify_adc_register(spi, cs, 0x0d, bytes([b1,b2,b3]))
+        bs[1] = 0xe0    # slow
+    print('Setting configuration register CONFIG0 at 0d to {:02x} {:02x} {:02x}'.format(*bs))
+    set_and_verify_adc_register(spi, cs, 0x0d, bytes(bs))
     time.sleep(1)
 
     # Set the configuration register CONFIG1 at 0x0e
-    print("Setting configuration register CONFIG1 at 0x0e to 0x00, 0x00, 0x00.")
-    set_and_verify_adc_register(spi, cs, 0x0e, bytes([0x00,0x00,0x00]))
+    bs = [0x00, 0x00, 0x00]
+    print('Setting configuration register CONFIG1 at 0e to {:02x} {:02x} {:02x}'.format(*bs))
+    set_and_verify_adc_register(spi, cs, 0x0e, bytes(bs))
     time.sleep(1)
     
     
@@ -136,28 +136,39 @@ def initialise():
     setup_adc(spi_adc, cs_adc, reset_adc)
 
 
+
 def print_buffer(buffer_section):
-    boardled.on()
+    board_led.on()
     if DEBUG_MODE == True:
         # write out the selected portion of buffer as hexadecimal text
-        sys.stdout.buffer.write(binascii.hexlify(buffer_section))
+        if buffer_section == 1:
+            sys.stdout.buffer.write(binascii.hexlify(ring_buffer[:BUFFER_START_B]))
+        elif buffer_section == 2:
+            sys.stdout.buffer.write(binascii.hexlify(ring_buffer[BUFFER_START_B:]))
     else:
         # write out the selected portion of buffer in raw binary
-        sys.stdout.buffer.write(buffer_section)
+        if buffer_section == 1:
+            sys.stdout.buffer.write(ring_buffer[:BUFFER_START_B])
+        elif buffer_section == 2:
+            sys.stdout.buffer.write(ring_buffer[BUFFER_START_B:])
     sys.stdout.buffer.write('\n')
-    boardled.off()
+    board_led.off()
 
 
 # Runs on Core 1
 def print_responder():
     print('Core 1 print_responder() starting, hello...')
     while running == True:
+        # Wait while Core 0 is writing to 'B' half
         while buffer_boolean == True:
             continue
-        print_buffer(ring_buffer[BUFFER_START_B:])
+        # Now safe to print 'B' half
+        print_buffer(2)
+        # Wait while Core 0 is writing to 'A' half
         while buffer_boolean == False:
             continue
-        print_buffer(ring_buffer[:BUFFER_START_B])        
+        # Now safe to print 'A' half
+        print_buffer(1)
     print('print_responder() exited on Core 1')
 
 
@@ -200,6 +211,8 @@ def main():
 
     print('Setting up the ADC (DR*) interrupt...')
     # bind the sampler handler to a falling edge transition on the DR pin
+    # can't yet get stable operation with a hard interrupt, soft interrupt
+    # is slightly slower but is stable.
     dr_adc.irq(trigger = Pin.IRQ_FALLING, handler = adc_read_handler, hard=False)
 
     # a do nothing loop now runs in idle time until the program is stopped

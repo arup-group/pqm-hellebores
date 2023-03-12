@@ -8,11 +8,11 @@ import sys
 
 DEBUG_MODE = True
 
-# Buffer memory visible to both threads
-BUFFER_SIZE = 256          # number of samples in a buffer
-BUFFER_SIZE_BIT_MASK = BUFFER_SIZE * 8 - 1    # bit mask to circulate the buffer pointer
-B1 = 0                     # beginning of 1st half of ring buffer
-B2 = BUFFER_SIZE // 2      # beginning of 2nd half
+# Buffer memory
+BUFFER_SIZE = 512                            # number of samples in a buffer
+BUFFER_SIZE_BIT_MASK = BUFFER_SIZE * 8 - 1   # bit mask to circulate the buffer pointer
+BUFFER_START_A = 0                           # beginning of 1st half of ring buffer
+BUFFER_START_B = (BUFFER_SIZE * 8) // 2      # beginning of 2nd half
 
 
 # pin and SPI setup
@@ -50,15 +50,6 @@ def read_bytes(spi, cs, addr, n):
     cs.value(1)
     return obs
 
-
-
-# convert two's complement 24 bit binary to signed integer
-def binary_to_signed_int(bs):
-    v = int.from_bytes(bs, 'big')
-    if bs[0] & (1<<7):    # negative number if most significant bit is set
-        # adjust for negative number
-        v = v - (1 << len(bs)*8)
-    return v
 
 def set_and_verify_adc_register(spi, cs, reg, bs):
     # The actual address byte leads with binary 01 and ends with the read/write bit (1 or 0).
@@ -111,37 +102,14 @@ def setup_adc(spi, cs, reset):
 # interrupt handler for data ready pin
 # this function runs in Core 1
 def adc_read_handler(dr_adc):
-    global spi_buffer, ring_buffer, in_ptr
+    global spi_buffer, ring_buffer, in_ptr, buffer_boolean
     spi_adc.readinto(spi_buffer)
     ring_buffer[in_ptr : in_ptr+8] = spi_buffer
     # 'anding' the pointer with a bit mask makes the buffer pointer
     # return to zero without needing an 'if' conditional
     in_ptr = (in_ptr + 8) & BUFFER_SIZE_BIT_MASK    # BUFFER_SIZE * 8 - 1
+    buffer_boolean = in_ptr & BUFFER_START_B        # flips polarity when we switch halves
 
-
-# This function and loop runs on Core 1
-def sample_data():
-    global spi_buffer, ring_buffer, in_ptr
-    print('Core 1 starting, hello...')
-    spi_buffer = bytearray(8)   # temporary buffer for reading one sample via SPI
-    ring_buffer = bytearray(BUFFER_SIZE * 8)  # 2 bytes per channel, 4 channels
-    in_ptr = 0                  # buffer cell pointer
-
-    # bind the sampler handler to a falling edge transition on the DR pin
-    dr_adc.irq(trigger = Pin.IRQ_FALLING, handler = adc_read_handler, hard=False)
-
-    # now command ADC to repeatedly refresh ADC registers, by holding CS* low
-    # pico will successively read these registers
-    # each time the DR* pin is activated
-    cs_adc.value(0)
-    spi_adc.write(bytes([0b01000001]))
-
-    # a do nothing loop now runs in idle time until the program is stopped
-    while running == True:
-        1
-    # stop sampling
-    cs_adc.value(1)    
-        
         
 # interrupt handler for reset pin (commanded from Pi)    
 def pico_restart(reset_me):
@@ -154,25 +122,39 @@ def initialise():
 
 
 def print_buffer(buffer_section):
-    boardled.on()
     if buffer_section == 1:
+        boardled.on()
         if DEBUG_MODE == True:
-            sys.stdout.write('1')
+            sys.stdout.buffer.write('1\n')
         else:
             # write out the first half of the buffer
-            sys.stdout.buffer.write(ring_buffer[:B2])
+            sys.stdout.buffer.write(ring_buffer[:BUFFER_START_B])
+        boardled.off()
     elif buffer_section == 2:
+        boardled.on()
         if DEBUG_MODE == True:
-            sys.stdout.write('2')
+            sys.stdout.buffer.write('2\n')
         else:
             # write out the second half of the buffer
-            sys.stdout.buffer.write(ring_buffer[B2:])
-    time.sleep(1)
-    boardled.off()
+            sys.stdout.buffer.write(ring_buffer[BUFFER_START_B:])
+        boardled.off()
+
+
+# Runs on Core 1
+def print_responder():
+    print('Core 1 print_responder() starting, hello...')
+    while running == True:
+        while buffer_boolean == True:
+            continue
+        print_buffer(2)
+        while buffer_boolean == False:
+            continue
+        print_buffer(1)        
+    print('print_responder() exited on Core 1')
 
 
 def main():
-    global in_ptr, running
+    global running, spi_buffer, ring_buffer, in_ptr, buffer_boolean
     running = True
     in_ptr = 0
     # waiting in case of lock up, opportunity to cancel
@@ -192,25 +174,35 @@ def main():
     # bind the reset handler to a falling edge transition on the RESET ME pin
     reset_me.irq(trigger = Pin.IRQ_FALLING, handler = pico_restart, hard=True)
     time.sleep(1)
-
-    # the sampling process runs on Core 1
-    print('Starting the sampling process on Core 1...')
-    _thread.start_new_thread(sample_data, ())  # Start Core 1 (sampling)
-    time.sleep(1)
         
+    spi_buffer = bytearray(8)   # temporary buffer for reading one sample via SPI
+    ring_buffer = bytearray(BUFFER_SIZE * 8)  # 2 bytes per channel, 4 channels
+    in_ptr = 0                  # buffer cell pointer
+    buffer_boolean = 0          # indicates which half of buffer is active (writing)
+    # now command ADC to repeatedly refresh ADC registers, by holding CS* low
+    # pico will successively read these registers
+    # each time the DR* pin is activated
+    cs_adc.value(0)
+    spi_adc.write(bytes([0b01000001]))
+
+    # the print process runs on Core 1
+    print('Starting the print process on Core 1...')
+    _thread.start_new_thread(print_responder, ())  # Start Core 1 (printing)
+    #time.sleep(1)
+
+    print('Setting up the ADC (DR*) interrupt...')
+    # bind the sampler handler to a falling edge transition on the DR pin
+    dr_adc.irq(trigger = Pin.IRQ_FALLING, handler = adc_read_handler, hard=False)
+
+    # a do nothing loop now runs in idle time until the program is stopped
     print('Entering main loop...')
+            
     while running == True:
-
-        if in_ptr == B1:
-            print_buffer(2)
-            while in_ptr == B1:
-                1
-        elif in_ptr == B2:
-            print_buffer(1)
-            while in_ptr == B2:
-                1
-
-
+        continue
+    # finish sampling
+    cs_adc.value(1)
+    print('Core 0 exited.')
+    
 # run from here
 if __name__ == '__main__':
     try:

@@ -86,11 +86,26 @@ def setup_adc(spi, cs, reset):
     time.sleep(1)
 
     # Set the configuration register CONFIG0 at 0x0d
-    print("Setting configuration register CONFIG0 at 0x0d to 0x24, 0x60, 0x50.")
     # 1st byte sets various ADC modes
-    # 2nd byte sets OSR, for sampling speed: 0x20 = 15.625kSa/s, 0x40 = 7.8125kSa/s, 0x60 = 3.90625kSa/s
+    # 2nd byte sets OSR, for sampling speed, OSR speeds as follows:
+    # 0x00 = 31.25 kSa/s
+    # 0x20 = 15.625 kSa/s
+    # 0x40 = 7.8125 kSa/s
+    # 0x60 = 3.90625 kSa/s
+    # 0x80 = 1.953 kSa/s
+    # 0xa0 = 976 Sa/s
+    # 0xc0 = 488 Sa/s
+    # 0xe0 = 244 Sa/s
     # 3rd byte sets temperature coefficient (leave as default 0x50)
-    set_and_verify_adc_register(spi, cs, 0x0d, bytes([0x24,0x60,0x50]))
+    b1 = 0x24
+    if DEBUG_MODE == True:
+        b2 = 0xe0    # slow
+    else:
+        b2 = 0x60    # fast
+    b3 = 0x50
+    print('Setting configuration register CONFIG0 at 0x0d to ' \
+          + hex(b1) + ' ' + hex(b2) + ' ' + hex(b3))
+    set_and_verify_adc_register(spi, cs, 0x0d, bytes([b1,b2,b3]))
     time.sleep(1)
 
     # Set the configuration register CONFIG1 at 0x0e
@@ -122,22 +137,15 @@ def initialise():
 
 
 def print_buffer(buffer_section):
-    if buffer_section == 1:
-        boardled.on()
-        if DEBUG_MODE == True:
-            sys.stdout.buffer.write('1\n')
-        else:
-            # write out the first half of the buffer
-            sys.stdout.buffer.write(ring_buffer[:BUFFER_START_B])
-        boardled.off()
-    elif buffer_section == 2:
-        boardled.on()
-        if DEBUG_MODE == True:
-            sys.stdout.buffer.write('2\n')
-        else:
-            # write out the second half of the buffer
-            sys.stdout.buffer.write(ring_buffer[BUFFER_START_B:])
-        boardled.off()
+    boardled.on()
+    if DEBUG_MODE == True:
+        # write out the selected portion of buffer as hexadecimal text
+        sys.stdout.buffer.write(binascii.hexlify(buffer_section))
+    else:
+        # write out the selected portion of buffer in raw binary
+        sys.stdout.buffer.write(buffer_section)
+    sys.stdout.buffer.write('\n')
+    boardled.off()
 
 
 # Runs on Core 1
@@ -146,10 +154,10 @@ def print_responder():
     while running == True:
         while buffer_boolean == True:
             continue
-        print_buffer(2)
+        print_buffer(ring_buffer[BUFFER_START_B:])
         while buffer_boolean == False:
             continue
-        print_buffer(1)        
+        print_buffer(ring_buffer[:BUFFER_START_B])        
     print('print_responder() exited on Core 1')
 
 

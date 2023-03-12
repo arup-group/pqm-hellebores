@@ -91,14 +91,14 @@ def setup_adc(spi, cs, reset):
     # Set the configuration register CONFIG0 at 0x0d
     # 1st byte sets various ADC modes
     # 2nd byte sets OSR, for sampling speed, OSR speeds as follows:
-    # 0x00 = 31.25 kSa/s
-    # 0x20 = 15.625 kSa/s
-    # 0x40 = 7.8125 kSa/s
-    # 0x60 = 3.90625 kSa/s
-    # 0x80 = 1.953 kSa/s
-    # 0xa0 = 976 Sa/s
-    # 0xc0 = 488 Sa/s
-    # 0xe0 = 244 Sa/s
+    # 0x00 = 32:  31.25 kSa/s
+    # 0x20 = 64:  15.625 kSa/s
+    # 0x40 = 128:  7.8125 kSa/s
+    # 0x60 = 256:  3.90625 kSa/s
+    # 0x80 = 512:  1.953 kSa/s
+    # 0xa0 = 1024:   976 Sa/s
+    # 0xc0 = 2048:   488 Sa/s
+    # 0xe0 = 4096:   244 Sa/s
     # 3rd byte sets temperature coefficient (leave as default 0x50)
     bs = [0x24, 0x60, 0x50]
     if DEBUG_MODE == True:
@@ -115,15 +115,16 @@ def setup_adc(spi, cs, reset):
     
     
 # interrupt handler for data ready pin
-# this function runs in Core 1
 def adc_read_handler(dr_adc):
     global spi_buffer, ring_buffer, in_ptr, buffer_boolean
     spi_adc.readinto(spi_buffer)
     ring_buffer[in_ptr : in_ptr+8] = spi_buffer
-    # 'anding' the pointer with a bit mask makes the buffer pointer
-    # return to zero without needing an 'if' conditional
+    # 'anding' the pointer with a bit mask that has binary '1' in the LSBs
+    # makes the buffer pointer return to zero without needing an 'if' conditional
     in_ptr = (in_ptr + 8) & BUFFER_SIZE_BIT_MASK    # BUFFER_SIZE * 8 - 1
-    buffer_boolean = in_ptr & BUFFER_START_B        # flips polarity when we switch halves
+    # and 'anding' the pointer with a bit mask that has binary '1' only in the MSB
+    # causes the result to flip polarity/value for half of the samples
+    buffer_boolean = in_ptr & BUFFER_START_B
 
         
 # interrupt handler for reset pin (commanded from Pi)    
@@ -137,19 +138,19 @@ def initialise():
 
 
 
-def print_buffer(buffer_section):
+def print_buffer(buffer_zone):
     board_led.on()
     if DEBUG_MODE == True:
         # write out the selected portion of buffer as hexadecimal text
-        if buffer_section == 1:
+        if buffer_zone == 1:
             sys.stdout.buffer.write(binascii.hexlify(ring_buffer[:BUFFER_START_B]))
-        elif buffer_section == 2:
+        elif buffer_zone == 2:
             sys.stdout.buffer.write(binascii.hexlify(ring_buffer[BUFFER_START_B:]))
     else:
         # write out the selected portion of buffer in raw binary
-        if buffer_section == 1:
+        if buffer_zone == 1:
             sys.stdout.buffer.write(ring_buffer[:BUFFER_START_B])
-        elif buffer_section == 2:
+        elif buffer_zone == 2:
             sys.stdout.buffer.write(ring_buffer[BUFFER_START_B:])
     sys.stdout.buffer.write('\n')
     board_led.off()
@@ -158,22 +159,21 @@ def print_buffer(buffer_section):
 # Runs on Core 1
 def print_responder():
     print('Core 1 print_responder() starting, hello...')
+    lpr = 0
+    pr = 1
     while running == True:
-        # Wait while Core 0 is writing to 'B' half
-        while buffer_boolean == True:
-            continue
-        # Now safe to print 'B' half
-        print_buffer(2)
-        # Wait while Core 0 is writing to 'A' half
-        while buffer_boolean == False:
-            continue
-        # Now safe to print 'A' half
-        print_buffer(1)
+        lk.acquire()
+        pr = print_request
+        lk.release()
+        if pr != lpr:
+            print_buffer(pr)
+            lpr = pr
+        time.sleep(0.01)  # microsleep to allow Core 0 to acquire the lock
     print('print_responder() exited on Core 1')
 
 
 def main():
-    global running, spi_buffer, ring_buffer, in_ptr, buffer_boolean
+    global running, spi_buffer, ring_buffer, in_ptr, buffer_boolean, lk, print_request
     running = True
     in_ptr = 0
     # waiting in case of lock up, opportunity to cancel
@@ -198,28 +198,44 @@ def main():
     ring_buffer = bytearray(BUFFER_SIZE * 8)  # 2 bytes per channel, 4 channels
     in_ptr = 0                  # buffer cell pointer
     buffer_boolean = 0          # indicates which half of buffer is active (writing)
-    # now command ADC to repeatedly refresh ADC registers, by holding CS* low
-    # pico will successively read these registers
-    # each time the DR* pin is activated
-    cs_adc.value(0)
-    spi_adc.write(bytes([0b01000001]))
 
+    # create a lock around access to the 'print_request' variable
+    lk = _thread.allocate_lock()
+    print_request = 1
     # the print process runs on Core 1
     print('Starting the print process on Core 1...')
     _thread.start_new_thread(print_responder, ())  # Start Core 1 (printing)
-    #time.sleep(1)
-
+    
     print('Setting up the ADC (DR*) interrupt...')
     # bind the sampler handler to a falling edge transition on the DR pin
     # can't yet get stable operation with a hard interrupt, soft interrupt
     # is slightly slower but is stable.
     dr_adc.irq(trigger = Pin.IRQ_FALLING, handler = adc_read_handler, hard=False)
 
+    # now command ADC to repeatedly refresh ADC registers, by holding CS* low
+    # pico will successively read these registers
+    # each time the DR* pin is activated
+    cs_adc.value(0)
+    spi_adc.write(bytes([0b01000001]))
+
     # a do nothing loop now runs in idle time until the program is stopped
     print('Entering main loop...')
             
     while running == True:
-        continue
+        # wait while writing buffer zone 1
+        while buffer_boolean == 0:
+            continue
+        # print it now
+        lk.acquire()
+        print_request = 1
+        lk.release()
+        # wait while writing buffer zone 2
+        while buffer_boolean != 0:
+            continue
+        # print it now
+        lk.acquire()
+        print_request = 2
+        lk.release()
     # finish sampling
     cs_adc.value(1)
     print('Core 0 exited.')
@@ -234,5 +250,6 @@ if __name__ == '__main__':
         cs_adc.value(1)
         gc.enable()
         
+
 
 

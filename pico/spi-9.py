@@ -137,38 +137,40 @@ def initialise():
     setup_adc(spi_adc, cs_adc, reset_adc)
 
 
-
+# print is an I/O operation and unfortunately can block (terminal not ready etc)
+# therefore we must copy the sampling buffer into another buffer to guarantee
+# correct timing wrt Core 0 sampling
 def print_buffer(buffer_zone):
+    global p_buf
     board_led.on()
+    if buffer_zone == 1:
+        p_buf[:] = ring_buffer[:BUFFER_START_B]
+    elif buffer_zone == 2:
+        p_buf[:] = ring_buffer[BUFFER_START_B:]
     if DEBUG_MODE == True:
         # write out the selected portion of buffer as hexadecimal text
-        if buffer_zone == 1:
-            sys.stdout.buffer.write(binascii.hexlify(ring_buffer[:BUFFER_START_B]))
-        elif buffer_zone == 2:
-            sys.stdout.buffer.write(binascii.hexlify(ring_buffer[BUFFER_START_B:]))
+        sys.stdout.buffer.write(binascii.hexlify(p_buf))
     else:
-        # write out the selected portion of buffer in raw binary
-        if buffer_zone == 1:
-            sys.stdout.buffer.write(ring_buffer[:BUFFER_START_B])
-        elif buffer_zone == 2:
-            sys.stdout.buffer.write(ring_buffer[BUFFER_START_B:])
+        # write out the selected portion of buffer as bytes
+        sys.stdout.buffer.write(p_buf)
     sys.stdout.buffer.write('\n')
     board_led.off()
 
 
 # Runs on Core 1
 def print_responder():
+    global p_buf
     print('Core 1 print_responder() starting, hello...')
-    lpr = 0
+    lpr = 1
     pr = 1
+    p_buf = bytearray(BUFFER_SIZE * 8 // 2)  # half the size of the sampling bytearray
     while running == True:
-        lk.acquire()
+        #lk.acquire()
         pr = print_request
-        lk.release()
+        #lk.release()
         if pr != lpr:
             print_buffer(pr)
             lpr = pr
-        time.sleep(0.01)  # microsleep to allow Core 0 to acquire the lock
     print('print_responder() exited on Core 1')
 
 
@@ -205,7 +207,12 @@ def main():
     # the print process runs on Core 1
     print('Starting the print process on Core 1...')
     _thread.start_new_thread(print_responder, ())  # Start Core 1 (printing)
+    time.sleep(1)        # give it some time to initialise
     
+    # disable garbage collector
+    # do not allocate any new memory below here
+    gc.disable()
+
     print('Setting up the ADC (DR*) interrupt...')
     # bind the sampler handler to a falling edge transition on the DR pin
     # can't yet get stable operation with a hard interrupt, soft interrupt
@@ -220,22 +227,22 @@ def main():
 
     # a do nothing loop now runs in idle time until the program is stopped
     print('Entering main loop...')
-            
+    
     while running == True:
         # wait while writing buffer zone 1
         while buffer_boolean == 0:
             continue
         # print it now
-        lk.acquire()
+        #lk.acquire()
         print_request = 1
-        lk.release()
+        #lk.release()
         # wait while writing buffer zone 2
         while buffer_boolean != 0:
             continue
         # print it now
-        lk.acquire()
+        #lk.acquire()
         print_request = 2
-        lk.release()
+        #lk.release()
     # finish sampling
     cs_adc.value(1)
     print('Core 0 exited.')
@@ -250,6 +257,5 @@ if __name__ == '__main__':
         cs_adc.value(1)
         gc.enable()
         
-
 
 

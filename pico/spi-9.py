@@ -74,10 +74,21 @@ def setup_adc(spi, cs, reset):
     time.sleep(0.1)
     # Set the gain configuration register 0x0b
     # 3 bits per channel (12 LSB in all)
-    # binary codes 101=32x, 100=16x, 011=8x, 010=4x, 001=2x, 000=1x
+    # binary codes:
+    # 101=32x
+    # 100=16x
+    # 011=8x
+    # 010=4x
+    # 001=2x
+    # 000=1x
     # XXXXXXXX XXXX---- --------
     # channel ->   3332 22111000 
-    bs = [0x00, 0x00, 0x00]
+    g0 = 32    # differential current
+    g1 = 2     # current 1
+    g2 = 2     # current 2
+    g3 = 1     # voltage
+    gains = (g0 << 9) + (g1 << 6) + (g2 << 3) + g3 
+    bs = [0x00, gains >> 8, gains & 0b11111111]
     print('Setting gain register at 0b to {:02x} {:02x} {:02x}'.format(*bs))
     set_and_verify_adc_register(spi, cs, 0x0b, bytes(bs))
     time.sleep(1)
@@ -102,7 +113,7 @@ def setup_adc(spi, cs, reset):
     # 3rd byte sets temperature coefficient (leave as default 0x50)
     bs = [0x24, 0x60, 0x50]
     if DEBUG_MODE == True:
-        bs[1] = 0xe0    # slow
+        bs[1] = 0xe0    # slow down sampling for debug mode
     print('Setting configuration register CONFIG0 at 0d to {:02x} {:02x} {:02x}'.format(*bs))
     set_and_verify_adc_register(spi, cs, 0x0d, bytes(bs))
     time.sleep(1)
@@ -230,19 +241,17 @@ def main():
     
     while running == True:
         # wait while writing buffer zone 1
+        lk.acquire()
         while buffer_boolean == 0:
             continue
-        # print it now
-        #lk.acquire()
-        print_request = 1
-        #lk.release()
+        # buffer zone 1 ready, print it now
+        lk.release()
         # wait while writing buffer zone 2
+        lk.acquire()
         while buffer_boolean != 0:
             continue
-        # print it now
-        #lk.acquire()
-        print_request = 2
-        #lk.release()
+        # buffer zone 2 ready, print it now
+        lk.release()
     # finish sampling
     cs_adc.value(1)
     print('Core 0 exited.')
@@ -256,6 +265,38 @@ if __name__ == '__main__':
         running = False
         cs_adc.value(1)
         gc.enable()
-        
 
 
+#
+# To prevent deadlock, if Core 0 has instructed a print
+# it must release and not re-acquire a lock until the print is cleared
+# Similarly if Core 1 has cleared a print, it must release and not
+# re-acquire a lock until a new print is instructed.        
+# Timing chart
+# Core 0           Core 1
+# filling z1       -
+# ACQUIRE          -
+# -> req print z1  -
+# RELEASE          -
+# filling z2       ACQUIRE   SYNC
+# -                -> copy z1 to local
+# -                <- z1 cleared
+# -                print local
+# -                RELEASE
+# ACQUIRE          -
+# -> req print z2  -
+# RELEASE          -
+# filling z1       ACQUIRE   SYNC
+# -                -> copy z2 to local
+# -                <- z2 cleared
+# -                print local
+# -                RELEASE
+# ACQUIRE          -
+# -> req print z1  -
+# RELEASE          -
+# filling z2       ACQUIRE   SYNC
+# -                -> copy z1 to local
+# -                <- z1 cleared
+# -                print local
+# -                RELEASE
+# ...

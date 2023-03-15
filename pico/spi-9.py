@@ -9,35 +9,34 @@ import sys
 DEBUG_MODE = False
 
 # Buffer memory
-# Advantage if this is a power of two, so that the buffer pointer can 'flip' its MSB
-# to indicate to the print function which 'half' of the buffer is safe to print
-BUFFER_SIZE = 256                            # number of samples in a buffer
-BUFFER_BIT_MASK = BUFFER_SIZE * 8 - 1        # bit mask to circulate the buffer pointer
-END_POINTER     = BUFFER_SIZE * 8
-HALFWAY_POINTER = END_POINTER // 2           # beginning of 2nd half
+# Advantage if this is a power of two, to allow divide by two and bit masks to work easily
+BUFFER_SIZE = 256                          # number of samples in a buffer
+BUFFER_BIT_MASK = BUFFER_SIZE * 8 - 1      # bit mask to circulate the buffer pointer
+END_POINTER     = BUFFER_SIZE * 8          # pointer value to end of buffer
+HALFWAY_POINTER = END_POINTER // 2         # beginning of 2nd half
 
 
-# pin and SPI setup
-pico_led     = machine.Pin(25, Pin.OUT)    # this is the led on the Pico
-board_led    = machine.Pin(15, Pin.OUT)    # this is the 'buffer' LED on the PCB
-cs_adc       = machine.Pin(1, Pin.OUT)
-sck_adc      = machine.Pin(2, Pin.OUT)
-sdi_adc      = machine.Pin(3, Pin.OUT)
-sdo_adc      = machine.Pin(0, Pin.IN)
-reset_adc    = machine.Pin(5, Pin.OUT)
-dr_adc       = machine.Pin(4, Pin.IN)
-reset_me     = machine.Pin(14, Pin.IN)
+# pin setup
+pico_led     = machine.Pin(25, Pin.OUT)    # the led on the Pico
+board_led    = machine.Pin(15, Pin.OUT)    # the 'buffer' LED on the PCB
+cs_adc       = machine.Pin(1, Pin.OUT)     # chip select pin of the ADC
+sck_adc      = machine.Pin(2, Pin.OUT)     # serial clock for the SPI interface
+sdi_adc      = machine.Pin(3, Pin.OUT)     # serial input to ADC from Pico
+sdo_adc      = machine.Pin(0, Pin.IN)      # serial output from ADC to Pico
+reset_adc    = machine.Pin(5, Pin.OUT)     # hardware reset of ADC commanded from Pico (active low)
+dr_adc       = machine.Pin(4, Pin.IN)      # data ready from ADC to Pico (active low)
+reset_me     = machine.Pin(14, Pin.IN)     # hardware reset of Pico (active low, implemented with interrupt handler)
 
-
+# SPI setup
 spi_adc = machine.SPI(0,
-                  baudrate = 6000000,
-                  polarity = 0,
-                  phase = 0,
-                  bits = 8,
-                  firstbit = machine.SPI.MSB,
-                  sck = sck_adc,
-                  mosi = sdi_adc,
-                  miso = sdo_adc)
+                  baudrate   = 6000000,
+                  polarity   = 0,
+                  phase      = 0,
+                  bits       = 8,
+                  firstbit   = machine.SPI.MSB,
+                  sck        = sck_adc,
+                  mosi       = sdi_adc,
+                  miso       = sdo_adc)
 
 
 def write_bytes(spi, cs, addr, bs):
@@ -65,22 +64,15 @@ def set_and_verify_adc_register(spi, cs, reg, bs):
 def setup_adc(spi, cs, reset):
     # Setup the MC3912 ADC
     # deselect the ADC
-    cs_adc.value(1)
+    cs.value(1)
     
     # reset the adc
-    reset_adc.value(0)
+    reset.value(0)
     time.sleep(0.1)
-    reset_adc.value(1)
+    reset.value(1)
     time.sleep(0.1)
     # Set the gain configuration register 0x0b
     # 3 bits per channel (12 LSB in all)
-    # binary codes:
-    # 101=32x
-    # 100=16x
-    # 011=8x
-    # 010=4x
-    # 001=2x
-    # 000=1x
     # XXXXXXXX XXXX---- --------
     # channel ->   3332 22111000
     G = { '32x':0b101, '16x':0b100, '8x':0b011, '4x':0b010, '2x':0b001, '1x':0b000 } 
@@ -112,9 +104,10 @@ def setup_adc(spi, cs, reset):
     # 0xc0 = 2048:   488 Sa/s
     # 0xe0 = 4096:   244 Sa/s
     # 3rd byte sets temperature coefficient (leave as default 0x50)
-    bs = [0x24, 0x40, 0x50]
+    SSP = { '244':0xe0, '488':0xc0, '976':0xa0, '1.953k':0x80, '3.906k':0x60, '7.812k':0x40, '15.625k':0x20, '31.250k':0x00 }
+    bs = [0x24, SSP['7.812k'], 0x50]
     if DEBUG_MODE == True:
-        bs[1] = 0xa0    # slow down sampling for debug mode
+        bs[1] = SSP['976']    # slow down sampling for debug mode
     print('Setting configuration register CONFIG0 at 0d to 0x{:02x} 0x{:02x} 0x{:02x}'.format(*bs))
     set_and_verify_adc_register(spi, cs, 0x0d, bytes(bs))
     time.sleep(1)
@@ -136,22 +129,12 @@ def adc_read_handler(dr_adc):
  
         
 # interrupt handler for reset pin (this pin is commanded from Pi GPIO)    
-def pico_restart(reset_me):
+def pico_restart_handler(reset_me):
     machine.reset()
     
-    
-def initialise():
-    # configure the ADC
-    setup_adc(spi_adc, cs_adc, reset_adc)
 
-
-# print is an I/O operation and unfortunately can block (terminal not ready etc)
-# therefore we ensure that *ALL* shared memory access takes place inside the lock
-# and Core 0 is not allowed to use it until we're finished.
-
-# Runs on Core 1
+# NB print_responder() runs on Core 1
 def print_responder():
-    # print('Core 1 print_responder() starting, hello...')
     p_buf = bytearray(BUFFER_SIZE * 8 // 2)
     
     def print_it():
@@ -164,14 +147,19 @@ def print_responder():
             # write out the selected portion of buffer as bytes
             sys.stdout.buffer.write(p_buf)
         board_led.off()
-     
-    while running1 == True:
-        while (running1 == True) and (print_request != 1):
+    
+    ########################################################
+    ######### MAIN LOOP FOR CORE 1 STARTS HERE
+    ########################################################
+    while running == True:
+        while (running == True) and (print_request != 1):
             continue
+        # we received a request to print 'page 1'
         p_buf[:] = acquire_buffer[0:HALFWAY_POINTER]
         print_it()
-        while (running1 == True) and (print_request != 2):
+        while (running == True) and (print_request != 2):
             continue
+        # we received a request to print 'page 2'
         p_buf[:] = acquire_buffer[HALFWAY_POINTER:END_POINTER]
         print_it()
                 
@@ -179,7 +167,7 @@ def print_responder():
 
 
 def main():
-    global acquire_buffer, running0, running1, print_request, in_ptr
+    global acquire_buffer, running, print_request, in_ptr
 
     # waiting in case of lock up, opportunity to cancel
     print('PICO starting up.')
@@ -190,28 +178,25 @@ def main():
     
     # configure the ADC
     print('Initialising ADC...')
-    initialise()
+    setup_adc(spi_adc, cs_adc, reset_adc)
     time.sleep(1)
 
     print('Setting up RESET interrupt...')
     # configure the interrupt handlers
     # bind the reset handler to a falling edge transition on the RESET ME pin
-    reset_me.irq(trigger = Pin.IRQ_FALLING, handler = pico_restart, hard=True)
+    reset_me.irq(trigger = Pin.IRQ_FALLING, handler = pico_restart_handler, hard=True)
     time.sleep(1)
     
-    running0 = True             # flags for running each core
-    running1 = True
-    spi_buffer = bytearray(8)   # temporary buffer for reading one sample via SPI
+    # initial values for global variables shared with second core
+    # and interrupt service routine
+    running = True              # flag for running each core
     acquire_buffer = bytearray(BUFFER_SIZE * 8)   # 2 bytes per channel, 4 channels
     in_ptr = 0                  # buffer cell pointer (for DR* interrupt service routine)
-    ptr = 0
     print_request = 0           # flag to indicate that printing is required
 
-    # create a lock around access to the 'print_request' variable
-    #lk = _thread.allocate_lock()
     # the print process runs on Core 1
-    print('Starting the print process on Core 1...')
-    _thread.start_new_thread(print_responder, ())  # Start Core 1 (printing)
+    print('Starting the print_responder() process on Core 1...')
+    _thread.start_new_thread(print_responder, ())
     time.sleep(1)        # give it some time to initialise
     
     # disable garbage collector
@@ -231,18 +216,27 @@ def main():
     cs_adc.value(0)
     spi_adc.write(bytes([0b01000001]))
 
+ 
+    ########################################################
+    ######### MAIN LOOP FOR CORE 0 STARTS HERE
+    ########################################################
     print('Entering main loop...')
     gc.collect()
-    while running0 == True:
+    ptr = 0
+    spi_buffer = bytearray(8)   # temporary buffer for reading one sample via SPI
+    while running == True:
         # this loop waits for the ISR to change the pointer value
         while in_ptr == ptr:
             continue
+
         # now immediately read the new data from ADC
         spi_adc.readinto(spi_buffer)
         # the pointer is volatile, so capture its value
         ptr = in_ptr
-        # store the data in the buffer
+
+        # store the new data in the buffer
         acquire_buffer[ptr : ptr+8] = spi_buffer
+
         # see if we have reached a 'page boundary' in the buffer
         # if so, instruct Core 1 CPU to print it
         if ptr == HALFWAY_POINTER:
@@ -261,55 +255,9 @@ if __name__ == '__main__':
         main()
     except:
         print('Interrupted -- re-enabling auto garbage collector.')
-        running0 = False
-        running1 = False
+        running = False
         cs_adc.value(1)
         gc.enable()
 
 
-#
-# To prevent deadlock, if Core 0 has instructed a print
-# it *must* release and not re-acquire a lock until the print is cleared
-# Similarly if Core 1 has cleared a print, it *must* release and not
-# re-acquire a lock until a new print is instructed.
-# Additional timing safeguards:
-# The I/O print operation in Core 1 doesn't have a guaranteed completion time,
-# it can block and so the data must be copied out of the main buffer first
-# to prevent a memory fault.
-# Timing chart
-# Core 0                  Core 1
-# filling z1              -
-# ACQUIRE                 -
-# print req clear?        -
-# zone transit?           -
-# -> req print z1         -                               (print_request = 1)
-# RELEASE                 -
-# filling z2              ACQUIRE
-# -                       req print?
-# -                       -> copy z1 to local
-# -                       <- clear print req              (print_request = -1)
-# -                       print local
-# -                       RELEASE
-# ACQUIRE                 -
-# print req clear?        -
-# zone transit?           -
-# -> req print z2         -                               (print_request = 2)
-# RELEASE                 -
-# filling z1              ACQUIRE
-# -                       req print?
-# -                       -> copy z2 to local
-# -                       <- clear print req              (print_request = -2)              
-# -                       print local
-# -                       RELEASE
-# ACQUIRE                 -
-# print req clear?        -
-# zone transit?           -
-# -> req print z1         -
-# RELEASE                 -
-# filling z2              ACQUIRE
-# -                       req print?
-# -                       -> copy z1 to local
-# -                       <- clear print req
-# -                       print local
-# -                       RELEASE
-# ...
+

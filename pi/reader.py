@@ -17,9 +17,13 @@ def main():
 
     while 1:    
         try:
-            bs = ser.read(128)
-            sys.stdout.buffer.write(binascii.hexlify(bs))
-            sys.stdout.write('\n')
+            data_block = (ser.read(256).hex())
+            # process data in chunks of 8 bytes, or 16 hex digits
+            for i in range(0, len(data_block), 16):
+                print('{:04x} {} {} {} {}'.format(i//16, data_block[i:i+4], \
+                                                         data_block[i+4:i+8], \
+                                                         data_block[i+8:i+12], \
+                                                         data_block[i+12:i+16]))
             sys.stdout.flush()
         except ValueError:
             print('reader.py, main(): Failed to read "' + line + '".', file=sys.stderr)

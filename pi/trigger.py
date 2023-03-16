@@ -44,7 +44,7 @@ def main():
     # trigger conditions
     direction = 'rising'
     threshold = 0.0
-    ch = 1
+    ch = 4
 
     # read the first couple of lines to figure out sample interval
     try:

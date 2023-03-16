@@ -138,8 +138,18 @@ def pico_restart_handler(reset_me):
     machine.reset()
     
 
-# NB print_responder() runs on Core 1
+# NB print_responder() runs on Core 1.
+# It works by detecting the 'print_flag' shared from Core 0 changing value.
+# This allows the print operation to synchronise to what is happening on Core 0,
+# so that it only tries to print the portion of buffer that is not currently 
+# being overwritten.
 def print_responder():
+    
+    # Create memoryview objects that point to each half of the buffer.
+    # This avoids having to make a copy of a portion of the buffer every
+    # time we print, which would waste time and leak memory that would need GC.
+    mv_p1 = memoryview(mv_acq[0:PAGE1_END])
+    mv_p2 = memoryview(mv_acq[PAGE1_END:PAGE2_END])
     
     def print_buffer(bs):
         board_led.on()
@@ -152,22 +162,19 @@ def print_responder():
             sys.stdout.buffer.write(bs)
         board_led.off()
     
-    
-    # Create memoryview objects for each page of the buffer
-    mv_p1 = memoryview(mv_acq[0:PAGE1_END])
-    mv_p2 = memoryview(mv_acq[PAGE1_END:PAGE2_END])
-    
     ########################################################
     ######### MAIN LOOP FOR CORE 1 STARTS HERE
     ########################################################
     while running == True:
+        # wait while Core 0 is writing to page 1
         while (running == True) and (print_flag == 0):
             continue
-        # print flag just flipped, print 'page 1'
+        # flag flipped, print 'page 1'
         print_buffer(mv_p1)
+        # now wait while Core 0 is writing to page 2
         while (running == True) and (print_flag == PAGE_FLIP_BIT_MASK):
             continue
-        # print flag just flipped, print 'page 2'
+        # flag flipped, print 'page 2'
         print_buffer(mv_p2)
                 
     print('print_responder() exited on Core 1')
@@ -199,9 +206,9 @@ def main():
  
     # Make an array of memoryview objects that point into an acquire_buffer.
     # this makes it possible to access slices of the buffer without creating new objects
-    # or allocating new memory at run time. In turn this allows us to switch off the
-    # garbage collector prior to starting the main loop, allowing the program run in
-    # real time without interruptions.
+    # or allocating new memory when the main loop is running. In turn this allows us 
+    # to switch off the garbage collector, allowing the program to continuously
+    # sample without interruptions.
     acquire_buffer = bytearray(BUFFER_SIZE * 8)   # 2 bytes per channel, 4 channels
     mv_acq = memoryview(acquire_buffer)
     # We now create a memoryview reference into each sample or slice of the buffer.
@@ -214,8 +221,7 @@ def main():
     print_flag = 0           # flag to indicate which chunk of the buffer to print
 
 
-    # The print process runs on Core 1. It detects the 'print_flag' changing
-    # value to synchronise to what is happening on Core 0.
+    # The print process runs on Core 1.
     print('Starting the print_responder() process on Core 1...')
     _thread.start_new_thread(print_responder, ())
     time.sleep(1)        # give it some time to initialise
@@ -227,7 +233,7 @@ def main():
         gc.disable()
 
     print('Setting up the ADC (DR*) interrupt...')
-    # bind the sampler handler to a falling edge transition on the DR pin
+    # Bind the sampler handler to a falling edge transition on the DR pin
     dr_adc.irq(trigger = Pin.IRQ_FALLING, handler = adc_read_handler, hard=True)
 
     # Now command ADC to repeatedly refresh ADC registers, by holding CS* low

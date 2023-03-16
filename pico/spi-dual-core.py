@@ -171,7 +171,7 @@ def print_responder():
 
 
 def main():
-    global mv_acq, mv_cells, acquire_buffer, running, print_request, in_ptr
+    global mv_acq, running, print_request, in_ptr
 
     # waiting in case of lock up, opportunity to cancel
     print('PICO starting up.')
@@ -243,7 +243,7 @@ def main():
         # this loop waits for the ISR to change the pointer value
         while in_ptr == ptr:
             continue
-        # immediately read the new data from ADC
+        # in_ptr has been incremented: immediately read the new data from ADC
         spi_adc.readinto(mv_cells[in_ptr])
         # the pointer is volatile, so capture its value
         ptr = in_ptr

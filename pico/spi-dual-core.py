@@ -7,15 +7,18 @@ import _thread
 import sys
 from micropython import const
 
-DEBUG_MODE         = const(False)
+DEBUG_MODE           = const(False)
 
 # Buffer memory
-# Advantage if this is a power of two, to allow divide by two and bit masks to work easily
-BUFFER_SIZE        = const(128)               # number of samples in a buffer
-HALF_BUFFER_SIZE   = const(BUFFER_SIZE // 2)
-BUFFER_BIT_MASK    = const(BUFFER_SIZE - 1)   # bit mask to circulate the buffer pointer
-END_POINTER        = const(BUFFER_SIZE * 8)   # pointer value to end of buffer
-HALFWAY_POINTER    = const(END_POINTER // 2)  # beginning of 2nd half
+# Advantage if the buffer size is a power of two, to allow divide by two and bit masks to work easily
+# The buffer size is measured in 'samples' or number of cells. However note the underlying memory size in bytes
+# is BUFFER_SIZE * 8 because we have 4 measurement channels and 2 bytes per channel.
+BUFFER_SIZE          = const(128)                   # number of samples in a buffer
+BUFFER_END_BIT_MASK  = const(BUFFER_SIZE - 1)       # bit mask to circulate the buffer pointer
+PAGE_FLIP_BIT_MASK   = const(BUFFER_SIZE // 2)      # bit mask to flip the print flag
+PAGE1_END            = const(BUFFER_SIZE * 8 // 2)  # bytearray index to end of page 1 (first half of buffer)
+PAGE2_END            = const(BUFFER_SIZE * 8)       # bytearray index to end of page 2 (second half of buffer)
+
 
 
 # pin setup
@@ -56,7 +59,7 @@ def read_bytes(spi, cs, addr, n):
 
 def set_and_verify_adc_register(spi, cs, reg, bs):
     # The actual address byte leads with binary 01 and ends with the read/write bit (1 or 0).
-    # The five bits in the middle are the 'register' address
+    # The five bits in the middle are the 'register' address inside the ADC
     addr = 0x40 | (reg << 1)
     write_bytes(spi, cs, addr, bs)
     obs = read_bytes(spi, cs, addr, len(bs))
@@ -121,16 +124,16 @@ def setup_adc(spi, cs, reset):
     time.sleep(1)
     
     
-# interrupt handler for data ready pin
+# Interrupt handler for data ready pin (this pin is commanded from the ADC)
 def adc_read_handler(dr_adc):
     global in_ptr
     # 'anding' the pointer with a bit mask that has binary '1' in the LSBs
     # makes the buffer pointer return to zero without needing an 'if' conditional
-    # this means it executes in constant time
-    in_ptr = (in_ptr + 1) & BUFFER_BIT_MASK    # BUFFER_BIT_MASK = BUFFER_SIZE - 1
+    # this means the instruction executes in constant time
+    in_ptr = (in_ptr + 1) & BUFFER_END_BIT_MASK
  
         
-# interrupt handler for reset pin (this pin is commanded from Pi GPIO)    
+# Interrupt handler for reset pin (this pin is commanded from Pi GPIO)    
 def pico_restart_handler(reset_me):
     machine.reset()
     
@@ -138,86 +141,88 @@ def pico_restart_handler(reset_me):
 # NB print_responder() runs on Core 1
 def print_responder():
     
-    def print_it(mv_page):
+    def print_buffer(bs):
         board_led.on()
         if DEBUG_MODE == True:
             # write out the selected portion of buffer as hexadecimal text
-            sys.stdout.write(binascii.hexlify(mv_page))
+            sys.stdout.write(binascii.hexlify(bs))
             sys.stdout.write('\n')
         else:
             # write out the selected portion of buffer as bytes
-            sys.stdout.buffer.write(mv_page)
+            sys.stdout.buffer.write(bs)
         board_led.off()
     
     
     # Create memoryview objects for each page of the buffer
-    mv_p1 = memoryview(mv_acq[0:HALFWAY_POINTER])
-    mv_p2 = memoryview(mv_acq[HALFWAY_POINTER:END_POINTER])
+    mv_p1 = memoryview(mv_acq[0:PAGE1_END])
+    mv_p2 = memoryview(mv_acq[PAGE1_END:PAGE2_END])
     
     ########################################################
     ######### MAIN LOOP FOR CORE 1 STARTS HERE
     ########################################################
     while running == True:
-        while (running == True) and (print_request != 1):
+        while (running == True) and (print_flag == 0):
             continue
-        # we received a request to print 'page 1'
-        print_it(mv_p1)
-        while (running == True) and (print_request != 2):
+        # print flag just flipped, print 'page 1'
+        print_buffer(mv_p1)
+        while (running == True) and (print_flag == PAGE_FLIP_BIT_MASK):
             continue
-        # we received a request to print 'page 2'
-        print_it(mv_p2)
+        # print flag just flipped, print 'page 2'
+        print_buffer(mv_p2)
                 
     print('print_responder() exited on Core 1')
 
 
 def main():
-    global mv_acq, running, print_request, in_ptr
+    global mv_acq, running, print_flag, in_ptr
 
-    # waiting in case of lock up, opportunity to cancel
+    # Waiting in case of lock up, opportunity to cancel
     print('PICO starting up.')
     time.sleep(1)
     print('Waiting for 10 seconds...')
     time.sleep(10)
     print('Now continuing with setup.')
     
-    # configure the ADC
+    # Configure the ADC
     print('Initialising ADC...')
     setup_adc(spi_adc, cs_adc, reset_adc)
     time.sleep(1)
 
     print('Setting up RESET interrupt...')
-    # configure the interrupt handlers
     # bind the reset handler to a falling edge transition on the RESET ME pin
     reset_me.irq(trigger = Pin.IRQ_FALLING, handler = pico_restart_handler, hard=True)
     time.sleep(1)
     
-    # initial values for global variables shared with second core
+    # Initial values for global variables that are shared with second core
     # and interrupt service routine
     running = True              # flag for running each core
  
-    # make an array of memoryview objects that point into an acquire_buffer.
+    # Make an array of memoryview objects that point into an acquire_buffer.
     # this makes it possible to access slices of the buffer without creating new objects
-    # at run time. In turn this allows us to switch off the garbage collector in the main
-    # loop, allowing the program run in real time without interruptions.
+    # or allocating new memory at run time. In turn this allows us to switch off the
+    # garbage collector prior to starting the main loop, allowing the program run in
+    # real time without interruptions.
     acquire_buffer = bytearray(BUFFER_SIZE * 8)   # 2 bytes per channel, 4 channels
     mv_acq = memoryview(acquire_buffer)
+    # We now create a memoryview reference into each sample or slice of the buffer.
+    # Later, the SPI read instruction will write into these memory slices directly.
     mv_cells = []
     for i in range(0, BUFFER_SIZE):
         mv_cells.append(memoryview(mv_acq[i*8 : i*8+8]))
     
-    in_ptr = 0                  # buffer cell pointer (for DR* interrupt service routine)
-    print_request = 0           # flag to indicate that printing is required
+    in_ptr = 0               # buffer cell pointer (for DR* interrupt service routine)
+    print_flag = 0           # flag to indicate which chunk of the buffer to print
 
 
-    # the print process runs on Core 1
+    # The print process runs on Core 1. It detects the 'print_flag' changing
+    # value to synchronise to what is happening on Core 0.
     print('Starting the print_responder() process on Core 1...')
     _thread.start_new_thread(print_responder, ())
     time.sleep(1)        # give it some time to initialise
     
-    # disable garbage collector
-    # heap memory can't be recovered below here
-    # so we must avoid functions that repeatedly allocate memory
-    # eg we use hexlify in DEBUG_MODE.
+    # Disable garbage collector, heap memory won't be automatically recovered.
+    # From now on, we must avoid functions that repeatedly allocate memory.
+    # eg we use hexlify in DEBUG_MODE, so must leave GC enabled for that case.
     if DEBUG_MODE == False:
         gc.disable()
 
@@ -225,9 +230,8 @@ def main():
     # bind the sampler handler to a falling edge transition on the DR pin
     dr_adc.irq(trigger = Pin.IRQ_FALLING, handler = adc_read_handler, hard=True)
 
-    # now command ADC to repeatedly refresh ADC registers, by holding CS* low
-    # pico will successively read these registers
-    # each time the DR* pin is activated
+    # Now command ADC to repeatedly refresh ADC registers, by holding CS* low
+    # Pico will successively read the SPI bus each time the DR* pin is activated
     cs_adc.value(0)
     spi_adc.write(bytes([0b01000001]))
 
@@ -236,29 +240,31 @@ def main():
     ######### MAIN LOOP FOR CORE 0 STARTS HERE
     ########################################################
     print('Entering main loop...')
-    # manual garbage collect before we go
+    # Manual garbage collect before we start looping
     gc.collect()
-    ptr = 0
+    # Local variable to help us detect when the ISR changes the value of
+    # the buffer index in_ptr
+    p = 0
     while running == True:
-        # this loop waits for the ISR to change the pointer value
-        while in_ptr == ptr:
+        # wait for the ISR to change the pointer value
+        while in_ptr == p:
             continue
-        # in_ptr has been incremented: immediately read the new data from ADC
+        # in_ptr has changed value: immediately read the new data from ADC
         spi_adc.readinto(mv_cells[in_ptr])
         # the pointer is volatile, so capture its value
-        ptr = in_ptr
+        p = in_ptr
         # see if we have reached a 'page boundary' in the buffer
         # if so, instruct Core 1 CPU to print it
-        if ptr == HALF_BUFFER_SIZE:
-            print_request = 1
-        elif ptr == 0:
-            print_request = 2
-            
-    # finish sampling
+        # 'anding' the pointer with a bit mask that has binary '1' in the MSB
+        # makes the print_flag value 'flip flop' without needing an 'if' conditional
+        # this means the instruction will execute in constant time
+        print_flag = p & PAGE_FLIP_BIT_MASK
+ 
+    # Tell the ADC to stop sampling
     cs_adc.value(1)
     print('Core 0 exited.')
     
-# run from here
+# Run from here
 if __name__ == '__main__':
     try:
         main()

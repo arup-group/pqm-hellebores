@@ -82,7 +82,7 @@ def setup_adc(spi, cs, reset):
     g1 = G['2x']     # current 1
     g2 = G['2x']     # current 2
     g3 = G['1x']     # voltage
-    gains = (g0 << 9) + (g1 << 6) + (g2 << 3) + g3 
+    gains = (g3 << 9) + (g2 << 6) + (g1 << 3) + g0 
     bs = [0x00, gains >> 8, gains & 0b11111111]
     print('Setting gain register at 0b to 0x{:02x} 0x{:02x} 0x{:02x}'.format(*bs))
     set_and_verify_adc_register(spi, cs, 0x0b, bytes(bs))

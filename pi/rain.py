@@ -9,9 +9,9 @@ import json
 
 
 # set up constants
-freq = 50
-sample_rate = 1000
-sample_period_ns = 1000000000.0/sample_rate
+freq = 50                                     # Hertz
+sample_rate = 7812.5                          # samples/second
+sample_period_ns = 1000000000.0/sample_rate   # in nanoseconds
 
 
 def get_settings():
@@ -33,13 +33,13 @@ def settings_handler(signum, frame):
 
 
 def get_sample(i, t, f):
-    t = t/1000000000.0
-    c1 = int(25000.0*math.sin(2.0*math.pi*f*t) + 100.0*(random.random()-0.5))
-    c2 = int(8000.0*math.sin(2.0*math.pi*f*t) + 50.0*(random.random()-0.5))
-    c3 = int(12000.0*math.sin(2.0*math.pi*f*t) + 50.0*(random.random()-0.5))
-    c4 = int(2000.0*math.sin(2.0*math.pi*f*t) + 10.0*(random.random()-0.5))
+    t = t/1000000000.0       # seconds
+    c0 = int(25000.0*math.sin(2.0*math.pi*f*t) + 100.0*(random.random()-0.5))
+    c1 = int(8000.0*math.sin(2.0*math.pi*f*t) + 50.0*(random.random()-0.5))
+    c2 = int(12000.0*math.sin(2.0*math.pi*f*t) + 50.0*(random.random()-0.5))
+    c3 = int(6800.0*math.sin(2.0*math.pi*f*t) + 10.0*(random.random()-0.5))
     # the '& 0xffff' truncates negative numbers to fit in 16 bits
-    return (i & 0xffff, c1 & 0xffff, c2 & 0xffff, c3 & 0xffff, c4 & 0xffff)
+    return (i & 0xffff, c0 & 0xffff, c1 & 0xffff, c2 & 0xffff, c3 & 0xffff)
 
 def main():
     # read settings or set defaults into global variables 
@@ -52,8 +52,7 @@ def main():
     # we use high resolution system clock to figure out when to print out
     # the next sample iteration
     tp = int(time.monotonic_ns()/sample_period_ns)
-    i = 0
-
+    i=0
     while 1:
         # check the clock and see if it has changed by one sample period
         tn = int(time.monotonic_ns()/sample_period_ns)
@@ -61,7 +60,6 @@ def main():
             tp = tn
             print('{:04x} {:04x} {:04x} {:04x} {:04x}'.format(*get_sample(i, i*sample_period_ns, freq)))
             i = i + 1
-
 
 if __name__ == '__main__':
     main()

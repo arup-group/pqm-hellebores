@@ -34,10 +34,10 @@ def settings_handler(signum, frame):
 
 def get_sample(i, t, f):
     t = t/1000000000.0       # seconds
-    c0 = int(25000.0*math.sin(2.0*math.pi*f*t) + 100.0*(random.random()-0.5))
-    c1 = int(8000.0*math.sin(2.0*math.pi*f*t) + 50.0*(random.random()-0.5))
-    c2 = int(12000.0*math.sin(2.0*math.pi*f*t) + 50.0*(random.random()-0.5))
-    c3 = int(6800.0*math.sin(2.0*math.pi*f*t) + 10.0*(random.random()-0.5))
+    c0 = int(25000.0*math.sin(2.0*math.pi*f*t) + 1000.0*(random.random()-0.5))
+    c1 = int(8000.0*math.sin(2.0*math.pi*f*t) + 200.0*(random.random()-0.5))
+    c2 = int(12000.0*math.sin(2.0*math.pi*f*t) + 500.0*(random.random()-0.5))
+    c3 = int(6800.0*math.sin(2.0*math.pi*f*t) + 500.0*(random.random()-0.5))
     # the '& 0xffff' truncates negative numbers to fit in 16 bits
     return (i & 0xffff, c0 & 0xffff, c1 & 0xffff, c2 & 0xffff, c3 & 0xffff)
 

@@ -9,7 +9,7 @@ import json
 
 
 # set up constants
-freq = 50                                     # Hertz
+freq = 50.0                                   # Hertz
 sample_rate = 7812.5                          # samples/second
 sample_period_ns = 1000000000.0/sample_rate   # in nanoseconds
 

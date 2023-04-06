@@ -1,26 +1,36 @@
 #!/usr/bin/env python3
 
 # Reset time t=0 in response to signal event eg voltage crossing zero
-# Interpolate sample readings to centre the subsequent time samples on t=0
+# Time offset other sample readings with respect to the trigger
 
 import sys
 
-OUTPUT_FRAME_LENGTH = 100.0      # milliseconds
-PRE_TRIGGER = 10.0               # percent
+PRE_TRIGGER_TIME = 10.0                     # milliseconds
+POST_TRIGGER_TIME = 30.0                    # milliseconds
+RE_TRIGGER_HOLD_OFF_TIME = (PRE_TRIGGER_TIME + POST_TRIGGER_TIME) * 0.9  # milliseconds, allows slightly early re-trigger
 INPUT_BUFFER_SIZE = 65535        # size of pre-trigger sample buffer
- 
 
-def trigger_detect(s0, s1, ch, threshold, direction):
+# trigger conditions
+direction = 'rising'
+threshold = 0.0
+ch = 4
+
+# returns the time interval between samples
+def interval_detect():
+    t0 = [float(w) for w in sys.stdin.readline().split()][0]
+    t1 = [float(w) for w in sys.stdin.readline().split()][0]
+    return t1-t0
+
+# three samples, channel selector and threshold/direction criteria
+# returns true/false 
+def trigger_detect(s0, s1, s2, ch, threshold, direction):
     trigger = False
     if direction == 'rising':
-        trigger = (s1[ch] > threshold and s0[ch] < threshold)
+        trigger = ((s2[ch] > threshold) and (s1[ch] < threshold) and (s0[ch] < s1[ch]))
     elif direction == 'falling':
-        trigger = (s1[ch] < threshold and s0[ch] > threshold) 
-    elif direction == 'either':
-        trigger = ((s1[ch] > threshold and s0[ch] < threshold) or \
-            (s1[ch] < threshold and s0[ch] > threshold)) 
+        trigger = ((s2[ch] < threshold) and (s1[ch] > threshold) and (s0[ch] > s1[ch])) 
     else:
-        print('trigger_detect(): direction option not implemented', file=sys.stderr)
+        print('trigger_detect(): selected direction option not implemented', file=sys.stderr)
     return trigger
 
 def prev_index(index):
@@ -36,29 +46,18 @@ def main():
     for i in range(INPUT_BUFFER_SIZE):     # pre-charge the buffer with zeros
         buf.append([0.0, 0.0, 0.0, 0.0, 0.0])     
 
-    # buffer has size INPUT_BUFFER_SIZE
-    # these are the index pointers for the current (p1) and immediately previous (p0) samples
-    p0 = 0
-    p1 = 1
-
-    # trigger conditions
-    direction = 'rising'
-    threshold = 0.0
-    ch = 4
-
-    # read the first couple of lines to figure out sample interval
+    # figure out sample interval
     try:
-        t0 = [float(w) for w in sys.stdin.readline().split()][0]
-        t1 = [float(w) for w in sys.stdin.readline().split()][0]
+        interval = interval_detect()
     except ValueError:
         print('trigger.py, main(): Error reading first two lines.', file=sys.stderr)
         sys.exit(1)
-    interval = t1 - t0
  
-    # initialise total samples and pre-samples required 
+    # initialise post-samples and pre-samples required 
     # and initialise output counter
-    output_samples = int(OUTPUT_FRAME_LENGTH / interval)
-    output_pre_samples = int(output_samples * PRE_TRIGGER / 100.0)
+    post_trigger_samples = int(POST_TRIGGER_TIME / interval)
+    pre_trigger_samples = int(PRE_TRIGGER_TIME / interval)
+    ii = 0    # input index 
     oi = 0    # output index
 
     # flag for controlling when output is required
@@ -66,37 +65,34 @@ def main():
     for line in sys.stdin:
         line = line.rstrip()
         try:
-            # we store each incoming line in a circular buffer
-            buf[p1] = [float(w) for w in line.split()]
+            # we store each incoming line, whether triggered or not, in a circular buffer
+            buf[ii] = [float(w) for w in line.split()]
         except ValueError:
             print('trigger.py, main(): Failed to read contents of line "' + line + '".', file=sys.stderr)
 
-        if not triggered and trigger_detect(buf[p0], buf[p1], ch, threshold, direction): 
+        # if not currently triggered, or outside the trigger hold-off time, check to see if latest sample causes a trigger
+        if (not triggered or (oi*interval > RE_TRIGGER_HOLD_OFF_TIME)) and trigger_detect(buf[prev_index(prev_index(ii))], buf[prev_index(ii)], buf[ii], ch, threshold, direction): 
             # ok, new trigger, let's go
             triggered = True
-            pre_trigger_index = (p1 - output_pre_samples) % INPUT_BUFFER_SIZE
+            oi = 0
+            pre_trigger_index = (ii - pre_trigger_samples) % INPUT_BUFFER_SIZE
             # print out all the pre-trigger contents of buffer
-            # this will do nothing if the PRE_TRIGGER % is zero
-            print('**** PRE-TRIGGER ****')
-            for i in range(output_pre_samples):
-                print('{:10.3f} {:10.3f} {:10.3f} {:10.3f} {:10.3f}'.format((oi - output_pre_samples)*interval,\
+            for i in range(pre_trigger_samples):
+                print('{:10.3f} {:10.3f} {:10.3f} {:10.3f} {:10.3f}'.format((oi - pre_trigger_samples)*interval,\
                          *buf[(pre_trigger_index + oi) % INPUT_BUFFER_SIZE][1:]))
                 oi = oi + 1
-            print('**** TRIGGER ****')                    
 
         # if a trigger occurred, continue to print out post-trigger samples, as they arrive 
         if triggered:
-            print('{:10.3f} {:10.3f} {:10.3f} {:10.3f} {:10.3f}'.format((oi - output_pre_samples)*interval, *buf[p1][1:]))
+            print('{:10.3f} {:10.3f} {:10.3f} {:10.3f} {:10.3f}'.format((oi - pre_trigger_samples)*interval, *buf[ii][1:]))
             oi = oi + 1
 
-        # if we've finished a frame of data, clear the trigger (which stops the output)
-        if oi*interval >= OUTPUT_FRAME_LENGTH:
+        # but if we've finished a frame of data, clear the trigger (which stops the output)
+        if oi >= (pre_trigger_samples + post_trigger_samples):
             triggered = False
-            oi = 0
 
-        # increment buffer pointers
-        p0 = p1              # last sample
-        p1 = next_index(p1)  # next sample
+        # increment input index
+        ii = next_index(ii)
 
 
 if __name__ == '__main__':

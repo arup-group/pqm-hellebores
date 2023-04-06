@@ -9,16 +9,24 @@
 
 import sys
 
+TIME_SHIFT = 00.0          # milliseconds time axis shift (positive values move '0ms' towards the right)
+TIME_SCALE = 4.0           # milliseconds per division (10 horizontal divisions)
+Y0_SCALE   = 200.0         # volts/amps/watts per division (8 vertical divisions)
+Y1_SCALE   = 200.0         # volts/amps/watts per division (8 vertical divisions)
+Y2_SCALE   = 200.0         # volts/amps/watts per division (8 vertical divisions)
+Y3_SCALE   = 200.0         # volts/amps/watts per division (8 vertical divisions)
+PIXELS_PER_DIVISION = 70   # size of each division in terms of display pixels
+
 def main():
     for line in sys.stdin: #receive data from standard input
         try:
-            t, v0, v1, v2, v3 = line.split() # take this line and split 
-            x = int((float(t)*698)/40) % 698
+            t, c0, c1, c2, c3 = line.split() # take this line and split on whitespace
+            x = int((float(t) + TIME_SHIFT)*PIXELS_PER_DIVISION/TIME_SCALE) % 700
             # do other coordinates y1 = vcv
-            y0 = int((-float(v0)*249)/500) + 250
-            y1 = int((-float(v1)*249)/300) + 250
-            y2 = int((-float(v2)*249)/200) + 250
-            y3 = int((-float(v3)*249)/100) + 250            
+            y0 = int(-float(c0)*PIXELS_PER_DIVISION/Y0_SCALE) + 250
+            y1 = int(-float(c1)*PIXELS_PER_DIVISION/Y1_SCALE) + 250
+            y2 = int(-float(c2)*PIXELS_PER_DIVISION/Y2_SCALE) + 250
+            y3 = int(-float(c3)*PIXELS_PER_DIVISION/Y3_SCALE) + 250
             print(x, y0, y1, y2, y3)
         except ValueError:
             # if stuff goes wrong, deal with it here

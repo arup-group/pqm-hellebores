@@ -15,6 +15,7 @@ import pygame
 import time
 import random
 import sys
+import os
 import select
 
 
@@ -54,6 +55,17 @@ T_UNDEF3      = 3
 T_UNDEF4      = 4
 T_UNDEF5      = 5
 
+
+
+def signal_other_processes():
+    # send a signal to everyone to update their settings
+    if sys.platform == 'linux':
+        os.system("pkill -f --signal=SIGUSR1 'python3 ./rain.py'")
+        os.system("pkill -f --signal=SIGUSR1 'python3 ./reader.py'")
+        os.system("pkill -f --signal=SIGUSR1 'python3 ./scaler.py'")
+        os.system("pkill -f --signal=SIGUSR1 'python3 ./trigger.py'")
+        os.system("pkill -f --signal=SIGUSR1 'python3 ./mapper.py'")
+    
 
 def initialise_buttons():
     buttons = []
@@ -151,10 +163,9 @@ def draw_lines(screen, lines):
     screen.fill(GRAY)
     # can handle up to six lines
     colours = [ GREEN, YELLOW, MAGENTA, CYAN, RED, BLUE ]
-    if lines:
-        for i in range(len(lines)):
-            pygame.draw.lines(screen, colours[i], False, lines[i], 2)
-    
+    for i in range(len(lines)):
+        pygame.draw.lines(screen, colours[i], False, lines[i], 2)
+            
 
 def refresh_wfs():
     # refresh the information box every second
@@ -202,7 +213,7 @@ def read_points(f):
             try:
                 ps[i].append((t, int(ws[i])))   # extend an existing line
             except IndexError:
-                ps.append( [(t, int(ws[i]))] )  # add another line
+                ps.append( [(t, int(ws[i]))] )  # or add another line if it doesn't exist yet
         tp = t
     return ps
 
@@ -237,8 +248,10 @@ def main():
             lines = read_points(sys.stdin)
         refresh_wfs()
         
-        # redraw the buffer
-        draw_lines(screen, lines)
+        # if we have new data, redraw the lines
+        if lines and len(lines[0]) > 1:
+            draw_lines(screen, lines)
+
         # uibox.update()  # enable this only if required
         uibox.blit()
         

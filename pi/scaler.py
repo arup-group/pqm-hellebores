@@ -3,12 +3,32 @@
 # Convert incoming integer samples to floating point and apply scaling factors 
 
 import sys
+import signal
+import json
 
-SF0 = 0.01
-SF1 = 0.03
-SF2 = 0.05
-SF3 = 0.05
-INTERVAL = 1000.0/7812.5   # milliseconds
+
+def get_settings():
+    global sf0, sf1, sf2, sf3, interval
+    try:
+        f = open("settings.json", "r")
+        js = json.loads(f.read())
+        f.close()
+        sf0 = js['scale_c0']
+        sf1 = js['scale_c1']
+        sf2 = js['scale_c2']
+        sf3 = js['scale_c3']
+        interval = 1000.0/js['sample_rate']
+    except:
+        print("scaler.py, get_settings(): couldn't read settings.json, using defaults.", file=sys.stderr)
+        sf0 = 0.01
+        sf1 = 0.03
+        sf2 = 0.05
+        sf3 = 0.05
+        interval = 1000.0/7812.5   # milliseconds
+
+  
+def settings_handler(signum, frame):
+    get_settings()
 
 
 def from_twos_complement(v):
@@ -24,12 +44,18 @@ def scale(sample, i, interval, sf0, sf1, sf2, sf3):
 
 
 def main():
+    global sf0, sf1, sf2, sf3, interval
+    get_settings()
+    # if we receive 'SIGUSR1' signal (on linux) updated settings will be read from settings.json
+    if sys.platform == 'linux':
+        signal.signal(signal.SIGUSR1, settings_handler)
+
     i = 0   # sample index
     for line in sys.stdin:
         line = line.rstrip()
         try:
             sample = scale([int(w.strip(), base=16) for w in line.split()],\
-                              i, INTERVAL, SF0, SF1, SF2, SF3)
+                              i, interval, sf0, sf1, sf2, sf3)
         except ValueError:
             print('scaler.py, main(): Failed to read "' + line + '".', file=sys.stderr)
         print('{:12.4f} {:10.3f} {:10.3f} {:10.3f} {:10.3f}'.format(*sample))

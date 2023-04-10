@@ -1,6 +1,32 @@
 {
-    "frequency": 48.0,
-    "sample_rate": 7812.5
+    "frequency": 50.05,
+    "sample_rate": 7812.5,
+    "time_axis_per_division": 4.0,
+    "time_axis_divisions": 10,
+    "time_axis_pre_trigger_divisions": 1,
+    "voltage_axis_per_division": 200.0,
+    "current_axis_per_division": 200.0,
+    "power_axis_per_division": 200.0,
+    "earth_leakage_current_axis_per_division": 200.0,
+    "vertical_axis_divisions": 8,
+    "adc_offset_trim_c0": 23,
+    "adc_offset_trim_c1": 0,
+    "adc_offset_trim_c2": 0,
+    "adc_offset_trim_c3": 0,
+    "adc_amplifier_gain_c0": 32,
+    "adc_amplifier_gain_c1": 2,
+    "adc_amplifier_gain_c2": 2,
+    "adc_amplifier_gain_c3": 2,
+    "scale_c0": 0.01,
+    "scale_c1": 0.03,
+    "scale_c2": 0.05,
+    "scale_c3": 0.05,
+    "trigger_channel": 3,
+    "trigger_direction": "rising",
+    "trigger_threshold": 0.0,
+    "horizontal_pixels_per_division": 70,
+    "vertical_pixels_per_division": 60
 }
+
 
 

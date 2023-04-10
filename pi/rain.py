@@ -8,12 +8,6 @@ import signal
 import json
 
 
-# set up constants
-freq = 50.0                                   # Hertz
-sample_rate = 7812.5                          # samples/second
-sample_period_ns = 1000000000.0/sample_rate   # in nanoseconds
-
-
 def get_settings():
     global freq, sample_rate, sample_period_ns
     try:
@@ -25,7 +19,10 @@ def get_settings():
         sample_period_ns = 1000000000.0/sample_rate
     except:
         print("rain.py, get_settings(): couldn't read settings.json, using defaults.", file=sys.stderr)
-   
+        freq = 50.0                                   # Hertz
+        sample_rate = 7812.5                          # samples/second
+        sample_period_ns = 1000000000.0/sample_rate   # in nanoseconds
+
 
 def settings_handler(signum, frame):
     # read in updated settings.json
@@ -37,11 +34,13 @@ def get_sample(i, t, f):
     c0 = int(25000.0*math.sin(2.0*math.pi*f*t) + 1000.0*(random.random()-0.5))
     c1 = int(8000.0*math.sin(2.0*math.pi*f*t) + 200.0*(random.random()-0.5))
     c2 = int(12000.0*math.sin(2.0*math.pi*f*t) + 500.0*(random.random()-0.5))
-    c3 = int(6800.0*math.sin(2.0*math.pi*f*t) + 500.0*(random.random()-0.5))
+    c3 = int(6800.0*math.sin(2.0*math.pi*f*t) + 50.0*(random.random()-0.5))
     # the '& 0xffff' truncates negative numbers to fit in 16 bits
     return (i & 0xffff, c0 & 0xffff, c1 & 0xffff, c2 & 0xffff, c3 & 0xffff)
 
 def main():
+    global freq, sample_rate, sample_period_ns
+
     # read settings or set defaults into global variables 
     get_settings()
 

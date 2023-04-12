@@ -17,9 +17,44 @@ import random
 import sys
 import os
 import select
+import json
 
 
-CAPTURE_BUFFER = '/tmp/capture_buffer'    # this is a fifo that we read data from
+
+def get_settings():
+    global time_axis_divisions, vertical_axis_divisions, horizontal_pixels_per_division,\
+               vertical_pixels_per_division, time_axis_pre_trigger_divisions, interval
+    try:
+        f = open("settings.json", "r")
+        js = json.loads(f.read())
+        f.close()
+        time_axis_divisions               = js['time_axis_divisions']
+        vertical_axis_divisions           = js['vertical_axis_divisions']
+        horizontal_pixels_per_division    = js['horizontal_pixels_per_division']
+        vertical_pixels_per_division      = js['vertical_pixels_per_division']
+        time_axis_pre_trigger_divisions   = js['time_axis_pre_trigger_divisions']
+        interval                          = 1000.0 / js['sample_rate']
+        return js
+    except:
+        print("hellebores.py, get_settings(): couldn't read settings.json, using defaults.", file=sys.stderr)
+        time_axis_divisions               = 10
+        vertical_axis_divisions           = 8
+        horizontal_pixels_per_division    = 70
+        vertical_pixels_per_division      = 60
+        time_axis_pre_trigger_divisions   = 2
+        interval                          = 1000.0 / 7812.5
+        return {}
+
+def save_settings(js):
+    try:
+        f = open('settings.json', 'w')
+        f.write(json.dumps(js))
+        f.close()
+    except:
+        print("hellebores.py, save_settings(): couldn't write settings.json.", file=sys.stderr)
+
+       
+
 RED = (255, 0, 0)
 BLUE = (0, 0, 255)
 GREEN = (0, 255, 0)
@@ -28,12 +63,16 @@ MAGENTA = (255, 0, 255)
 CYAN = (0, 255, 255)
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
-GRAY = (75, 75, 75)
+DARK_GREY = (30, 30, 30)
+GREY = (75, 75, 75)
+LIGHT_GREY = (100, 100, 100)
 PI_SCREEN_SIZE = (800,480)
 SCOPE_BOX_SIZE = (700,480)
 CONTROLS_BOX_SIZE = (100,480)
 BUTTON_SIZE = (100,50) 
 TEXT_SIZE = (100,12)
+
+
 
 pygame.init()
 pygame.display.set_caption('pqm-hellebores')
@@ -128,7 +167,6 @@ def initialise_dispatching(uibox, screen):
     # event loop, while we need to have a free running loop in this application,
     # to maximise the display refresh rate.
     # So instead, we process events manually inside the main() function.
-    #menu.play()
     return menu
 
 
@@ -147,7 +185,7 @@ def about_box_reaction(event):
                                text="Power quality meter, v0.01",
                                ok_text="Ok, I've read",
                                font_size=12,
-                               font_color=(255,0,0))
+                               font_color=RED)
 
 
 def process_events(menu):
@@ -158,9 +196,29 @@ def process_events(menu):
         menu.react(event)
 
 
-def draw_lines(screen, lines):
-    # draw updated lines 
-    screen.fill(GRAY)
+def draw_graticule(screen):
+    xmax, ymax = SCOPE_BOX_SIZE
+    for dx in range(1, time_axis_divisions):
+        x = horizontal_pixels_per_division * dx
+        # mark the trigger position (t=0) with a thicker line
+        if dx == time_axis_pre_trigger_divisions:
+            lt = 3
+        else:
+            lt = 1
+        pygame.draw.line(screen, LIGHT_GREY, (x, 0), (x, ymax), lt)
+    for dy in range(1, vertical_axis_divisions):
+        y = vertical_pixels_per_division * dy
+        # mark the central position (v, i = 0) with a thicker line
+        if dy == vertical_axis_divisions // 2:
+            lt = 3
+        else:
+            lt = 1
+        pygame.draw.line(screen, LIGHT_GREY, (0, y), (xmax, y), lt)
+
+
+def draw_lines(screen, background_surface, lines):
+    # blit the screen with background image (graticule)
+    screen.blit(background_surface, (0,0))
     # can handle up to six lines
     colours = [ GREEN, YELLOW, MAGENTA, CYAN, RED, BLUE ]
     for i in range(len(lines)):
@@ -221,6 +279,8 @@ def read_points(f):
 def main():
     global capturing, running, texts
 
+    get_settings()
+
     # initialise UI
     # fullscreen on Pi, but not on laptop
     if get_screen_hardware_size() == PI_SCREEN_SIZE:
@@ -232,6 +292,16 @@ def main():
     uibox     = initialise_uibox(buttons, texts.get_texts())
     menu      = initialise_dispatching(uibox, screen)
 
+    # make the cursor invisible
+    # can't make the cursor invisible using the pygame flags because we need it working
+    # to return correct coordinates from the touchscreen
+    pygame.mouse.set_cursor((8,8),(0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0))
+
+    # set up the background image
+    background_surface = pygame.Surface(SCOPE_BOX_SIZE)
+    background_surface.fill(GREY)
+    draw_graticule(background_surface)
+
     # now set up the initial text states
     texts.clear_texts()
     texts.set_text(T_RUNSTOP, "Running")
@@ -241,22 +311,21 @@ def main():
     capturing = True        # allow/stop update of the lines on the screen
 
     while running:
-        process_events(menu)
         
-        # update information
+        # waveform display update
         if capturing:
             lines = read_points(sys.stdin)
-        refresh_wfs()
-        
-        # if we have new data, redraw the lines
-        if lines and len(lines[0]) > 1:
-            draw_lines(screen, lines)
+            if lines and len(lines[0]) > 1:
+                draw_lines(screen, background_surface, lines)
 
+        # UI/buttons update
+        process_events(menu)
+        refresh_wfs()
         # uibox.update()  # enable this only if required
         uibox.blit()
         
         # update the display
-        # this flips the newly drawn buffer into the framebuffer (screen)
+        # this flips the re-drawn screen surface into the framebuffer (hardware)
         pygame.display.update()
 
     pygame.quit()

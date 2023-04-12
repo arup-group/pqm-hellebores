@@ -54,7 +54,6 @@ def save_settings(js):
         print("hellebores.py, save_settings(): couldn't write settings.json.", file=sys.stderr)
 
        
-
 RED = (255, 0, 0)
 BLUE = (0, 0, 255)
 GREEN = (0, 255, 0)
@@ -72,10 +71,6 @@ CONTROLS_BOX_SIZE = (100,480)
 BUTTON_SIZE = (100,50) 
 TEXT_SIZE = (100,12)
 
-
-
-pygame.init()
-pygame.display.set_caption('pqm-hellebores')
 
 # button enumerations
 B_RUNSTOP     = 0
@@ -275,13 +270,16 @@ def read_points(f):
         tp = t
     return ps
 
-    
+   
 def main():
     global capturing, running, texts
 
     get_settings()
 
     # initialise UI
+    pygame.init()
+    pygame.display.set_caption('pqm-hellebores')
+
     # fullscreen on Pi, but not on laptop
     if get_screen_hardware_size() == PI_SCREEN_SIZE:
         screen    = pygame.display.set_mode(PI_SCREEN_SIZE, flags=pygame.FULLSCREEN)
@@ -292,8 +290,8 @@ def main():
     uibox     = initialise_uibox(buttons, texts.get_texts())
     menu      = initialise_dispatching(uibox, screen)
 
-    # make the cursor invisible
-    # can't make the cursor invisible using the pygame flags because we need it working
+    # make the mouse pointer invisible
+    # can't make the pointer inactive using the pygame flags because we need it working
     # to return correct coordinates from the touchscreen
     pygame.mouse.set_cursor((8,8),(0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0))
 

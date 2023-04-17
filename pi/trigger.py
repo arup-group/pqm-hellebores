@@ -48,7 +48,7 @@ def next_index(index):
 
 # three samples, channel selector and threshold/direction criteria
 # returns true/false 
-def trigger_detect(buf, ii, ch, threshold, direction, interval):
+def trigger_detect(buf, ii, ch, threshold, direction):
     trigger = False
     interpolation_fraction = 0.0
     ci = ch + 1  # channel index is channel number plus 1 (time is at index 0)
@@ -89,6 +89,7 @@ def main():
 
     ii = 0    # input buffer index 
     oc = 0    # output counter
+    hc = 0    # holdoff counter, minimum number of samples required before next trigger
     interpolation_fraction = 0.0  # the exact trigger position is normally somewhere between samples
 
     # flag for controlling when output is required
@@ -102,8 +103,8 @@ def main():
             print('trigger.py, main(): Failed to read contents of line "' + line + '".', file=sys.stderr)
 
         # if not currently triggered, check to see if latest sample causes a trigger
-        if not triggered:
-            triggered, interpolation_fraction = trigger_detect(buf, ii, trigger_channel, trigger_threshold, trigger_direction, interval) 
+        if (hc <= 0) and (not triggered):
+            triggered, interpolation_fraction = trigger_detect(buf, ii, trigger_channel, trigger_threshold, trigger_direction) 
             if triggered:
                 # ok, we have a new trigger, let's go
                 pti = (ii - pre_trigger_samples) % INPUT_BUFFER_SIZE
@@ -114,6 +115,9 @@ def main():
                              *interpolate(buf[prev_index(pti)][1:], buf[pti][1:], interpolation_fraction)))
                    pti = next_index(pti)
                    oc = oc + 1
+                # set the hold-off counter to be slightly less than one full screenful of data
+                hc = int(0.95 * (pre_trigger_samples + post_trigger_samples))
+ 
 
         # if we are currently triggered, continue to print out post-trigger samples, as they arrive 
         if triggered:
@@ -125,9 +129,9 @@ def main():
         if oc >= post_trigger_samples:
             triggered = False
 
-        # increment input index
+        # increment input index and decrement hold-off counter
         ii = next_index(ii)
-
+        hc = hc - 1
 
 if __name__ == '__main__':
     main()

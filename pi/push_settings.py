@@ -12,6 +12,8 @@ def signal_other_processes():
         os.system("pkill -f --signal=SIGUSR1 'python3 ./scaler.py'")
         os.system("pkill -f --signal=SIGUSR1 'python3 ./trigger.py'")
         os.system("pkill -f --signal=SIGUSR1 'python3 ./mapper.py'")
+        os.system("pkill -f --signal=SIGUSR1 'python3 ./hellebores.py'")
+        os.system("pkill -f --signal=SIGUSR1 'python3 ./hb1.py'")
 
 
 signal_other_processes()

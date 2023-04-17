@@ -69,7 +69,7 @@ LIGHT_GREY = (100, 100, 100)
 PI_SCREEN_SIZE = (800,480)
 SCOPE_BOX_SIZE = (700,480)
 CONTROLS_BOX_SIZE = (100,480)
-BUTTON_SIZE = (100,50) 
+BUTTON_SIZE = (92,50) 
 TEXT_SIZE = (100,12)
 
 
@@ -137,7 +137,10 @@ def create_buttons():
                                   thorpy.make_button('Wifi', func = wifi_reaction),\
                                   thorpy.make_button('Shell', func = shell_reaction),\
                                   thorpy.make_button('Exit', func = exit_reaction) ]
-                            
+    # set buttons to all be the same size                        
+    for mode in buttons.keys():
+        for button in buttons[mode]:
+            button.set_size(BUTTON_SIZE)
     return buttons
 
 def mode_reaction():
@@ -231,12 +234,6 @@ def initialise_uibox(buttons, texts):
                            refresh_reaction, {"id": thorpy.constants.EVENT_TIME}))
     uibox.add_reaction(thorpy.ConstantReaction(pygame.KEYDOWN, \
                            quit_reaction, {"key": pygame.K_q})) 
-    #uibox.add_reaction(thorpy.ConstantReaction(thorpy.constants.THORPY_EVENT, \
-    #                       start_stop_reaction, \
-    #                       {"el": buttons[B_RUNSTOP], "id": thorpy.constants.EVENT_UNPRESS}))
-    #uibox.add_reaction(thorpy.ConstantReaction(thorpy.constants.THORPY_EVENT, \
-    #                       about_box_reaction, \
-    #                       {"el": buttons[B_ABOUT], "id": thorpy.constants.EVENT_UNPRESS}))
     uibox.set_size(CONTROLS_BOX_SIZE)
     uibox.set_topleft((PI_SCREEN_SIZE[0]-CONTROLS_BOX_SIZE[0],0))
     return uibox
@@ -269,10 +266,14 @@ def about_box_reaction():
                                ok_text="Ok, I've read",
                                font_size=12,
                                font_color=RED)
+   print("A non-blocking alert was launched")
 
 
 def refresh_reaction():
-    global capturing, background_surface, uibox, screen, wfs
+    global capturing, background_surface, uibox, texts, screen, wfs
+    # update the wfs and corresponding display 
+    if wfs.refresh_wfs() == True:
+        texts.get_texts()[1].unblit_and_reblit()
     # update the lines only if capturing
     if capturing:
         lines = read_points(sys.stdin)
@@ -280,10 +281,8 @@ def refresh_reaction():
             # blit the screen with background image (graticule)
             screen.blit(background_surface, (0,0))
             draw_lines(screen, background_surface, lines)
-    # update the wfs counter and text output
-    wfs.refresh_wfs()
+            wfs.increment_wfs()
     # send to display surface and update framebuffer
-    uibox.blit()
     pygame.display.update()
 
 
@@ -291,7 +290,7 @@ def quit_reaction():
     global capturing
     capturing = False
     print("Quitting...", file=sys.stderr)    
-    sys.exit(0)
+    thorpy.functions.quit_menu_func() 
 
 
 def draw_background():
@@ -331,23 +330,31 @@ def draw_lines(screen, background_surface, lines):
 
 class WFS_Counter:
     def __init__(self):
-        self.frames = 0
-        self.time = int(time.time())
- 
+        self.counter = 0           # number of waveforms since last posting
+        self.time = time.time()    # keep track of time in milliseconds
+        self.posted = self.time    # time when the wfs/s was lasted posted to screen
+
+    # called whenever we update the waveform on screen 
+    def increment_wfs(self):
+        self.counter = self.counter + 1
+
+    # called when a refresh event occurs (image isn't always updated)
     def refresh_wfs(self):
-        global capturing
-        if capturing:
-            # update the frame count
-            self.frames = self.frames + 1
+        updated_text = False
 
-        # refresh the information box every second
-        t = int(time.time())
-        if t != self.time:
-            self.time = t
-            texts.set_text(T_WFS, str(self.frames) + ' wfm/s')
-            self.frames = 0 
+        # time check 
+        self.time = time.time()
+        # if the time has increased by at least 1.0 second, update the wfm/s text
+        elapsed = self.time - self.posted
+        if elapsed >= 1.0:
+            texts.set_text(T_WFS, f'{int(self.counter/elapsed)} wfm/s          ')
+            self.posted = self.time
+            self.counter = 0
+            updated_text = True
 
+        return updated_text
  
+
 def get_screen_hardware_size():
     i = pygame.display.Info()
     return i.current_w, i.current_h
@@ -371,7 +378,7 @@ def read_points(f):
     # the loop will exit and the points list is returned if
     # (a) there is no more data waiting to be read, or
     # (b) if the time coordinate 'goes backwards'
-    while is_data_available(f, 0.1):
+    while is_data_available(f, 1.0):
         ws = f.readline().split()
         t = int(ws[0])
         if t < tp:
@@ -390,11 +397,10 @@ def settings_handler(signum, frame):
     global background_surface
     get_settings()
     background_surface = draw_background()
- 
 
 
 def main():
-    global capturing, texts, background_surface, uibox, screen, wfs
+    global capturing, texts, background_surface, uibox, texts, screen, wfs
 
     get_settings()
     background_surface = draw_background()
@@ -419,7 +425,7 @@ def main():
     # make the mouse pointer invisible
     # can't make the pointer inactive using the pygame flags because we need it working
     # to return correct coordinates from the touchscreen
-    pygame.mouse.set_cursor((8,8),(0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0))
+    #pygame.mouse.set_cursor((8,8),(0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0))
 
     # now set up the initial text states
     texts.clear_texts()
@@ -427,6 +433,8 @@ def main():
     
     # initialise flags
     capturing = True        # allow/stop update of the lines on the screen
+
+    # start the thorpy event handler loop
     menu.play()
     application.quit()
 

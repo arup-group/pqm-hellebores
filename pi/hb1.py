@@ -305,18 +305,18 @@ def draw_background():
         x = horizontal_pixels_per_division * dx
         # mark the trigger position (t=0) with a thicker line
         if dx == time_axis_pre_trigger_divisions:
-            lt = 3
+            lc = WHITE
         else:
-            lt = 1
-        pygame.draw.line(background_surface, LIGHT_GREY, (x, 0), (x, ymax), lt)
+            lc = LIGHT_GREY
+        pygame.draw.line(background_surface, lc, (x, 0), (x, ymax), 1)
     for dy in range(1, vertical_axis_divisions):
         y = vertical_pixels_per_division * dy
         # mark the central position (v, i = 0) with a thicker line
         if dy == vertical_axis_divisions // 2:
-            lt = 3
+            lc = WHITE
         else:
-            lt = 1
-        pygame.draw.line(background_surface, LIGHT_GREY, (0, y), (xmax, y), lt)
+            lc = LIGHT_GREY
+        pygame.draw.line(background_surface, lc, (0, y), (xmax, y), 1)
     return background_surface
 
 
@@ -347,7 +347,7 @@ class WFS_Counter:
         # if the time has increased by at least 1.0 second, update the wfm/s text
         elapsed = self.time - self.posted
         if elapsed >= 1.0:
-            texts.set_text(T_WFS, f'{int(self.counter/elapsed)} wfm/s          ')
+            texts.set_text(T_WFS, f'{round(self.counter/elapsed)} wfm/s          ')
             self.posted = self.time
             self.counter = 0
             updated_text = True

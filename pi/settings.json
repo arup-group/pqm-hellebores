@@ -1,7 +1,7 @@
 {
-    "frequency": 49.5,
+    "frequency": 51.0,
     "sample_rate": 7812.5,
-    "time_axis_per_division": 4.0,
+    "time_axis_per_division": 4.0, 
     "time_axis_divisions": 10,
     "time_axis_pre_trigger_divisions": 5,
     "voltage_axis_per_division": 200.0,

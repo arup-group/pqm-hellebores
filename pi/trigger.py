@@ -42,8 +42,6 @@ def get_settings():
     # we set a hold-off threshold (minimum number of samples to next trigger) to be slightly less
     # (2ms) than one full screenful of data
     holdoff_samples         = frame_samples - int(0.002 * sample_rate)
-    sys.stderr.write(f'pre_trig {pre_trigger_samples}, post_trig {post_trigger_samples}, frame_samples {frame_samples}')
-    
 
  
 def settings_handler(signum, frame):

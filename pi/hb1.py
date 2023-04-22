@@ -13,45 +13,12 @@ import thorpy
 import math
 import pygame
 import time
-import random
 import sys
 import os
 import select
-import json
 import signal
+import settings
 
-
-def get_settings():
-    global time_axis_divisions, vertical_axis_divisions, horizontal_pixels_per_division,\
-               vertical_pixels_per_division, time_axis_pre_trigger_divisions, interval
-    try:
-        f = open("settings.json", "r")
-        js = json.loads(f.read())
-        f.close()
-        time_axis_divisions               = js['time_axis_divisions']
-        vertical_axis_divisions           = js['vertical_axis_divisions']
-        horizontal_pixels_per_division    = js['horizontal_pixels_per_division']
-        vertical_pixels_per_division      = js['vertical_pixels_per_division']
-        time_axis_pre_trigger_divisions   = js['time_axis_pre_trigger_divisions']
-        interval                          = 1000.0 / js['sample_rate']
-        return js
-    except:
-        print("hellebores.py, get_settings(): couldn't read settings.json, using defaults.", file=sys.stderr)
-        time_axis_divisions               = 10
-        vertical_axis_divisions           = 8
-        horizontal_pixels_per_division    = 70
-        vertical_pixels_per_division      = 60
-        time_axis_pre_trigger_divisions   = 2
-        interval                          = 1000.0 / 7812.5
-        return {}
-
-def save_settings(js):
-    try:
-        f = open('settings.json', 'w')
-        f.write(json.dumps(js))
-        f.close()
-    except:
-        print("hellebores.py, save_settings(): couldn't write settings.json.", file=sys.stderr)
 
 
       
@@ -294,6 +261,7 @@ def quit_reaction():
 
 
 def draw_background():
+    global st
     xmax, ymax = SCOPE_BOX_SIZE
 
     # empty background
@@ -301,18 +269,18 @@ def draw_background():
     background_surface.fill(GREY)
 
     # draw the graticule lines
-    for dx in range(1, time_axis_divisions):
-        x = horizontal_pixels_per_division * dx
+    for dx in range(1, st.time_axis_divisions):
+        x = st.horizontal_pixels_per_division * dx
         # mark the trigger position (t=0) with a thicker line
-        if dx == time_axis_pre_trigger_divisions:
+        if dx == st.time_axis_pre_trigger_divisions:
             lc = WHITE
         else:
             lc = LIGHT_GREY
         pygame.draw.line(background_surface, lc, (x, 0), (x, ymax), 1)
-    for dy in range(1, vertical_axis_divisions):
-        y = vertical_pixels_per_division * dy
+    for dy in range(1, st.vertical_axis_divisions):
+        y = st.vertical_pixels_per_division * dy
         # mark the central position (v, i = 0) with a thicker line
-        if dy == vertical_axis_divisions // 2:
+        if dy == st.vertical_axis_divisions // 2:
             lc = WHITE
         else:
             lc = LIGHT_GREY
@@ -394,15 +362,19 @@ def read_points(f):
 
 
 def settings_handler(signum, frame):
-    global background_surface
-    get_settings()
+    global st, background_surface
+    st.get_settings()
     background_surface = draw_background()
 
 
 def main():
+    global st
     global capturing, texts, background_surface, uibox, texts, screen, wfs
 
-    get_settings()
+    # get settings from settings.json
+    st = settings.Settings()
+    st.get_settings()
+
     background_surface = draw_background()
     # if we receive 'SIGUSR1' signal (on linux) updated settings will be read from settings.json
     if sys.platform == 'linux':

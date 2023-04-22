@@ -5,32 +5,18 @@ import random
 import time
 import sys
 import signal
-import json
+import settings
 
-
-def get_settings():
-    global freq, sample_rate, sample_period_ns
-    try:
-        f = open("settings.json", "r")
-        js = json.loads(f.read())
-        f.close()
-        freq = js['frequency']
-        sample_rate = js['sample_rate']
-        sample_period_ns = 1000000000.0/sample_rate
-    except:
-        print("rain.py, get_settings(): couldn't read settings.json, using defaults.", file=sys.stderr)
-        freq = 50.0                                   # Hertz
-        sample_rate = 7812.5                          # samples/second
-        sample_period_ns = 1000000000.0/sample_rate   # in nanoseconds
 
 
 def settings_handler(signum, frame):
+    global st
     # read in updated settings.json
-    get_settings()
+    st.get_settings()
 
 
 def get_sample(i, t, f):
-    t = t/1000000000.0       # seconds
+    t = t/1000.0       # seconds
     c0 = int(25000.0*math.sin(2.0*math.pi*f*t) + 1000.0*(random.random()-0.5))
     c1 = int(8000.0*math.sin(2.0*math.pi*f*t) + 200.0*(random.random()-0.5))
     c2 = int(12000.0*math.sin(2.0*math.pi*f*t) + 500.0*(random.random()-0.5))
@@ -39,25 +25,25 @@ def get_sample(i, t, f):
     return (i & 0xffff, c0 & 0xffff, c1 & 0xffff, c2 & 0xffff, c3 & 0xffff)
 
 def main():
-    global freq, sample_rate, sample_period_ns
+    global st
 
     # read settings or set defaults into global variables 
-    get_settings()
+    st = settings.Settings()
+    st.get_settings()
 
     # if we receive 'SIGUSR1' signal (on linux) updated settings will be read from settings.json
     if sys.platform == 'linux':
         signal.signal(signal.SIGUSR1, settings_handler)
 
-    # we use high resolution system clock to figure out when to print out
-    # the next sample iteration
-    tp = int(time.monotonic_ns()/sample_period_ns)
+    # we use system clock to figure out when to print out the next sample
+    tp = int(time.time()*1000.0/st.interval)
     i=0
     while 1:
         # check the clock and see if it has changed by one sample period
-        tn = int(time.monotonic_ns()/sample_period_ns)
+        tn = int(time.time()*1000.0/st.interval)
         if tn != tp:
             tp = tn
-            print('{:04x} {:04x} {:04x} {:04x} {:04x}'.format(*get_sample(i, i*sample_period_ns, freq)))
+            print('{:04x} {:04x} {:04x} {:04x} {:04x}'.format(*get_sample(i, i*st.interval, st.frequency)))
             i = i + 1
 
 if __name__ == '__main__':

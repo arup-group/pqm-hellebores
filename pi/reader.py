@@ -5,10 +5,26 @@
 import sys
 import serial
 import binascii
+import signal
+import settings
 
+
+# settings aren't used yet, but will be added to adjust ADC
+def settings_handler(signum, frame):
+    global st
+    st.get_settings()
 
 
 def main():
+    global st
+    # load settings from settings.json
+    st = settings.Settings()
+    st.get_settings()
+    
+    # if we receive 'SIGUSR1' signal (on linux) updated settings will be read from settings.json
+    if sys.platform == 'linux':
+        signal.signal(signal.SIGUSR1, settings_handler)
+
     try:
         ser = serial.Serial('/dev/ttyACM0')
     except:

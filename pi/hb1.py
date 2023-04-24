@@ -237,7 +237,7 @@ def about_box_reaction():
 
 
 def refresh_reaction():
-    global capturing, background_surface, uibox, texts, screen, wfs
+    global wfs, texts, capturing, screen, background_surface
     # update the wfs and corresponding display 
     if wfs.refresh_wfs() == True:
         texts.get_texts()[1].unblit_and_reblit()
@@ -261,7 +261,7 @@ def quit_reaction():
 
 
 def draw_background():
-    global st
+    global st, background_surface
     xmax, ymax = SCOPE_BOX_SIZE
 
     # empty background
@@ -285,8 +285,6 @@ def draw_background():
         else:
             lc = LIGHT_GREY
         pygame.draw.line(background_surface, lc, (0, y), (xmax, y), 1)
-    return background_surface
-
 
 
 def draw_lines(screen, background_surface, lines):
@@ -361,43 +359,31 @@ def read_points(f):
     return ps
 
 
-def settings_handler(signum, frame):
-    global st, background_surface
-    st.get_settings()
-    background_surface = draw_background()
-
-
 def main():
-    global st
-    global capturing, texts, background_surface, uibox, texts, screen, wfs
+    global st, capturing, texts, background_surface, uibox, texts, screen, wfs
 
     # get settings from settings.json
-    st = settings.Settings()
-    st.get_settings()
-
-    background_surface = draw_background()
-    # if we receive 'SIGUSR1' signal (on linux) updated settings will be read from settings.json
-    if sys.platform == 'linux':
-        signal.signal(signal.SIGUSR1, settings_handler)
+    st = settings.Settings(draw_background)
+    draw_background()
 
     # initialise UI
     application = thorpy.Application(PI_SCREEN_SIZE, 'pqm-hellebores')
 
     # fullscreen on Pi, but not on laptop
+    # also make the mouse pointer invisible on Pi, as we will use the touchscreen
+    # we can't make the pointer inactive using the pygame flags because we need it working
+    # to return correct coordinates from the touchscreen
     if get_screen_hardware_size() == PI_SCREEN_SIZE:
         screen    = pygame.display.set_mode(PI_SCREEN_SIZE, flags=pygame.FULLSCREEN)
+        pygame.mouse.set_cursor((8,8),(0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0))
     else:
         screen    = pygame.display.set_mode(PI_SCREEN_SIZE)
+
     buttons   = create_buttons()
     texts     = Texts()
     wfs       = WFS_Counter()
     uibox     = initialise_uibox(buttons['main'], texts.get_texts())
     menu      = initialise_menu(uibox, screen)
-
-    # make the mouse pointer invisible
-    # can't make the pointer inactive using the pygame flags because we need it working
-    # to return correct coordinates from the touchscreen
-    #pygame.mouse.set_cursor((8,8),(0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0))
 
     # now set up the initial text states
     texts.clear_texts()

@@ -9,12 +9,6 @@ import settings
 
 
 
-def settings_handler(signum, frame):
-    global st
-    # read in updated settings.json
-    st.get_settings()
-
-
 def get_sample(i, t, f):
     t = t/1000.0       # seconds
     c0 = int(25000.0*math.sin(2.0*math.pi*f*t) + 1000.0*(random.random()-0.5))
@@ -24,16 +18,10 @@ def get_sample(i, t, f):
     # the '& 0xffff' truncates negative numbers to fit in 16 bits
     return (i & 0xffff, c0 & 0xffff, c1 & 0xffff, c2 & 0xffff, c3 & 0xffff)
 
+
 def main():
-    global st
-
     # read settings or set defaults into global variables 
-    st = settings.Settings()
-    st.get_settings()
-
-    # if we receive 'SIGUSR1' signal (on linux) updated settings will be read from settings.json
-    if sys.platform == 'linux':
-        signal.signal(signal.SIGUSR1, settings_handler)
+    st = settings.Settings(lambda: None)
 
     # we use system clock to figure out when to print out the next sample
     tp = int(time.time()*1000.0/st.interval)

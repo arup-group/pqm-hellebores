@@ -11,11 +11,6 @@ import settings
 INPUT_BUFFER_SIZE = 65535          # size of circular sample buffer
 
 
-def settings_handler(signum, frame):
-    global buf, st
-    st.get_settings()
-    buf = clear_buffer()
-
 def prev_index(index):
     return (index-1) % INPUT_BUFFER_SIZE
 
@@ -34,9 +29,11 @@ def trigger_gate(buf, i, ch, threshold, hysteresis, gate_number):
 
     if qualify(buf, i, ch, threshold, hysteresis[gate_number]):
         gate_number = gate_number + 1
-    # gate count TriGGER_GATE is special because it is the potential trigger threshold.
-    # if qualify fails when gc=TRIGGER_GATE, we keep the counter at TRIGGER_GATE
-    # if gc is any other value then the trigger qualification has failed and we start again.
+    # gate count TRIGGER_GATE is special because it is the potential trigger threshold.
+    # if qualify fails when gc=TRIGGER_GATE, we keep the counter at TRIGGER_GATE because the
+    # pattern might succeed on subsequent samples.
+    # if gc is any other value then the pattern is not satisfied, the trigger qualification
+    # has failed and we start again.
     elif gate_number != st.trigger_gate_transition:
         gate_number = 0
 
@@ -52,25 +49,20 @@ def interpolate(s1, s2, interpolation_fraction):
 
 
 def clear_buffer():
+    global buf
     buf = []
     for i in range(INPUT_BUFFER_SIZE):     # pre-charge the buffer with zeros
         buf.append([0.0, 0.0, 0.0, 0.0, 0.0])     
-    return buf
 
 
 def main():
     global st
     # load settings into st object
-    st = settings.Settings()
-    st.get_settings()
+    st = settings.Settings(clear_buffer)
 
     # we make a buffer to temporarily hold a history of samples -- this allows us to output
     # waveform samples 'before the trigger'
-    buf = clear_buffer()
-
-    # if we receive 'SIGUSR1' signal (on linux) updated settings will be read from settings.json
-    if sys.platform == 'linux':
-        signal.signal(signal.SIGUSR1, settings_handler)
+    clear_buffer()
 
     ii = 0    # input index (into buf, filling buffer) 
     oi = 0    # output index (out of buf, draining buffer)
@@ -106,9 +98,13 @@ def main():
                 triggered = True
                 # using linear interpolation, find out the exact timing offset between
                 # samples where the trigger position is 
-                ci = st.trigger_channel + 1
                 oi = (oi - st.trigger_gate_transition) % INPUT_BUFFER_SIZE
-                interpolation_fraction = buf[oi][ci] / (buf[oi][ci] - buf[prev_index(oi)][ci])
+                s1 = buf[oi][st.trigger_channel + 1]
+                s0 = buf[prev_index(oi)][st.trigger_channel + 1]
+                if s0 == s1:
+                    interpolation_fraction = 0.0
+                else:
+                    interpolation_fraction = s1 / (s1 - s0)
                 # figure out the 'pre-trigger' index and set the output pointer to that position
                 # set an output sample counter, and then exit this loop
                 oi = (oi - st.pre_trigger_samples) % INPUT_BUFFER_SIZE

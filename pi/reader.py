@@ -9,29 +9,19 @@ import signal
 import settings
 
 
-# settings aren't used yet, but will be added to adjust ADC
-def settings_handler(signum, frame):
-    global st
-    st.get_settings()
-
 
 def main():
-    global st
     # load settings from settings.json
-    st = settings.Settings()
-    st.get_settings()
+    # settings aren't used yet, but will be added to adjust ADC
+    st = settings.Settings(lambda: None)
     
-    # if we receive 'SIGUSR1' signal (on linux) updated settings will be read from settings.json
-    if sys.platform == 'linux':
-        signal.signal(signal.SIGUSR1, settings_handler)
-
     try:
         ser = serial.Serial('/dev/ttyACM0')
     except:
         print("Couldn't open serial port.", file=sys.stderr)
         sys.exit(1)
 
-    while 1:    
+    while True:    
         try:
             data_block = (ser.read(256).hex())
             # process data in chunks of 8 bytes, or 16 hex digits

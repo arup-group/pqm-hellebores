@@ -18,8 +18,8 @@ def next_index(index):
     return (index+1) % INPUT_BUFFER_SIZE
 
 
-def trigger_gate(buf, i, ch, threshold, hysteresis, gate_number):
-    global st
+def trigger_gate(buf, i, ch, threshold, hysteresis, transition_gate, gate_number):
+
     def qualify(buf, i, ch, threshold, side):
         if side == 'L':
             qual = buf[i][ch+1] <= threshold
@@ -30,11 +30,11 @@ def trigger_gate(buf, i, ch, threshold, hysteresis, gate_number):
     if qualify(buf, i, ch, threshold, hysteresis[gate_number]):
         gate_number = gate_number + 1
     # gate count TRIGGER_GATE is special because it is the potential trigger threshold.
-    # if qualify fails when gc=TRIGGER_GATE, we keep the counter at TRIGGER_GATE because the
-    # pattern might succeed on subsequent samples.
-    # if gc is any other value then the pattern is not satisfied, the trigger qualification
-    # has failed and we start again.
-    elif gate_number != st.trigger_gate_transition:
+    # if qualify fails when gate_number == transition_gate, we keep the counter at
+    # transition_gate because the pattern might succeed on subsequent samples.
+    # if gate_number is any other value then the pattern is not satisfied, the trigger
+    # qualification has failed and we start again.
+    elif gate_number != transition_gate:
         gate_number = 0
 
     return gate_number
@@ -48,21 +48,24 @@ def interpolate(s1, s2, interpolation_fraction):
     return interpolated
 
 
-def clear_buffer():
-    global buf
+class Buffer:
     buf = []
-    for i in range(INPUT_BUFFER_SIZE):     # pre-charge the buffer with zeros
-        buf.append([0.0, 0.0, 0.0, 0.0, 0.0])     
+  
+    def __init__(self):
+        self.clear_buffer()
+
+    def clear_buffer(self):
+        for i in range(INPUT_BUFFER_SIZE):     # pre-charge the buffer with zeros
+            self.buf.append([0.0, 0.0, 0.0, 0.0, 0.0])     
 
 
 def main():
-    global st
-    # load settings into st object
-    st = settings.Settings(clear_buffer)
-
     # we make a buffer to temporarily hold a history of samples -- this allows us to output
     # waveform samples 'before the trigger'
-    clear_buffer()
+    buf = Buffer()
+
+    # load settings into st object
+    st = settings.Settings(buf.clear_buffer)
 
     ii = 0    # input index (into buf, filling buffer) 
     oi = 0    # output index (out of buf, draining buffer)
@@ -82,7 +85,7 @@ def main():
         # FILLING BUFFER
         try:
             # we store each incoming line, whether triggered or not, in a circular buffer
-            buf[ii] = [float(w) for w in line.split()]
+            buf.buf[ii] = [float(w) for w in line.split()]
             ii = next_index(ii)
 
         except ValueError:
@@ -92,15 +95,16 @@ def main():
         # if hold off is clear, and we are not currently triggered, check to see if any outstanding 
         # samples meet the trigger qualification. If they do they will increase gc, the trigger 'gate counter'.
         while not triggered and (hc >= st.holdoff_samples) and (oi != ii):
-            gc = trigger_gate(buf, oi, st.trigger_channel, st.trigger_threshold, st.trigger_hysteresis, gc)
+            gc = trigger_gate(buf.buf, oi, st.trigger_channel, st.trigger_threshold,\
+                                  st.trigger_hysteresis, st.trigger_gate_transition, gc)
             if gc == st.trigger_gate_length:
                 # trigger qualifications (ie entire hysteresis pattern) has been met
                 triggered = True
                 # using linear interpolation, find out the exact timing offset between
                 # samples where the trigger position is 
                 oi = (oi - st.trigger_gate_transition) % INPUT_BUFFER_SIZE
-                s1 = buf[oi][st.trigger_channel + 1]
-                s0 = buf[prev_index(oi)][st.trigger_channel + 1]
+                s1 = buf.buf[oi][st.trigger_channel + 1]
+                s0 = buf.buf[prev_index(oi)][st.trigger_channel + 1]
                 if s0 == s1:
                     interpolation_fraction = 0.0
                 else:
@@ -118,8 +122,8 @@ def main():
         # if triggered, print out all buffered/outstanding samples up to the current input pointer
         while triggered and (oi != ii):
             print('{:10.3f} {:10.3f} {:10.3f} {:10.3f} {:10.3f}'.format(st.interval *\
-                      (oc - st.pre_trigger_samples), *interpolate(buf[prev_index(oi)][1:],\
-                      buf[oi][1:], interpolation_fraction)))
+                      (oc - st.pre_trigger_samples), *interpolate(buf.buf[prev_index(oi)][1:],\
+                      buf.buf[oi][1:], interpolation_fraction)))
             oc = oc + 1
             # if we've finished a whole frame of data, clear the trigger and position the output
             # index counter 2ms behind the current input index

@@ -29,7 +29,7 @@ def trigger_gate(buf, i, ch, threshold, hysteresis, transition_gate, gate_number
 
     if qualify(buf, i, ch, threshold, hysteresis[gate_number]):
         gate_number = gate_number + 1
-    # gate count TRIGGER_GATE is special because it is the potential trigger threshold.
+    # gate count transition_gate is special because it is the potential trigger position.
     # if qualify fails when gate_number == transition_gate, we keep the counter at
     # transition_gate because the pattern might succeed on subsequent samples.
     # if gate_number is any other value then the pattern is not satisfied, the trigger
@@ -124,7 +124,6 @@ def main():
             print('{:10.3f} {:10.3f} {:10.3f} {:10.3f} {:10.3f}'.format(st.interval *\
                       (oc - st.pre_trigger_samples), *interpolate(buf.buf[prev_index(oi)][1:],\
                       buf.buf[oi][1:], interpolation_fraction)))
-            oc = oc + 1
             # if we've finished a whole frame of data, clear the trigger and position the output
             # index counter 2ms behind the current input index
             if oc >= st.frame_samples:
@@ -132,7 +131,8 @@ def main():
                 oi = (ii - int(0.002 * st.sample_rate)) % INPUT_BUFFER_SIZE
             else:
                 oi = next_index(oi)
-            
+            oc = oc + 1
+
         # increment the holdoff counter, this has to be done once per input sample/outer loop
         hc = hc + 1
  

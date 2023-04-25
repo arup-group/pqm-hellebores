@@ -229,7 +229,7 @@ def start_stop_reaction():
 
 def about_box_reaction():
    thorpy.launch_nonblocking_alert(title="hellebores.py",
-                               text="Power quality meter, v0.01",
+                               text="Power quality meter, v0.02",
                                ok_text="Ok, I've read",
                                font_size=12,
                                font_color=RED)
@@ -262,7 +262,8 @@ def quit_reaction():
 
 def draw_background():
     global st, background_surface
-    xmax, ymax = SCOPE_BOX_SIZE
+    xmax = SCOPE_BOX_SIZE[0] - 1
+    ymax = SCOPE_BOX_SIZE[1] - 1
 
     # empty background
     background_surface = pygame.Surface(SCOPE_BOX_SIZE)
@@ -292,7 +293,7 @@ def draw_lines(screen, background_surface, lines):
     colours = [ GREEN, YELLOW, MAGENTA, CYAN, RED, BLUE ]
     for i in range(len(lines)):
         pygame.draw.lines(screen, colours[i], False, lines[i], 2)
-            
+
 
 class WFS_Counter:
     def __init__(self):
@@ -336,26 +337,35 @@ def is_data_available(f, t):
         if len(r) == 0:   
            is_available = False 
     return is_available
- 
-    
+
+
+# working line buffer 
+ws = []
 def read_points(f):
+    global ws
     ps = []
     tp = 0
     # the loop will exit and the points list is returned if
-    # (a) there is no more data waiting to be read, or
-    # (b) if the time coordinate 'goes backwards'
-    while is_data_available(f, 1.0):
-        ws = f.readline().split()
-        t = int(ws[0])
-        if t < tp:
-            break
-        ws = ws[1:]
-        for i in range(len(ws)):
-            try:
-                ps[i].append((t, int(ws[i])))   # extend an existing line
-            except IndexError:
-                ps.append( [(t, int(ws[i]))] )  # or add another line if it doesn't exist yet
+    # (a) there is no more data waiting to be read, 
+    # (b) if the time coordinate 'goes backwards', or
+    # (c) if the line is empty or not correctly formatted.
+    while is_data_available(f, 1.0): 
+        try:
+            if ws == []:
+                ws = f.readline().split()
+            t = int(ws[0])
+            if t < tp:
+                break       # exit now if time coordinate is lower than previous one
+            ws = ws[1:]
+            for i in range(len(ws)):
+                try:
+                    ps[i].append((t, int(ws[i])))   # extend an existing line
+                except IndexError:
+                    ps.append( [(t, int(ws[i]))] )  # or add another line if it doesn't exist yet
+        except:
+            break           # exit if we have any other type of error with the input data
         tp = t
+        ws = f.readline().split()
     return ps
 
 
@@ -367,7 +377,11 @@ def main():
     draw_background()
 
     # initialise UI
-    application = thorpy.Application(PI_SCREEN_SIZE, 'pqm-hellebores')
+    # thorpy.Application doesn't behave well on Windows -- goes to full screen immediately
+    # therefore using underlying pygame functions to initialise display
+    #application = thorpy.Application(PI_SCREEN_SIZE, 'pqm-hellebores')
+    pygame.init()
+    pygame.display.set_caption('pqm-hellebores')
 
     # fullscreen on Pi, but not on laptop
     # also make the mouse pointer invisible on Pi, as we will use the touchscreen
@@ -394,7 +408,8 @@ def main():
 
     # start the thorpy event handler loop
     menu.play()
-    application.quit()
+    #application.quit()
+    pygame.quit()
 
 
 

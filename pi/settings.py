@@ -32,6 +32,7 @@ class Settings():
             self.y_pixels                = self.vertical_axis_divisions * self.vertical_pixels_per_division
             self.half_y_pixels           = self.y_pixels // 2
  
+
     def get_default_settings(self):
         self.frequency                                 = 50.0
         self.sample_rate                               = 7812.5
@@ -60,7 +61,6 @@ class Settings():
         self.trigger_threshold                         = 0.0
         self.horizontal_pixels_per_division            = 70
         self.vertical_pixels_per_division              = 60
-        self.get_derived_settings()
 
  
     def get_settings(self):
@@ -95,9 +95,10 @@ class Settings():
             self.trigger_threshold                         = js['trigger_threshold']
             self.horizontal_pixels_per_division            = js['horizontal_pixels_per_division']
             self.vertical_pixels_per_division              = js['vertical_pixels_per_division']
-            self.get_derived_settings()
         except:
             print("settings.py, get_settings(): couldn't read settings.json.", file=sys.stderr)
+            self.get_default_settings()
+        self.get_derived_settings()
 
 
     def save_settings(self):
@@ -137,8 +138,17 @@ class Settings():
             print("settings.py, save_settings(): couldn't write settings.json.", file=sys.stderr)
 
 
-    def __init__(self):
-        self.get_default_settings()
-        self.get_derived_settings()
+    def signal_handler(self, signum, frame):
+        self.get_settings()
+        self.callback_fn()
+
+
+    def __init__(self, callback_fn):
+        self.get_settings()
+        self.callback_fn = callback_fn
+        # if we receive 'SIGUSR1' signal (on linux) updated settings will be read from settings.json
+        # via the signal_handler function
+        if sys.platform == 'linux':
+            signal.signal(signal.SIGUSR1, self.signal_handler)
 
 

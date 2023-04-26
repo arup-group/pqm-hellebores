@@ -36,10 +36,20 @@ LIGHT_GREY = (100, 100, 100)
 PI_SCREEN_SIZE = (800,480)
 SCOPE_BOX_SIZE = (700,480)
 CONTROLS_BOX_SIZE = (100,480)
-BUTTON_SIZE = (92,50) 
+BUTTON_SIZE = (86,50) 
 TEXT_SIZE = (100,16)
+FONT = 'dejavusansmono'
+FONT_SIZE = 14
 
-
+# Default pygame font: freesansbold
+# Ubuntu monospaced fonts:
+# dejavusansmono
+# ubuntumono
+# bitstreamverasansmono
+# nimbusmonops
+# notosansmono
+# notomono
+ 
 # button enumerations
 B_RUNSTOP     = 0
 B_MODE        = 1
@@ -75,6 +85,7 @@ def create_buttons():
 
     button_mode          = thorpy.Button('Mode')
     button_mode.at_unclick       = mode_reaction
+    button_mode.set_style_attr('font_align', 'r')
 
     button_horizontal    = thorpy.Button('Horizontal')
     button_horizontal.at_unclick = horizontal_reaction
@@ -205,7 +216,6 @@ class Texts:
             # the dummy text here is needed to allocate pixels
             # and to make all the text left aligned
             t = thorpy.Text('')
-            t.font_align = 'l'
             t.set_size(TEXT_SIZE)
             self.texts.append(t)
         #self.clear_texts()
@@ -216,11 +226,11 @@ class Texts:
     # update text message string
     def set_text(self, item, value):
         self.texts[item].set_text(value)
-        print('hi')
+
 
     def clear_texts(self):
         for t in self.texts:
-            t.set_text('hello')
+            t.set_text('')
 
 
 def initialise_uibox(elements):
@@ -235,43 +245,32 @@ def start_stop_reaction():
    global capturing
    if capturing == True:
        capturing = False
-       texts.set_text(T_RUNSTOP, "Stopped         ")
+       texts.set_text(T_RUNSTOP, "Stopped")
    else:
        capturing = True
-       texts.set_text(T_RUNSTOP, "Running         ")
+       texts.set_text(T_RUNSTOP, "Running")
        
 
-def about_box_reaction():
-   thorpy.launch_nonblocking_alert(title="hellebores.py",
-                               text="Power quality meter, v0.02",
-                               ok_text="Ok, I've read",
-                               font_size=12,
-                               font_color=RED)
-   print("A non-blocking alert was launched")
+def options_reaction():
+    global screen, background_surface
+    alert = thorpy.Alert(title="hellebores.py",
+                         text="Power quality meter, v0.02",
+                         ok_text="Ok, I've read")
+    alert.set_draggable()
+    alert.cannot_drag_outside = True
+    alert.launch_nonblocking()
 
 
-def refresh_reaction():
+def refresh_reaction(points):
     global wfs, texts, capturing, screen, background_surface
-    # update the wfs and corresponding display 
-    #if wfs.refresh_wfs() == True:
-    #    texts.get_texts()[1].blit()
-    # update the lines only if capturing
+    lines = points.read_points(sys.stdin)
+    # update the screen only if capturing
     if capturing:
-        lines = read_points(sys.stdin)
         if lines and len(lines[0]) > 1:
             # blit the screen with background image (graticule)
             screen.blit(background_surface, (0,0))
             draw_lines(screen, background_surface, lines)
             wfs.increment_wfs()
-    # send to display surface and update framebuffer
-    #pygame.display.update()
-
-
-def quit_reaction():
-    global capturing
-    capturing = False
-    print("Quitting...", file=sys.stderr)    
-    thorpy.functions.quit_menu_func() 
 
 
 def draw_background():
@@ -330,7 +329,7 @@ class WFS_Counter:
         # if the time has increased by at least 1.0 second, update the wfm/s text
         elapsed = self.time - self.posted
         if elapsed >= 1.0:
-            texts.set_text(T_WFS, f'{round(self.counter/elapsed)} wfm/s          ')
+            texts.set_text(T_WFS, f'{round(self.counter/elapsed)} wfm/s')
             self.posted = self.time
             self.counter = 0
             updated_text = True
@@ -355,34 +354,39 @@ def is_data_available(f, t):
     return is_available
 
 
-# working line buffer 
-ws = []
-def read_points(f):
-    global ws
-    ps = []
-    tp = 0
-    # the loop will exit and the points list is returned if
-    # (a) there is no more data waiting to be read, 
-    # (b) if the time coordinate 'goes backwards', or
-    # (c) if the line is empty or not correctly formatted.
-    while is_data_available(f, 1.0): 
-        try:
-            if ws == []:
-                ws = f.readline().split()
-            t = int(ws[0])
-            if t < tp:
-                break       # exit now if time coordinate is lower than previous one
-            ws = ws[1:]
-            for i in range(len(ws)):
-                try:
-                    ps[i].append((t, int(ws[i])))   # extend an existing line
-                except IndexError:
-                    ps.append( [(t, int(ws[i]))] )  # or add another line if it doesn't exist yet
-        except:
-            break           # exit if we have any other type of error with the input data
-        tp = t
-        ws = f.readline().split()
-    return ps
+class Points:
+
+    # working line buffer 
+    ws = []
+
+    def read_points(self, f):
+        ps = []
+        tp = 0
+        # the loop will exit and the points list is returned if
+        # (a) there is no more data waiting to be read, 
+        # (b) if the time coordinate 'goes backwards', or
+        # (c) if the line is empty or not correctly formatted
+        while is_data_available(f, 1.0): 
+            try:
+                if self.ws == []:
+                    self.ws = f.readline().split()
+                t = int(self.ws[0])
+                if t < tp:
+                    break       # exit now if time coordinate is lower than previous one
+                self.ws = self.ws[1:]
+                for i in range(len(self.ws)):
+                    try:
+                        ps[i].append((t, int(self.ws[i])))   # extend an existing line
+                    except IndexError:
+                        ps.append( [(t, int(self.ws[i]))] )  # or add another line if it doesn't exist yet
+            except:
+                break           # exit if we have any other type of error with the input data
+            tp = t
+            self.ws = f.readline().split()
+        return ps
+
+    def __init__(self):
+        pass
 
 
 def main():
@@ -409,8 +413,8 @@ def main():
     else:
         screen    = pygame.display.set_mode(PI_SCREEN_SIZE)
 
-    thorpy.set_default_font('freesans', 14)
-    thorpy.init(screen, thorpy.theme_classic)
+    thorpy.set_default_font(FONT, FONT_SIZE)
+    thorpy.init(screen, thorpy.theme_human)
     buttons   = create_buttons()
     texts     = Texts()
     wfs       = WFS_Counter()
@@ -419,6 +423,9 @@ def main():
 
     # now set up the initial text states
     texts.set_text(T_RUNSTOP, "Running")
+
+    # set up points object
+    points = Points()
     
     # initialise flags
     capturing = True        # allow/stop update of the lines on the screen
@@ -428,10 +435,10 @@ def main():
     while running:
         events = pygame.event.get()
         for e in events:
-            if (e.type == pygame.QUIT) or (e.type == pygame.KEYDOWN and event.key == pygame.K_q):
+            if (e.type == pygame.QUIT) or (e.type == pygame.KEYDOWN and e.key == pygame.K_q):
                 running = False
+        refresh_reaction(points)
         wfs.refresh_wfs()
-        refresh_reaction()
         ui_updater.update(events=events)
         pygame.display.flip()
 

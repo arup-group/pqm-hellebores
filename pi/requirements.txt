@@ -1,3 +1,4 @@
+pyserial
 pygame
 thorpy
 

@@ -1,7 +1,6 @@
-pip3 install thorpy pygame
+pip3 install pyserial thorpy pygame
 http://www.thorpy.org/documentation/userguide/elements.html
-Raspbian may need sudo apt install libsdl2-mixer-2.0-0
-
+Raspbian may need sudo apt install libsdl2-mixer-2.0-0 libsdl-ttf-2.0-0
 
 # Running graphical app on local display remotely via ssh
 # Disable mouse driver, including OS touch mouse emulation

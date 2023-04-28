@@ -409,17 +409,17 @@ def main():
     # to return correct coordinates from the touchscreen
     if get_screen_hardware_size() == PI_SCREEN_SIZE:
         screen    = pygame.display.set_mode(PI_SCREEN_SIZE, flags=pygame.FULLSCREEN)
-        pygame.mouse.set_cursor((8,8),(0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0))
     else:
         screen    = pygame.display.set_mode(PI_SCREEN_SIZE)
 
     thorpy.set_default_font(FONT, FONT_SIZE)
-    thorpy.init(screen, thorpy.theme_human)
+    thorpy.init(screen, thorpy.theme_classic)
     buttons   = create_buttons()
     texts     = Texts()
     wfs       = WFS_Counter()
     uibox     = initialise_uibox([*buttons['main'], *texts.get_texts()])
     ui_updater = uibox.get_updater()
+    pygame.mouse.set_cursor((8,8),(0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0))
 
     # now set up the initial text states
     texts.set_text(T_RUNSTOP, "Running")
@@ -431,7 +431,7 @@ def main():
     capturing = True        # allow/stop update of the lines on the screen
     running   = True        # program runs until this flag is cleared
 
-    # need to re-implement pygame event loop!
+    # main loop
     while running:
         events = pygame.event.get()
         for e in events:
@@ -442,10 +442,6 @@ def main():
         ui_updater.update(events=events)
         pygame.display.flip()
 
-    # start the thorpy event handler loop
-    #player = uibox.get_updater().launch()
-    #menu.play()
-    #application.quit()
     pygame.quit()
 
 

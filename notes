@@ -1,11 +1,23 @@
-pip3 install pyserial thorpy pygame
-http://www.thorpy.org/documentation/userguide/elements.html
-Raspbian may need sudo apt install libsdl2-mixer-2.0-0 libsdl-ttf-2.0-0
+INSTALLATION
 
-# Running graphical app on local display remotely via ssh
-# Disable mouse driver, including OS touch mouse emulation
+On Pico
+Copy pico/main.py to the Pico storage, using Thonny.
+
+On Pi
+python3 -m pip install -r requirements.txt
+or
+python3 -m pip install pyserial thorpy pygame
+
+Raspberry Pi OS may also need SDL2 libraries:
+sudo apt install libsdl2-mixer-2.0-0 libsdl2-ttf-2.0-0
+
+http://www.thorpy.org/documentation
+
+# For development, if you want to graphical app on local display remotely via ssh
 export SDL_FBDEV=/dev/fb0
+# Disable mouse driver, including OS touch mouse emulation
 export SDL_MOUSEDRV=/dev/null
+# App may need to run with root permissions in order to access framebuffer
 sudo ./app.py
 
 # Enable more memory for video driver in performance options

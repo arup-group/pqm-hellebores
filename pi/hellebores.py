@@ -13,47 +13,15 @@ import thorpy
 import math
 import pygame
 import time
-import random
 import sys
 import os
 import select
-import json
+import signal
+import settings
 
 
 
-def get_settings():
-    global time_axis_divisions, vertical_axis_divisions, horizontal_pixels_per_division,\
-               vertical_pixels_per_division, time_axis_pre_trigger_divisions, interval
-    try:
-        f = open("settings.json", "r")
-        js = json.loads(f.read())
-        f.close()
-        time_axis_divisions               = js['time_axis_divisions']
-        vertical_axis_divisions           = js['vertical_axis_divisions']
-        horizontal_pixels_per_division    = js['horizontal_pixels_per_division']
-        vertical_pixels_per_division      = js['vertical_pixels_per_division']
-        time_axis_pre_trigger_divisions   = js['time_axis_pre_trigger_divisions']
-        interval                          = 1000.0 / js['sample_rate']
-        return js
-    except:
-        print("hellebores.py, get_settings(): couldn't read settings.json, using defaults.", file=sys.stderr)
-        time_axis_divisions               = 10
-        vertical_axis_divisions           = 8
-        horizontal_pixels_per_division    = 70
-        vertical_pixels_per_division      = 60
-        time_axis_pre_trigger_divisions   = 2
-        interval                          = 1000.0 / 7812.5
-        return {}
-
-def save_settings(js):
-    try:
-        f = open('settings.json', 'w')
-        f.write(json.dumps(js))
-        f.close()
-    except:
-        print("hellebores.py, save_settings(): couldn't write settings.json.", file=sys.stderr)
-
-       
+      
 RED = (255, 0, 0)
 BLUE = (0, 0, 255)
 GREEN = (0, 255, 0)
@@ -68,10 +36,20 @@ LIGHT_GREY = (100, 100, 100)
 PI_SCREEN_SIZE = (800,480)
 SCOPE_BOX_SIZE = (700,480)
 CONTROLS_BOX_SIZE = (100,480)
-BUTTON_SIZE = (100,50) 
-TEXT_SIZE = (100,12)
+BUTTON_SIZE = (86,50) 
+TEXT_SIZE = (100,16)
+FONT = 'dejavusansmono'
+FONT_SIZE = 14
 
-
+# Default pygame font: freesansbold
+# Ubuntu monospaced fonts:
+# dejavusansmono
+# ubuntumono
+# bitstreamverasansmono
+# nimbusmonops
+# notosansmono
+# notomono
+ 
 # button enumerations
 B_RUNSTOP     = 0
 B_MODE        = 1
@@ -101,13 +79,132 @@ def signal_other_processes():
         os.system("pkill -f --signal=SIGUSR1 'python3 ./mapper.py'")
     
 
-def initialise_buttons():
-    buttons = []
-    for s in ['Run/Stop', 'Mode', 'Horizontal', 'Vertical', 'Options', 'About']:
-        button = thorpy.make_button(s)
-        button.set_size(BUTTON_SIZE)
-        buttons.append(button)
+def create_buttons():
+    button_runstop       = thorpy.Button('Run/Stop')
+    button_runstop.at_unclick    = start_stop_reaction
+
+    button_mode          = thorpy.Button('Mode')
+    button_mode.at_unclick       = mode_reaction
+    button_mode.set_style_attr('font_align', 'r')
+
+    button_horizontal    = thorpy.Button('Horizontal')
+    button_horizontal.at_unclick = horizontal_reaction
+
+    button_vertical      = thorpy.Button('Vertical')
+    button_vertical.at_unclick   = vertical_reaction
+
+    button_trigger       = thorpy.Button('Trigger')
+    button_trigger.at_unclick    = trigger_reaction
+
+    button_options       = thorpy.Button('Options')
+    button_options.at_unclick    = options_reaction
+
+
+    buttons = {}
+    buttons['main']      = [ button_runstop, \
+                             button_mode, \
+                             button_horizontal, \
+                             button_vertical, \
+                             button_trigger, \
+                             button_options ]
+
+#    buttons['main']           = [ thorpy.Button('Run/Stop', func = start_stop_reaction),\
+#                                  thorpy.Button('Mode', func = mode_reaction),\
+#                                  thorpy.Button('Horizontal', func = horizontal_reaction),\
+#                                  thorpy.Button('Vertical', func = vertical_reaction),\
+#                                  thorpy.Button('Trigger', func = trigger_reaction),\
+#                                  thorpy.Button('Options', func = about_box_reaction) ]
+#
+#    buttons['mode']           = [ thorpy.Button('Back', func = back_reaction),\
+#                                  thorpy.Button('Waveform', func = mode_reaction),\
+#                                  thorpy.Button('Meter', func = horizontal_reaction),\
+#                                  thorpy.Button('Harmonics', func = vertical_reaction),\
+#                                  thorpy.Button('Logging', func = options_reaction) ]
+#
+#    buttons['horizontal']     = [ thorpy.Button('Back', func = back_reaction),\
+#                                  thorpy.Button('< Zoom >', func = horizontal_zoom_reaction),\
+#                                  thorpy.Button('> Expand <', func = horizontal_expand_reaction),\
+#                                  thorpy.Button('t0 >', func = time_right_reaction),\
+#                                  thorpy.Button('< t0', func = time_left_reaction),\
+#                                  thorpy.Button('Trigger', func = trigger_reaction) ]
+#
+#    buttons['trigger']        = [ thorpy.Button('Back', func = back_reaction),\
+#                                  thorpy.Button('Trigger channel', func = trigger_channel_reaction),\
+#                                  thorpy.Button('Trigger level', func = trigger_level_reaction),\
+#                                  thorpy.Button('Trigger direction', func = trigger_direction_reaction) ]
+#                            
+#    buttons['vertical']       = [ thorpy.Button('Back', func = back_reaction),\
+#                                  thorpy.Button('< Zoom >', func = vertical_zoom_reaction),\
+#                                  thorpy.Button('> Expand <', func = vertical_expand_reaction) ]
+#                            
+#    buttons['options']        = [ thorpy.Button('Back', func = back_reaction),\
+#                                  thorpy.Button('Wifi', func = wifi_reaction),\
+#                                  thorpy.Button('Shell', func = shell_reaction),\
+#                                  thorpy.Button('Exit', func = exit_reaction) ]
+    # set buttons to all be the same size                        
+    for mode in buttons.keys():
+        for button in buttons[mode]:
+            button.set_size(BUTTON_SIZE)
     return buttons
+
+def mode_reaction():
+   1
+
+def horizontal_reaction():
+   1
+
+def vertical_reaction():
+   1
+
+def trigger_reaction():
+   1
+
+def options_reaction():
+   1
+
+def back_reaction():
+   1
+
+def horizontal_zoom_reaction():
+   1
+
+def horizontal_expand_reaction():
+   1
+
+def time_right_reaction():
+   1
+
+def time_left_reaction():
+   1
+
+def trigger_channel_reaction():
+   1
+
+def trigger_level_reaction():
+   1
+
+def trigger_direction_reaction():
+   1
+
+def vertical_zoom_reaction():
+   1
+
+def vertical_expand_reaction():
+   1
+
+def trigger_direction_reaction():
+   1
+
+def wifi_reaction():
+   1
+
+def shell_reaction():
+   1
+
+def exit_reaction():
+   1
+
+
 
 
 class Texts:
@@ -118,9 +215,10 @@ class Texts:
         for s in range(0,7):
             # the dummy text here is needed to allocate pixels
             # and to make all the text left aligned
-            t = thorpy.make_text('XXXXXXXXX')  
+            t = thorpy.Text('')
             t.set_size(TEXT_SIZE)
             self.texts.append(t)
+        #self.clear_texts()
 
     def get_texts(self):
         return self.texts
@@ -129,43 +227,21 @@ class Texts:
     def set_text(self, item, value):
         self.texts[item].set_text(value)
 
+
     def clear_texts(self):
         for t in self.texts:
             t.set_text('')
 
 
-def initialise_uibox(buttons, texts):
+def initialise_uibox(elements):
     # create the user interface object, and add reactions to it
-    uibox = thorpy.Box(elements=[*buttons, *texts])
-    uibox.add_reaction(thorpy.Reaction(reacts_to=thorpy.constants.THORPY_EVENT, \
-                       reac_func=start_stop_reaction, \
-                       event_args={"el": buttons[B_RUNSTOP], "id": thorpy.constants.EVENT_UNPRESS}))
-
-    uibox.add_reaction(thorpy.Reaction(reacts_to=thorpy.constants.THORPY_EVENT, \
-                       reac_func=about_box_reaction, \
-                       event_args={"el": buttons[B_ABOUT], "id": thorpy.constants.EVENT_UNPRESS}))
-
+    uibox = thorpy.Box(elements)
     uibox.set_size(CONTROLS_BOX_SIZE)
-    uibox.set_topleft((PI_SCREEN_SIZE[0]-CONTROLS_BOX_SIZE[0],0))
+    uibox.set_topleft(PI_SCREEN_SIZE[0]-CONTROLS_BOX_SIZE[0],0)
     return uibox
 
 
-def initialise_dispatching(uibox, screen):
-    # a menu object is needed for events dispatching
-    menu = thorpy.Menu(uibox) 
-
-    # set the screen to be the display surface
-    for element in menu.get_population():
-        element.surface = screen
-
-    # We do not actually launch the menu (menu.play()) because it creates an embedded
-    # event loop, while we need to have a free running loop in this application,
-    # to maximise the display refresh rate.
-    # So instead, we process events manually inside the main() function.
-    return menu
-
-
-def start_stop_reaction(event):
+def start_stop_reaction():
    global capturing
    if capturing == True:
        capturing = False
@@ -175,63 +251,91 @@ def start_stop_reaction(event):
        texts.set_text(T_RUNSTOP, "Running")
        
 
-def about_box_reaction(event):
-   thorpy.launch_blocking_alert(title="hellebores.py",
-                               text="Power quality meter, v0.01",
-                               ok_text="Ok, I've read",
-                               font_size=12,
-                               font_color=RED)
+def options_reaction():
+    global screen, background_surface
+    alert = thorpy.Alert(title="hellebores.py",
+                         text="Power quality meter, v0.02",
+                         ok_text="Ok, I've read")
+    alert.set_draggable()
+    alert.cannot_drag_outside = True
+    alert.launch_nonblocking()
 
 
-def process_events(menu):
-    global running
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_q):
-            running = False
-        menu.react(event)
+def refresh_reaction(points):
+    global wfs, texts, capturing, screen, background_surface
+    lines = points.read_points(sys.stdin)
+    # update the screen only if capturing
+    if capturing:
+        if lines and len(lines[0]) > 1:
+            # blit the screen with background image (graticule)
+            screen.blit(background_surface, (0,0))
+            draw_lines(screen, background_surface, lines)
+            wfs.increment_wfs()
 
 
-def draw_graticule(screen):
-    xmax, ymax = SCOPE_BOX_SIZE
-    for dx in range(1, time_axis_divisions):
-        x = horizontal_pixels_per_division * dx
+def draw_background():
+    global st, background_surface
+    xmax = SCOPE_BOX_SIZE[0] - 1
+    ymax = SCOPE_BOX_SIZE[1] - 1
+
+    # empty background
+    background_surface = pygame.Surface(SCOPE_BOX_SIZE)
+    background_surface.fill(GREY)
+
+    # draw the graticule lines
+    for dx in range(1, st.time_axis_divisions):
+        x = st.horizontal_pixels_per_division * dx
         # mark the trigger position (t=0) with a thicker line
-        if dx == time_axis_pre_trigger_divisions:
-            lt = 3
+        if dx == st.time_axis_pre_trigger_divisions:
+            lc = WHITE
         else:
-            lt = 1
-        pygame.draw.line(screen, LIGHT_GREY, (x, 0), (x, ymax), lt)
-    for dy in range(1, vertical_axis_divisions):
-        y = vertical_pixels_per_division * dy
+            lc = LIGHT_GREY
+        pygame.draw.line(background_surface, lc, (x, 0), (x, ymax), 1)
+    for dy in range(1, st.vertical_axis_divisions):
+        y = st.vertical_pixels_per_division * dy
         # mark the central position (v, i = 0) with a thicker line
-        if dy == vertical_axis_divisions // 2:
-            lt = 3
+        if dy == st.vertical_axis_divisions // 2:
+            lc = WHITE
         else:
-            lt = 1
-        pygame.draw.line(screen, LIGHT_GREY, (0, y), (xmax, y), lt)
+            lc = LIGHT_GREY
+        pygame.draw.line(background_surface, lc, (0, y), (xmax, y), 1)
 
 
 def draw_lines(screen, background_surface, lines):
-    # blit the screen with background image (graticule)
-    screen.blit(background_surface, (0,0))
-    # can handle up to six lines
+   # can handle up to six lines
     colours = [ GREEN, YELLOW, MAGENTA, CYAN, RED, BLUE ]
     for i in range(len(lines)):
         pygame.draw.lines(screen, colours[i], False, lines[i], 2)
-            
 
-def refresh_wfs():
-    # refresh the information box every second
-    t = int(time.time())
-    if t != refresh_wfs.seconds:
-        refresh_wfs.seconds = t
-        texts.set_text(T_WFS, str(refresh_wfs.frames) + ' wfm/s')
-        refresh_wfs.frames = 0 
-    refresh_wfs.frames = refresh_wfs.frames + 1
-    
-refresh_wfs.frames=0
-refresh_wfs.seconds=int(time.time())
 
+class WFS_Counter:
+    global texts
+
+    def __init__(self):
+        self.counter = 0           # number of waveforms since last posting
+        self.time = time.time()    # keep track of time in milliseconds
+        self.posted = self.time    # time when the wfs/s was lasted posted to screen
+
+    # called whenever we update the waveform on screen 
+    def increment_wfs(self):
+        self.counter = self.counter + 1
+
+    # called when a refresh event occurs (image isn't always updated)
+    def refresh_wfs(self):
+        updated_text = False
+
+        # time check 
+        self.time = time.time()
+        # if the time has increased by at least 1.0 second, update the wfm/s text
+        elapsed = self.time - self.posted
+        if elapsed >= 1.0:
+            texts.set_text(T_WFS, f'{round(self.counter/elapsed)} wfm/s')
+            self.posted = self.time
+            self.counter = 0
+            updated_text = True
+
+        return updated_text
+ 
 
 def get_screen_hardware_size():
     i = pygame.display.Info()
@@ -248,84 +352,100 @@ def is_data_available(f, t):
         if len(r) == 0:   
            is_available = False 
     return is_available
- 
-    
-def read_points(f):
-    ps = []
-    tp = 0
-    # the loop will exit and the points list is returned if
-    # (a) there is no more data to read, or
-    # (b) if the time coordinate 'goes backwards'
-    while is_data_available(f, 0.1):
-        ws = f.readline().split()
-        t = int(ws[0])
-        if t < tp:
-            break
-        ws = ws[1:]
-        for i in range(len(ws)):
+
+
+class Points:
+
+    # working line buffer 
+    ws = []
+
+    def read_points(self, f):
+        ps = []
+        tp = 0
+        # the loop will exit and the points list is returned if
+        # (a) there is no more data waiting to be read, 
+        # (b) if the time coordinate 'goes backwards', or
+        # (c) if the line is empty or not correctly formatted
+        while is_data_available(f, 1.0): 
             try:
-                ps[i].append((t, int(ws[i])))   # extend an existing line
-            except IndexError:
-                ps.append( [(t, int(ws[i]))] )  # or add another line if it doesn't exist yet
-        tp = t
-    return ps
+                if self.ws == []:
+                    self.ws = f.readline().split()
+                t = int(self.ws[0])
+                if t < tp:
+                    break       # exit now if time coordinate is lower than previous one
+                self.ws = self.ws[1:]
+                for i in range(len(self.ws)):
+                    try:
+                        ps[i].append((t, int(self.ws[i])))   # extend an existing line
+                    except IndexError:
+                        ps.append( [(t, int(self.ws[i]))] )  # or add another line if it doesn't exist yet
+            except:
+                break           # exit if we have any other type of error with the input data
+            tp = t
+            self.ws = f.readline().split()
+        return ps
 
-   
+    def __init__(self):
+        pass
+
+
 def main():
-    global capturing, running, texts
+    global st, running, capturing, texts, background_surface, uibox, texts, screen, wfs
 
-    get_settings()
+    # get settings from settings.json
+    st = settings.Settings(draw_background)
+    draw_background()
 
     # initialise UI
+    # thorpy.Application doesn't behave well on Windows -- goes to full screen immediately
+    # therefore using underlying pygame functions to initialise display
+    #application = thorpy.Application(PI_SCREEN_SIZE, 'pqm-hellebores')
     pygame.init()
     pygame.display.set_caption('pqm-hellebores')
 
     # fullscreen on Pi, but not on laptop
+    # also make the mouse pointer invisible on Pi, as we will use the touchscreen
+    # we can't make the pointer inactive using the pygame flags because we need it working
+    # to return correct coordinates from the touchscreen
     if get_screen_hardware_size() == PI_SCREEN_SIZE:
         screen    = pygame.display.set_mode(PI_SCREEN_SIZE, flags=pygame.FULLSCREEN)
+        pygame.mouse.set_cursor((8,8),(0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0))
     else:
         screen    = pygame.display.set_mode(PI_SCREEN_SIZE)
-    buttons   = initialise_buttons()
+
+    thorpy.set_default_font(FONT, FONT_SIZE)
+    thorpy.init(screen, thorpy.theme_human)
+    buttons   = create_buttons()
     texts     = Texts()
-    uibox     = initialise_uibox(buttons, texts.get_texts())
-    menu      = initialise_dispatching(uibox, screen)
-
-    # make the mouse pointer invisible
-    # can't make the pointer inactive using the pygame flags because we need it working
-    # to return correct coordinates from the touchscreen
-    pygame.mouse.set_cursor((8,8),(0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0))
-
-    # set up the background image
-    background_surface = pygame.Surface(SCOPE_BOX_SIZE)
-    background_surface.fill(GREY)
-    draw_graticule(background_surface)
+    wfs       = WFS_Counter()
+    uibox     = initialise_uibox([*buttons['main'], *texts.get_texts()])
+    ui_updater = uibox.get_updater()
 
     # now set up the initial text states
-    texts.clear_texts()
     texts.set_text(T_RUNSTOP, "Running")
+
+    # set up points object
+    points = Points()
     
     # initialise flags
-    running = True          # the loop will run continuously until this is set to False
     capturing = True        # allow/stop update of the lines on the screen
+    running   = True        # program runs until this flag is cleared
 
+    # need to re-implement pygame event loop!
     while running:
-        
-        # waveform display update
-        if capturing:
-            lines = read_points(sys.stdin)
-            if lines and len(lines[0]) > 1:
-                draw_lines(screen, background_surface, lines)
+        events = pygame.event.get()
+        for e in events:
+            if (e.type == pygame.QUIT) or (e.type == pygame.KEYDOWN and e.key == pygame.K_q):
+                running = False
+        refresh_reaction(points)
+        wfs.refresh_wfs()
+        ui_updater.update(events=events)
+        pygame.display.flip()
 
-        # UI/buttons update
-        process_events(menu)
-        refresh_wfs()
-        # uibox.update()  # enable this only if required
-        uibox.blit()
-        
-        # update the display
-        # this flips the re-drawn screen surface into the framebuffer (hardware)
-        pygame.display.update()
-
+    # start the thorpy event handler loop
+    #player = uibox.get_updater().launch()
+    #menu.play()
+    #application.quit()
     pygame.quit()
 
 

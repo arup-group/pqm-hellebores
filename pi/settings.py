@@ -132,7 +132,7 @@ class Settings():
             js['trigger_threshold']                        = self.trigger_threshold
             js['horizontal_pixels_per_division']           = self.horizontal_pixels_per_division
             js['vertical_pixels_per_division']             = self.vertical_pixels_per_division
-            f.write(json.dumps(js))
+            f.write(json.dumps(js, indent=4))
             f.close()
         except:
             print("settings.py, save_settings(): couldn't write settings.json.", file=sys.stderr)

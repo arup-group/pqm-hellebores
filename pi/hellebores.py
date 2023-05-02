@@ -36,6 +36,9 @@ LIGHT_GREY = (100, 100, 100)
 PI_SCREEN_SIZE = (800,480)
 SCOPE_BOX_SIZE = (700,480)
 CONTROLS_BOX_SIZE = (100,480)
+CONTROLS_BOX_POSITION = (700,0)
+SETTINGS_BOX_SIZE = (500,400)
+SETTINGS_BOX_POSITION = (50,50)
 BUTTON_SIZE = (86,50) 
 TEXT_SIZE = (100,16)
 FONT = 'dejavusansmono'
@@ -79,13 +82,16 @@ def signal_other_processes():
         os.system("pkill -f --signal=SIGUSR1 'python3 ./mapper.py'")
     
 
-def create_buttons():
+def create_controls():
+    global st
+
+    # Main controls, on right of screen
+
     button_runstop       = thorpy.Button('Run/Stop')
     button_runstop.at_unclick    = start_stop_reaction
 
     button_mode          = thorpy.Button('Mode')
     button_mode.at_unclick       = mode_reaction
-    button_mode.set_style_attr('font_align', 'r')
 
     button_horizontal    = thorpy.Button('Horizontal')
     button_horizontal.at_unclick = horizontal_reaction
@@ -100,14 +106,76 @@ def create_buttons():
     button_options.at_unclick    = options_reaction
 
 
-    buttons = {}
-    buttons['main']      = [ button_runstop, \
+    controls = {}
+    controls['main']     = [ button_runstop, \
                              button_mode, \
                              button_horizontal, \
                              button_vertical, \
                              button_trigger, \
                              button_options ]
 
+    class Range_controller:
+        ranges = []
+        range_selector = 1
+        maximum_range = 1
+
+        def __init__(self, required_ranges):
+            self.ranges = required_ranges
+            self.maximum_range = len(required_ranges) - 1
+
+        def selected(self):
+            return self.ranges[self.range_selector]
+
+        def change_range(self, offset):
+            if offset == 1:
+                self.range_selector = min(self.maximum_range, self.range_selector+1)
+            elif offset == -1:
+                self.range_selector = max(0, self.range_selector-1)
+            else:
+                sys.stderr.write("Range_controller.change_range: can only change range by +1 or -1.") 
+
+    def update_voltage_range(voltages, offset):
+        voltages.change_range(offset)
+        display_voltage.set_text(f'{voltages.selected()} V/div')
+        st.earth_leakage_current_axis_per_division = voltages.selected()
+        st.save_settings()
+        signal_other_processes()
+
+    button_done          = thorpy.Button('Done')
+    button_done.at_unclick       = back_to_main_reaction
+
+    voltages                  = Range_controller([50,100])
+    display_voltage           = thorpy.Text(f'{voltages.selected()} V/div') 
+    down_voltage              = thorpy.ArrowButton('up', (50,30))
+    down_voltage.at_unclick   = lambda: update_voltage_range(voltages, -1)
+    up_voltage                = thorpy.ArrowButton('down', (50,30))
+    up_voltage.at_unclick     = lambda: update_voltage_range(voltages, 1)
+ 
+
+    #drop_down_voltage    = thorpy.DropDownListButton(('50', '100'), \
+    #                                                 bck_func = alive_func, \
+    #                                                 choice_mode='h', \
+    #                                                 all_same_width=True)
+    #drop_down_voltage_labelled = thorpy.Labelled('Voltage V/div', drop_down_voltage)
+
+    #drop_down_current    = thorpy.DropDownListButton(('0.01', '0.02', '0.05', '0.1', '0.2', '0.5' ), \
+    #                                                 choice_mode='h', \
+    #                                                 all_same_width = True)
+    #drop_down_current_labelled = thorpy.Labelled('Current A/div', drop_down_current)
+
+    #drop_down_power      = thorpy.DropDownListButton(('0.01', '0.02', '0.05', '0.1', '0.2', '0.5' ), \
+    #                                                 choice_mode='h', \
+    #                                                 all_same_width = True)
+    #drop_down_power_labelled = thorpy.Labelled('Power W/div', drop_down_power)
+   
+
+    controls['vertical'] = [ button_done, \
+                             display_voltage, \
+                             down_voltage, \
+                             up_voltage ]
+
+
+                              
 #    buttons['main']           = [ thorpy.Button('Run/Stop', func = start_stop_reaction),\
 #                                  thorpy.Button('Mode', func = mode_reaction),\
 #                                  thorpy.Button('Horizontal', func = horizontal_reaction),\
@@ -142,69 +210,78 @@ def create_buttons():
 #                                  thorpy.Button('Shell', func = shell_reaction),\
 #                                  thorpy.Button('Exit', func = exit_reaction) ]
     # set buttons to all be the same size                        
-    for mode in buttons.keys():
-        for button in buttons[mode]:
-            button.set_size(BUTTON_SIZE)
-    return buttons
+    for mode in controls.keys():
+        for c in controls[mode]:
+            # if it's a button, set the size 
+            if c.__class__ == thorpy.elements.Button:
+                c.set_size(BUTTON_SIZE)
+    return controls
+
+def alive_func():
+   print("I'm alive.")
 
 def mode_reaction():
-   1
+   pass
 
 def horizontal_reaction():
-   1
+   pass
 
 def vertical_reaction():
-   1
+    global ui_groups, ui_updater
+    ui_updater = ui_groups['vertical'].get_updater() 
+
 
 def trigger_reaction():
-   1
+   pass
 
 def options_reaction():
-   1
+   pass
 
 def back_reaction():
-   1
+   pass
 
 def horizontal_zoom_reaction():
-   1
+   pass
 
 def horizontal_expand_reaction():
-   1
+   pass
 
 def time_right_reaction():
-   1
+   pass
 
 def time_left_reaction():
-   1
+   pass
 
 def trigger_channel_reaction():
-   1
+   pass
 
 def trigger_level_reaction():
-   1
+   pass
 
 def trigger_direction_reaction():
-   1
+   pass
 
 def vertical_zoom_reaction():
-   1
+   pass
 
 def vertical_expand_reaction():
-   1
+   pass
 
 def trigger_direction_reaction():
-   1
+   pass
 
 def wifi_reaction():
-   1
+   pass
 
 def shell_reaction():
-   1
+   pass
 
 def exit_reaction():
-   1
+   pass
 
-
+def back_to_main_reaction():
+    global ui_groups, ui_updater
+    ui_updater = ui_groups['main'].get_updater() 
 
 
 class Texts:
@@ -233,12 +310,20 @@ class Texts:
             t.set_text('')
 
 
-def initialise_uibox(elements):
-    # create the user interface object, and add reactions to it
-    uibox = thorpy.Box(elements)
-    uibox.set_size(CONTROLS_BOX_SIZE)
-    uibox.set_topleft(PI_SCREEN_SIZE[0]-CONTROLS_BOX_SIZE[0],0)
-    return uibox
+def initialise_ui_groups(main, vertical, horizontal, trigger, options):
+    ui_groups = {}
+    
+    ui_main = thorpy.Box(main)
+    ui_main.set_size(CONTROLS_BOX_SIZE)
+    ui_main.set_topleft(*CONTROLS_BOX_POSITION)
+    ui_groups['main'] = ui_main
+
+    ui_vertical = thorpy.Box(vertical)
+    #ui_vertical.set_size(SETTINGS_BOX_SIZE)
+    ui_vertical.set_topleft(*SETTINGS_BOX_POSITION)
+    ui_groups['vertical'] = ui_vertical
+
+    return ui_groups
 
 
 def start_stop_reaction():
@@ -306,6 +391,9 @@ def draw_lines(screen, background_surface, lines):
     colours = [ GREEN, YELLOW, MAGENTA, CYAN, RED, BLUE ]
     for i in range(len(lines)):
         pygame.draw.lines(screen, colours[i], False, lines[i], 2)
+
+
+
 
 
 class WFS_Counter:
@@ -390,7 +478,7 @@ class Points:
 
 
 def main():
-    global st, running, capturing, texts, background_surface, uibox, texts, screen, wfs
+    global st, running, capturing, texts, background_surface, ui_groups, ui_updater, screen, wfs
 
     # get settings from settings.json
     st = settings.Settings(draw_background)
@@ -414,11 +502,15 @@ def main():
 
     thorpy.set_default_font(FONT, FONT_SIZE)
     thorpy.init(screen, thorpy.theme_classic)
-    buttons   = create_buttons()
     texts     = Texts()
     wfs       = WFS_Counter()
-    uibox     = initialise_uibox([*buttons['main'], *texts.get_texts()])
-    ui_updater = uibox.get_updater()
+    controls  = create_controls()
+    ui_groups = initialise_ui_groups([*controls['main'], *texts.get_texts()], \
+                                     [*controls['vertical']], \
+                                     None, \
+                                     None, \
+                                     None)
+    ui_updater = ui_groups['main'].get_updater()
     pygame.mouse.set_cursor((8,8),(0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0))
 
     # now set up the initial text states

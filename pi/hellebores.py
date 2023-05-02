@@ -90,7 +90,6 @@ def create_controls():
 
     button_runstop       = thorpy.Button('Run/Stop')
     button_runstop.set_size(BUTTON_SIZE)
-    button_runstop.hand_cursor = False
     button_runstop.at_unclick    = start_stop_reaction
 
     button_mode          = thorpy.Button('Mode')
@@ -181,7 +180,6 @@ def create_controls():
         thorpy.Group(elements=[display_voltage, down_voltage, up_voltage], mode='h'), \
         thorpy.Group(elements=[current_display, current_down, current_up], mode='h'), \
         thorpy.SliderWithText('Current',0,5,0,100,thickness=8)])]
-
                               
 #    buttons['main']           = [ thorpy.Button('Run/Stop', func = start_stop_reaction),\
 #                                  thorpy.Button('Mode', func = mode_reaction),\
@@ -507,8 +505,6 @@ def main():
     thorpy.set_default_font(FONT, FONT_SIZE)
     thorpy.init(screen, thorpy.theme_classic)
     pygame.mouse.set_cursor((8,8),(0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0))
-    thorpy.arrow_cursor = pygame.mouse.get_cursor()
-    thorpy.hand_cursor = pygame.mouse.get_cursor()
 
     texts     = Texts()
     wfs       = WFS_Counter()

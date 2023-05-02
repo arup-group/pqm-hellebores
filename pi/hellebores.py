@@ -504,7 +504,6 @@ def main():
 
     thorpy.set_default_font(FONT, FONT_SIZE)
     thorpy.init(screen, thorpy.theme_classic)
-    pygame.mouse.set_cursor((8,8),(0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0))
 
     texts     = Texts()
     wfs       = WFS_Counter()
@@ -528,6 +527,8 @@ def main():
 
     # main loop
     while running:
+        # hack to make the cursor invisible while still responding
+        pygame.mouse.set_cursor((8,8),(0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0))
         events = pygame.event.get()
         for e in events:
             if (e.type == pygame.QUIT) or (e.type == pygame.KEYDOWN and e.key == pygame.K_q):

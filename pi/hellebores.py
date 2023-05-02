@@ -506,6 +506,10 @@ def main():
 
     thorpy.set_default_font(FONT, FONT_SIZE)
     thorpy.init(screen, thorpy.theme_classic)
+    pygame.mouse.set_cursor((8,8),(0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0))
+    thorpy.arrow_cursor = pygame.mouse.get_cursor()
+    thorpy.hand_cursor = pygame.mouse.get_cursor()
+
     texts     = Texts()
     wfs       = WFS_Counter()
     controls  = create_controls()
@@ -515,8 +519,6 @@ def main():
                                      None, \
                                      None)
     ui_updater = ui_groups['main'].get_updater()
-    pygame.mouse.set_cursor((8,8),(0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0))
-    thorpy.arrow_cursor = pygame.mouse.get_cursor()
 
     # now set up the initial text states
     texts.set_text(T_RUNSTOP, "Running")

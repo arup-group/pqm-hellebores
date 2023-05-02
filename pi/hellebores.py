@@ -90,6 +90,7 @@ def create_controls():
 
     button_runstop       = thorpy.Button('Run/Stop')
     button_runstop.set_size(BUTTON_SIZE)
+    button_runstop.hand_cursor = False
     button_runstop.at_unclick    = start_stop_reaction
 
     button_mode          = thorpy.Button('Mode')
@@ -322,7 +323,7 @@ def initialise_ui_groups(main, vertical, horizontal, trigger, options):
     ui_groups['main'] = ui_main
 
     ui_vertical = thorpy.Box(vertical)
-    #ui_vertical.set_size(SETTINGS_BOX_SIZE)
+    ui_vertical.set_draggable()
     ui_vertical.set_topleft(*SETTINGS_BOX_POSITION)
     ui_groups['vertical'] = ui_vertical
 
@@ -515,6 +516,7 @@ def main():
                                      None)
     ui_updater = ui_groups['main'].get_updater()
     pygame.mouse.set_cursor((8,8),(0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0))
+    thorpy.arrow_cursor = pygame.mouse.get_cursor()
 
     # now set up the initial text states
     texts.set_text(T_RUNSTOP, "Running")

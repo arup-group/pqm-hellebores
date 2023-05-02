@@ -40,6 +40,7 @@ CONTROLS_BOX_POSITION = (700,0)
 SETTINGS_BOX_SIZE = (500,400)
 SETTINGS_BOX_POSITION = (50,50)
 BUTTON_SIZE = (86,50) 
+ARROW_BUTTON_SIZE = (80,50)
 TEXT_SIZE = (100,16)
 FONT = 'dejavusansmono'
 FONT_SIZE = 14
@@ -88,21 +89,27 @@ def create_controls():
     # Main controls, on right of screen
 
     button_runstop       = thorpy.Button('Run/Stop')
+    button_runstop.set_size(BUTTON_SIZE)
     button_runstop.at_unclick    = start_stop_reaction
 
     button_mode          = thorpy.Button('Mode')
+    button_mode.set_size(BUTTON_SIZE)
     button_mode.at_unclick       = mode_reaction
 
     button_horizontal    = thorpy.Button('Horizontal')
+    button_horizontal.set_size(BUTTON_SIZE)
     button_horizontal.at_unclick = horizontal_reaction
 
     button_vertical      = thorpy.Button('Vertical')
+    button_vertical.set_size(BUTTON_SIZE)
     button_vertical.at_unclick   = vertical_reaction
 
     button_trigger       = thorpy.Button('Trigger')
+    button_trigger.set_size(BUTTON_SIZE)
     button_trigger.at_unclick    = trigger_reaction
 
     button_options       = thorpy.Button('Options')
+    button_options.set_size(BUTTON_SIZE)
     button_options.at_unclick    = options_reaction
 
 
@@ -141,39 +148,38 @@ def create_controls():
         st.save_settings()
         signal_other_processes()
 
+    def update_current_range(currents, offset):
+        currents.change_range(offset)
+        current_display.set_text(f'{currents.selected()} A/div')
+        st.current_axis_per_division = currents.selected()
+        st.save_settings()
+        signal_other_processes()
+
+
     button_done          = thorpy.Button('Done')
+    button_done.set_size(BUTTON_SIZE)
     button_done.at_unclick       = back_to_main_reaction
 
     voltages                  = Range_controller([50,100])
     display_voltage           = thorpy.Text(f'{voltages.selected()} V/div') 
-    down_voltage              = thorpy.ArrowButton('up', (50,30))
+    down_voltage              = thorpy.ArrowButton('up', ARROW_BUTTON_SIZE)
     down_voltage.at_unclick   = lambda: update_voltage_range(voltages, -1)
-    up_voltage                = thorpy.ArrowButton('down', (50,30))
+    up_voltage                = thorpy.ArrowButton('down', ARROW_BUTTON_SIZE)
     up_voltage.at_unclick     = lambda: update_voltage_range(voltages, 1)
  
 
-    #drop_down_voltage    = thorpy.DropDownListButton(('50', '100'), \
-    #                                                 bck_func = alive_func, \
-    #                                                 choice_mode='h', \
-    #                                                 all_same_width=True)
-    #drop_down_voltage_labelled = thorpy.Labelled('Voltage V/div', drop_down_voltage)
-
-    #drop_down_current    = thorpy.DropDownListButton(('0.01', '0.02', '0.05', '0.1', '0.2', '0.5' ), \
-    #                                                 choice_mode='h', \
-    #                                                 all_same_width = True)
-    #drop_down_current_labelled = thorpy.Labelled('Current A/div', drop_down_current)
-
-    #drop_down_power      = thorpy.DropDownListButton(('0.01', '0.02', '0.05', '0.1', '0.2', '0.5' ), \
-    #                                                 choice_mode='h', \
-    #                                                 all_same_width = True)
-    #drop_down_power_labelled = thorpy.Labelled('Power W/div', drop_down_power)
-   
-
-    controls['vertical'] = [ button_done, \
-                             display_voltage, \
-                             down_voltage, \
-                             up_voltage ]
-
+    currents                  = Range_controller([0.01,0.02,0.05,0.1,0.2,0.5])
+    current_display           = thorpy.Text(f'{currents.selected()} A/div')
+    current_down              = thorpy.ArrowButton('up', ARROW_BUTTON_SIZE)
+    current_down.at_unclick   = lambda: update_current_range(currents, -1)
+    current_up                = thorpy.ArrowButton('down', ARROW_BUTTON_SIZE)
+    current_up.at_unclick     = lambda: update_current_range(currents, 1)
+    
+  
+    controls['vertical']       = [thorpy.TitleBox(text='Vertical', children=[button_done, \
+        thorpy.Group(elements=[display_voltage, down_voltage, up_voltage], mode='h'), \
+        thorpy.Group(elements=[current_display, current_down, current_up], mode='h'), \
+        thorpy.SliderWithText('Current',0,5,0,100,thickness=8)])]
 
                               
 #    buttons['main']           = [ thorpy.Button('Run/Stop', func = start_stop_reaction),\
@@ -209,13 +215,10 @@ def create_controls():
 #                                  thorpy.Button('Wifi', func = wifi_reaction),\
 #                                  thorpy.Button('Shell', func = shell_reaction),\
 #                                  thorpy.Button('Exit', func = exit_reaction) ]
-    # set buttons to all be the same size                        
-    for mode in controls.keys():
-        for c in controls[mode]:
-            # if it's a button, set the size 
-            if c.__class__ == thorpy.elements.Button:
-                c.set_size(BUTTON_SIZE)
+
+
     return controls
+
 
 def alive_func():
    print("I'm alive.")

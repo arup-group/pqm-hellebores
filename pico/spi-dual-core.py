@@ -262,7 +262,8 @@ def main():
         # see if we have reached a 'page boundary' in the buffer
         # if so, instruct Core 1 CPU to print it
         # 'anding' the pointer with a bit mask that has binary '1' in the MSB
-        # makes the print_flag value 'flip flop' without needing an 'if' conditional
+        # makes the print_flag value 'flip flop' between zero and non-zero 
+        # without needing an 'if' conditional
         # this means the instruction will execute in constant time
         print_flag = p & PAGE_FLIP_BIT_MASK
  

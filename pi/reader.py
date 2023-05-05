@@ -23,13 +23,10 @@ def main():
 
     while True:    
         try:
-            data_block = (ser.read(256).hex())
+            bs = (ser.read(256).hex())
             # process data in chunks of 8 bytes, or 16 hex digits
-            for i in range(0, len(data_block), 16):
-                print('{:04x} {} {} {} {}'.format(i//16, data_block[i:i+4], \
-                                                         data_block[i+4:i+8], \
-                                                         data_block[i+8:i+12], \
-                                                         data_block[i+12:i+16]))
+            for i in range(0, len(bs), 16):
+                print(f'{i//16 :04x} {bs[i:i+4]} {bs[i+4:i+8]} {bs[i+8:i+12]} {bs[i+12:i+16]}')
             sys.stdout.flush()
         except ValueError:
             print('reader.py, main(): Failed to read "' + line + '".', file=sys.stderr)

@@ -11,10 +11,10 @@ import settings
 
 def get_sample(i, t, f):
     t = t/1000.0       # seconds
-    c0 = int(25000.0*math.sin(2.0*math.pi*f*t) + 1000.0*(random.random()-0.5))
-    c1 = int(8000.0*math.sin(2.0*math.pi*f*t) + 200.0*(random.random()-0.5))
-    c2 = int(12000.0*math.sin(2.0*math.pi*f*t) + 500.0*(random.random()-0.5))
-    c3 = int(6800.0*math.sin(2.0*math.pi*f*t) + 50.0*(random.random()-0.5))
+    c0 = int(25000.0*math.sin(2.0*math.pi*f*t) + 1.0*(random.random()-0.5))
+    c1 = int(8000.0*math.sin(2.0*math.pi*f*t) + 2.0*(random.random()-0.5))
+    c2 = int(200.0*math.sin(2.0*math.pi*f*t) + 5.0*(random.random()-0.5))
+    c3 = int(5000.0*math.sin(2.0*math.pi*f*t) + 1.0*(random.random()-0.5))
     # the '& 0xffff' truncates negative numbers to fit in 16 bits
     return (i & 0xffff, c0 & 0xffff, c1 & 0xffff, c2 & 0xffff, c3 & 0xffff)
 
@@ -31,7 +31,8 @@ def main():
         tn = int(time.time()*1000.0/st.interval)
         if tn != tp:
             tp = tn
-            print('{:04x} {:04x} {:04x} {:04x} {:04x}'.format(*get_sample(i, i*st.interval, st.frequency)))
+            t, c0, c1, c2, c3 = get_sample(i, i*st.interval, st.frequency)
+            print(f'{t :04x} {c0 :04x} {c1 :04x} {c2 :04x} {c3 :04x}')
             i = i + 1
 
 if __name__ == '__main__':

@@ -20,13 +20,13 @@ def get_sample(i, t, f):
 
 
 def main():
-    # read settings or set defaults into global variables 
+    # read settings from settings.json
     st = settings.Settings(lambda: None)
 
     # we use system clock to figure out when to print out the next sample
     tp = int(time.time()*1000.0/st.interval)
     i=0
-    while 1:
+    while True:
         # check the clock and see if it has changed by one sample period
         tn = int(time.time()*1000.0/st.interval)
         if tn != tp:

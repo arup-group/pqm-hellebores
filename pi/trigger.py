@@ -61,7 +61,7 @@ class Buffer:
 
 def main():
     # we make a buffer to temporarily hold a history of samples -- this allows us to output
-    # waveform samples 'before the trigger'
+    # a frame of waveform that includes samples 'before the trigger'
     buf = Buffer()
 
     # load settings into st object
@@ -75,16 +75,23 @@ def main():
     hc = 0
     # the exact trigger position is normally somewhere between samples
     interpolation_fraction = 0.0
-    # gate counter, for tracking hysteresis at the trigger point
+    # gate counter, for qualifying hysteresis at the trigger point
     gc = 0
     # flag for controlling when output is required
     triggered = False
 
     # read data from standard input
     for line in sys.stdin:
+
+        # SPECIAL CASE, NO TRIGGER
+        if st.trigger_channel == -1:
+            # just pass the data through unaltered
+            sys.stdout.write(line)
+            continue
+
         # FILLING BUFFER
         try:
-            # we store each incoming line, whether triggered or not, in a circular buffer
+            # we store each incoming line in a circular buffer
             buf.buf[ii] = [float(w) for w in line.split()]
             ii = next_index(ii)
 
@@ -92,8 +99,9 @@ def main():
             print('trigger.py, main(): Failed to read contents of line "' + line + '".', file=sys.stderr)
 
         # DRAINING BUFFER 
-        # if hold off is clear, and we are not currently triggered, check to see if any outstanding 
-        # samples meet the trigger qualification. If they do they will increase gc, the trigger 'gate counter'.
+        # if hold off is clear, and we are not currently triggered, we check to see if any samples that 
+        # haven't yet been outputs meet the trigger qualification. If they do they will increase gc, the
+        # trigger 'gate counter'.
         while not triggered and (hc >= st.holdoff_samples) and (oi != ii):
             gc = trigger_gate(buf.buf, oi, st.trigger_channel, st.trigger_threshold,\
                                   st.trigger_hysteresis, st.trigger_gate_transition, gc)
@@ -106,6 +114,7 @@ def main():
                 s1 = buf.buf[oi][st.trigger_channel + 1]
                 s0 = buf.buf[prev_index(oi)][st.trigger_channel + 1]
                 if s0 == s1:
+                    # make sure we don't get 'divide by zero' errors
                     interpolation_fraction = 0.0
                 else:
                     interpolation_fraction = s1 / (s1 - s0)
@@ -113,9 +122,7 @@ def main():
                 # set an output sample counter, and then exit this loop
                 oi = (oi - st.pre_trigger_samples) % INPUT_BUFFER_SIZE
                 # set the holdoff counter, output counter and gate counter to zero
-                hc = 0
-                oc = 0
-                gc = 0
+                hc, oc, gc = (0, 0, 0)
             else:
                 oi = next_index(oi)  
    

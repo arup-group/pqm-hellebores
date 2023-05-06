@@ -38,7 +38,7 @@ SCOPE_BOX_SIZE = (700,480)
 CONTROLS_BOX_SIZE = (100,480)
 CONTROLS_BOX_POSITION = (700,0)
 SETTINGS_BOX_SIZE = (500,400)
-SETTINGS_BOX_POSITION = (50,50)
+SETTINGS_BOX_POSITION = (400,100)
 BUTTON_SIZE = (86,50) 
 ARROW_BUTTON_SIZE = (80,50)
 TEXT_SIZE = (100,16)
@@ -123,7 +123,7 @@ def create_controls():
 
     class Range_controller:
         ranges = []
-        range_selector = 1
+        range_selector = 0
         maximum_range = 1
 
         def __init__(self, required_ranges):
@@ -141,10 +141,11 @@ def create_controls():
             else:
                 sys.stderr.write("Range_controller.change_range: can only change range by +1 or -1.") 
 
+
     def update_voltage_range(voltages, offset):
         voltages.change_range(offset)
         display_voltage.set_text(f'{voltages.selected()} V/div')
-        st.earth_leakage_current_axis_per_division = voltages.selected()
+        st.voltage_axis_per_division = voltages.selected()
         st.save_settings()
         signal_other_processes()
 
@@ -152,6 +153,20 @@ def create_controls():
         currents.change_range(offset)
         current_display.set_text(f'{currents.selected()} A/div')
         st.current_axis_per_division = currents.selected()
+        st.save_settings()
+        signal_other_processes()
+
+    def update_power_range(powers, offset):
+        powers.change_range(offset)
+        power_display.set_text(f'{powers.selected()} W/div')
+        st.power_axis_per_division = powers.selected()
+        st.save_settings()
+        signal_other_processes()
+
+    def update_leakage_current_range(leakage_currents, offset):
+        leakage_currents.change_range(offset)
+        leakage_current_display.set_text(f'{leakage_currents.selected()*1000.0} mA/div')
+        st.earth_leakage_current_axis_per_division = leakage_currents.selected()
         st.save_settings()
         signal_other_processes()
 
@@ -167,19 +182,33 @@ def create_controls():
     up_voltage                = thorpy.ArrowButton('down', ARROW_BUTTON_SIZE)
     up_voltage.at_unclick     = lambda: update_voltage_range(voltages, 1)
  
-
-    currents                  = Range_controller([0.01,0.02,0.05,0.1,0.2,0.5])
+    currents                  = Range_controller([0.001,0.002,0.005,0.01,0.02,0.05,0.1,0.2,0.5,1.0,2.0])
     current_display           = thorpy.Text(f'{currents.selected()} A/div')
     current_down              = thorpy.ArrowButton('up', ARROW_BUTTON_SIZE)
     current_down.at_unclick   = lambda: update_current_range(currents, -1)
     current_up                = thorpy.ArrowButton('down', ARROW_BUTTON_SIZE)
     current_up.at_unclick     = lambda: update_current_range(currents, 1)
     
+    powers                    = Range_controller([0.1,0.2,0.5,1.0,2.0,5.0,10.0,20.0,50.0,100.0,200.0,500.0])
+    power_display             = thorpy.Text(f'{powers.selected()} W/div')
+    power_down                = thorpy.ArrowButton('up', ARROW_BUTTON_SIZE)
+    power_down.at_unclick     = lambda: update_power_range(powers, -1)
+    power_up                  = thorpy.ArrowButton('down', ARROW_BUTTON_SIZE)
+    power_up.at_unclick       = lambda: update_power_range(powers, 1)
   
+    leakage_currents          = Range_controller([0.00001,0.00002,0.00005,0.0001,0.0002,0.0005,0.001,0.002])
+    leakage_current_display   = thorpy.Text(f'{leakage_currents.selected()*1000.0} mA/div')
+    leakage_current_down      = thorpy.ArrowButton('up', ARROW_BUTTON_SIZE)
+    leakage_current_down.at_unclick     = lambda: update_leakage_current_range(leakage_currents, -1)
+    leakage_current_up        = thorpy.ArrowButton('down', ARROW_BUTTON_SIZE)
+    leakage_current_up.at_unclick       = lambda: update_leakage_current_range(leakage_currents, 1)
+
+
     controls['vertical']       = [thorpy.TitleBox(text='Vertical', children=[button_done, \
         thorpy.Group(elements=[display_voltage, down_voltage, up_voltage], mode='h'), \
         thorpy.Group(elements=[current_display, current_down, current_up], mode='h'), \
-        thorpy.SliderWithText('Current',0,5,0,100,thickness=8)])]
+        thorpy.Group(elements=[power_display, power_down, power_up], mode='h'),
+        thorpy.Group(elements=[leakage_current_display, leakage_current_down, leakage_current_up], mode='h') ])]
                               
 #    buttons['main']           = [ thorpy.Button('Run/Stop', func = start_stop_reaction),\
 #                                  thorpy.Button('Mode', func = mode_reaction),\
@@ -321,7 +350,6 @@ def initialise_ui_groups(main, vertical, horizontal, trigger, options):
     ui_groups['main'] = ui_main
 
     ui_vertical = thorpy.Box(vertical)
-    ui_vertical.set_draggable()
     ui_vertical.set_topleft(*SETTINGS_BOX_POSITION)
     ui_groups['vertical'] = ui_vertical
 
@@ -528,7 +556,7 @@ def main():
     # main loop
     while running:
         # hack to make the cursor invisible while still responding
-        pygame.mouse.set_cursor((8,8),(0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0))
+        # pygame.mouse.set_cursor((8,8),(0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0))
         events = pygame.event.get()
         for e in events:
             if (e.type == pygame.QUIT) or (e.type == pygame.KEYDOWN and e.key == pygame.K_q):

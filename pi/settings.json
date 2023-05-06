@@ -1,13 +1,13 @@
 {
     "frequency": 51.0,
     "sample_rate": 7812.5,
-    "time_axis_per_division": 4.0, 
+    "time_axis_per_division": 4.0,
     "time_axis_divisions": 10,
     "time_axis_pre_trigger_divisions": 5,
-    "voltage_axis_per_division": 0.000010,
-    "current_axis_per_division": 0.1,
-    "power_axis_per_division": 0.2,
-    "earth_leakage_current_axis_per_division": 100.0,
+    "voltage_axis_per_division": 100,
+    "current_axis_per_division": 1.0,
+    "power_axis_per_division": 200.0,
+    "earth_leakage_current_axis_per_division": 0.002,
     "vertical_axis_divisions": 8,
     "adc_offset_trim_c0": 23,
     "adc_offset_trim_c1": 0,
@@ -17,16 +17,13 @@
     "adc_amplifier_gain_c1": 2,
     "adc_amplifier_gain_c2": 2,
     "adc_amplifier_gain_c3": 1,
-    "scale_c0": 0.0000000127,
-    "scale_c1": 0.0000122,
-    "scale_c2": 0.000610,
+    "scale_c0": 1.27e-08,
+    "scale_c1": 1.22e-05,
+    "scale_c2": 0.00061,
     "scale_c3": 0.0489,
-    "trigger_channel": 3,
+    "trigger_channel": 0,
     "trigger_direction": "rising",
     "trigger_threshold": 0.0,
     "horizontal_pixels_per_division": 70,
     "vertical_pixels_per_division": 60
 }
-
-
-

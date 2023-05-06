@@ -36,7 +36,7 @@ def main():
 
         except ValueError:
             print('scaler.py, main(): Failed to read "' + line + '".', file=sys.stderr)
-        print(f'{t :12.4f} {voltage :10.3f} {current :10.3f} {power :10.3f} {leakage_current :10.3f}')
+        print(f'{t :12.4f} {voltage :10.3f} {current :10.5f} {power :10.3f} {leakage_current :12.7f}')
         i = i + 1
 
 

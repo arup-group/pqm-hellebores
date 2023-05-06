@@ -128,7 +128,7 @@ def main():
    
         # if triggered, print out all buffered/outstanding samples up to the current input pointer
         while triggered and (oi != ii):
-            print('{:10.3f} {:10.3f} {:10.3f} {:10.3f} {:10.3f}'.format(st.interval *\
+            print('{:12.4f} {:10.3f} {:10.5f} {:10.3f} {:12.7f}'.format(st.interval *\
                       (oc - st.pre_trigger_samples), *interpolate(buf.buf[prev_index(oi)][1:],\
                       buf.buf[oi][1:], interpolation_fraction)))
             # if we've finished a whole frame of data, clear the trigger and position the output

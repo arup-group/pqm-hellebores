@@ -72,7 +72,6 @@ T_UNDEF4      = 4
 T_UNDEF5      = 5
 
 
-
 def signal_other_processes():
     # send a signal to everyone to update their settings
     if sys.platform == 'linux':
@@ -126,11 +125,15 @@ def create_controls():
         range_selector = 0
         maximum_range = 1
 
-        def __init__(self, required_ranges):
+        def __init__(self, required_ranges, initial_index):
             self.ranges = required_ranges
+            self.range_selector = initial_index
             self.maximum_range = len(required_ranges) - 1
 
-        def selected(self):
+        def get_index(self):
+            return self.range_selector
+
+        def get_value(self):
             return self.ranges[self.range_selector]
 
         def change_range(self, offset):
@@ -144,29 +147,33 @@ def create_controls():
 
     def update_voltage_range(voltages, offset):
         voltages.change_range(offset)
-        display_voltage.set_text(f'{voltages.selected()} V/div')
-        st.voltage_axis_per_division = voltages.selected()
+        display_voltage.set_text(f'{voltages.get_value()} V/div')
+        st.voltage_display_index = voltages.get_index()
+        st.voltage_axis_per_division = voltages.get_value()
         st.save_settings()
         signal_other_processes()
 
     def update_current_range(currents, offset):
         currents.change_range(offset)
-        current_display.set_text(f'{currents.selected()} A/div')
-        st.current_axis_per_division = currents.selected()
+        current_display.set_text(f'{currents.get_value()} A/div')
+        st.current_display_index = currents.get_index()
+        st.current_axis_per_division = currents.get_value()
         st.save_settings()
         signal_other_processes()
 
     def update_power_range(powers, offset):
         powers.change_range(offset)
-        power_display.set_text(f'{powers.selected()} W/div')
-        st.power_axis_per_division = powers.selected()
+        power_display.set_text(f'{powers.get_value()} W/div')
+        st.power_display_index = powers.get_index()
+        st.power_axis_per_division = powers.get_value()
         st.save_settings()
         signal_other_processes()
 
     def update_leakage_current_range(leakage_currents, offset):
         leakage_currents.change_range(offset)
-        leakage_current_display.set_text(f'{leakage_currents.selected()*1000.0} mA/div')
-        st.earth_leakage_current_axis_per_division = leakage_currents.selected()
+        leakage_current_display.set_text(f'{leakage_currents.get_value()*1000.0} mA/div')
+        st.earth_leakage_current_display_index = leakage_currents.get_index()
+        st.earth_leakage_current_axis_per_division = leakage_currents.get_value()
         st.save_settings()
         signal_other_processes()
 
@@ -175,29 +182,30 @@ def create_controls():
     button_done.set_size(BUTTON_SIZE)
     button_done.at_unclick       = back_to_main_reaction
 
-    voltages                  = Range_controller([50,100])
-    display_voltage           = thorpy.Text(f'{voltages.selected()} V/div') 
+    voltages                  = Range_controller(st.voltage_display_ranges, st.voltage_display_index)
+    display_voltage           = thorpy.Text(f'{voltages.get_value()} V/div') 
     down_voltage              = thorpy.ArrowButton('up', ARROW_BUTTON_SIZE)
     down_voltage.at_unclick   = lambda: update_voltage_range(voltages, -1)
     up_voltage                = thorpy.ArrowButton('down', ARROW_BUTTON_SIZE)
     up_voltage.at_unclick     = lambda: update_voltage_range(voltages, 1)
  
-    currents                  = Range_controller([0.001,0.002,0.005,0.01,0.02,0.05,0.1,0.2,0.5,1.0,2.0])
-    current_display           = thorpy.Text(f'{currents.selected()} A/div')
+    currents                  = Range_controller(st.current_display_ranges, st.current_display_index)
+    current_display           = thorpy.Text(f'{currents.get_value()} A/div')
     current_down              = thorpy.ArrowButton('up', ARROW_BUTTON_SIZE)
     current_down.at_unclick   = lambda: update_current_range(currents, -1)
     current_up                = thorpy.ArrowButton('down', ARROW_BUTTON_SIZE)
     current_up.at_unclick     = lambda: update_current_range(currents, 1)
     
-    powers                    = Range_controller([0.1,0.2,0.5,1.0,2.0,5.0,10.0,20.0,50.0,100.0,200.0,500.0])
-    power_display             = thorpy.Text(f'{powers.selected()} W/div')
+    powers                    = Range_controller(st.power_display_ranges, st.power_display_index)
+    power_display             = thorpy.Text(f'{powers.get_value()} W/div')
     power_down                = thorpy.ArrowButton('up', ARROW_BUTTON_SIZE)
     power_down.at_unclick     = lambda: update_power_range(powers, -1)
     power_up                  = thorpy.ArrowButton('down', ARROW_BUTTON_SIZE)
     power_up.at_unclick       = lambda: update_power_range(powers, 1)
   
-    leakage_currents          = Range_controller([0.00001,0.00002,0.00005,0.0001,0.0002,0.0005,0.001,0.002])
-    leakage_current_display   = thorpy.Text(f'{leakage_currents.selected()*1000.0} mA/div')
+    leakage_currents          = Range_controller(st.earth_leakage_current_display_ranges, \
+                                                   st.earth_leakage_current_display_index)
+    leakage_current_display   = thorpy.Text(f'{leakage_currents.get_value()*1000.0} mA/div')
     leakage_current_down      = thorpy.ArrowButton('up', ARROW_BUTTON_SIZE)
     leakage_current_down.at_unclick     = lambda: update_leakage_current_range(leakage_currents, -1)
     leakage_current_up        = thorpy.ArrowButton('down', ARROW_BUTTON_SIZE)
@@ -335,7 +343,6 @@ class Texts:
     def set_text(self, item, value):
         self.texts[item].set_text(value)
 
-
     def clear_texts(self):
         for t in self.texts:
             t.set_text('')
@@ -343,7 +350,12 @@ class Texts:
 
 def initialise_ui_groups(main, vertical, horizontal, trigger, options):
     ui_groups = {}
-    
+
+    ui_datetime = thorpy.Text(time.ctime())
+    ui_datetime.set_topleft(0,0)
+    ui_datetime.set_font_color(WHITE)
+    ui_groups['datetime'] = ui_datetime
+   
     ui_main = thorpy.Box(main)
     ui_main.set_size(CONTROLS_BOX_SIZE)
     ui_main.set_topleft(*CONTROLS_BOX_POSITION)
@@ -352,6 +364,7 @@ def initialise_ui_groups(main, vertical, horizontal, trigger, options):
     ui_vertical = thorpy.Box(vertical)
     ui_vertical.set_topleft(*SETTINGS_BOX_POSITION)
     ui_groups['vertical'] = ui_vertical
+
 
     return ui_groups
 
@@ -377,7 +390,7 @@ def options_reaction():
 
 
 def refresh_reaction(points):
-    global wfs, texts, capturing, screen, background_surface
+    global wfs, capturing, screen, background_surface
     lines = points.read_points(sys.stdin)
     # update the screen only if capturing
     if capturing:
@@ -563,6 +576,9 @@ def main():
                 running = False
         refresh_reaction(points)
         wfs.refresh_wfs()
+        if capturing:
+            ui_groups['datetime'].set_text(time.ctime())
+            ui_groups['datetime'].draw()
         ui_updater.update(events=events)
         pygame.display.flip()
 

@@ -38,7 +38,7 @@ SCOPE_BOX_SIZE = (700,480)
 CONTROLS_BOX_SIZE = (100,480)
 CONTROLS_BOX_POSITION = (700,0)
 SETTINGS_BOX_SIZE = (500,400)
-SETTINGS_BOX_POSITION = (400,100)
+SETTINGS_BOX_POSITION = (380,100)
 BUTTON_SIZE = (86,50) 
 ARROW_BUTTON_SIZE = (80,50)
 TEXT_SIZE = (100,16)
@@ -59,8 +59,8 @@ B_RUNSTOP     = 0
 B_MODE        = 1
 B_HORIZONTAL  = 2
 B_VERTICAL    = 3
-B_OPTIONS     = 4
-B_ABOUT       = 5
+B_TRIGGER     = 4
+B_OPTIONS     = 5
 
 
 # text message cell enumerations
@@ -74,19 +74,23 @@ T_UNDEF5      = 5
 
 def signal_other_processes():
     # send a signal to everyone to update their settings
+    st.set_derived_settings()
+    st.save_settings()
     if sys.platform == 'linux':
         os.system("pkill -f --signal=SIGUSR1 'python3 ./rain.py'")
         os.system("pkill -f --signal=SIGUSR1 'python3 ./reader.py'")
         os.system("pkill -f --signal=SIGUSR1 'python3 ./scaler.py'")
         os.system("pkill -f --signal=SIGUSR1 'python3 ./trigger.py'")
         os.system("pkill -f --signal=SIGUSR1 'python3 ./mapper.py'")
+    # update the background, in case the graticule has changed
+    draw_background()
     
 
 def create_controls():
-    global st
-
+    global st, texts
+    #####
     # Main controls, on right of screen
-
+    #####
     button_runstop       = thorpy.Button('Run/Stop')
     button_runstop.set_size(BUTTON_SIZE)
     button_runstop.at_unclick    = start_stop_reaction
@@ -118,7 +122,8 @@ def create_controls():
                              button_horizontal, \
                              button_vertical, \
                              button_trigger, \
-                             button_options ]
+                             button_options, \
+                             *texts.get_texts() ]
 
     class Range_controller:
         ranges = []
@@ -144,43 +149,63 @@ def create_controls():
             else:
                 sys.stderr.write("Range_controller.change_range: can only change range by +1 or -1.") 
 
+    #####
+    # Horizontal controls
+    #####
+
+    def update_time_range(times, offset):
+        times.change_range(offset)
+        display_time.set_text(f'{times.get_value()} ms/div')
+        st.time_display_index = times.get_index()
+        signal_other_processes()
+
+    button_done               = thorpy.Button('Done')
+    button_done.set_size(BUTTON_SIZE)
+    button_done.at_unclick    = back_to_main_reaction
+
+    times                     = Range_controller(st.time_display_ranges, st.time_display_index)
+    display_time              = thorpy.Text(f'{times.get_value()} ms/div') 
+    down_time                 = thorpy.ArrowButton('left', ARROW_BUTTON_SIZE)
+    down_time.at_unclick      = lambda: update_time_range(times, -1)
+    up_time                   = thorpy.ArrowButton('right', ARROW_BUTTON_SIZE)
+    up_time.at_unclick        = lambda: update_time_range(times, 1)
+ 
+    controls['horizontal']    = [thorpy.TitleBox(text='Horizontal', children=[button_done, \
+        thorpy.Group(elements=[display_time, down_time, up_time], mode='h') ])]
+ 
+
+    #####
+    # Vertical controls
+    #####
 
     def update_voltage_range(voltages, offset):
         voltages.change_range(offset)
         display_voltage.set_text(f'{voltages.get_value()} V/div')
         st.voltage_display_index = voltages.get_index()
-        st.voltage_axis_per_division = voltages.get_value()
-        st.save_settings()
         signal_other_processes()
 
     def update_current_range(currents, offset):
         currents.change_range(offset)
         current_display.set_text(f'{currents.get_value()} A/div')
         st.current_display_index = currents.get_index()
-        st.current_axis_per_division = currents.get_value()
-        st.save_settings()
         signal_other_processes()
 
     def update_power_range(powers, offset):
         powers.change_range(offset)
         power_display.set_text(f'{powers.get_value()} W/div')
         st.power_display_index = powers.get_index()
-        st.power_axis_per_division = powers.get_value()
-        st.save_settings()
         signal_other_processes()
 
     def update_leakage_current_range(leakage_currents, offset):
         leakage_currents.change_range(offset)
         leakage_current_display.set_text(f'{leakage_currents.get_value()*1000.0} mA/div')
         st.earth_leakage_current_display_index = leakage_currents.get_index()
-        st.earth_leakage_current_axis_per_division = leakage_currents.get_value()
-        st.save_settings()
         signal_other_processes()
 
 
-    button_done          = thorpy.Button('Done')
+    button_done               = thorpy.Button('Done')
     button_done.set_size(BUTTON_SIZE)
-    button_done.at_unclick       = back_to_main_reaction
+    button_done.at_unclick    = back_to_main_reaction
 
     voltages                  = Range_controller(st.voltage_display_ranges, st.voltage_display_index)
     display_voltage           = thorpy.Text(f'{voltages.get_value()} V/div') 
@@ -210,7 +235,6 @@ def create_controls():
     leakage_current_down.at_unclick     = lambda: update_leakage_current_range(leakage_currents, -1)
     leakage_current_up        = thorpy.ArrowButton('down', ARROW_BUTTON_SIZE)
     leakage_current_up.at_unclick       = lambda: update_leakage_current_range(leakage_currents, 1)
-
 
     controls['vertical']       = [thorpy.TitleBox(text='Vertical', children=[button_done, \
         thorpy.Group(elements=[display_voltage, down_voltage, up_voltage], mode='h'), \
@@ -263,11 +287,12 @@ def mode_reaction():
    pass
 
 def horizontal_reaction():
-   pass
+   global ui_groups, ui_updater
+   ui_updater = ui_groups['horizontal'].get_updater() 
 
 def vertical_reaction():
-    global ui_groups, ui_updater
-    ui_updater = ui_groups['vertical'].get_updater() 
+   global ui_groups, ui_updater
+   ui_updater = ui_groups['vertical'].get_updater() 
 
 
 def trigger_reaction():
@@ -334,7 +359,6 @@ class Texts:
             t = thorpy.Text('')
             t.set_size(TEXT_SIZE)
             self.texts.append(t)
-        #self.clear_texts()
 
     def get_texts(self):
         return self.texts
@@ -363,14 +387,17 @@ def initialise_ui_groups(main, vertical, horizontal, trigger, options):
 
     ui_vertical = thorpy.Box(vertical)
     ui_vertical.set_topleft(*SETTINGS_BOX_POSITION)
-    ui_groups['vertical'] = ui_vertical
+    ui_groups['vertical'] = thorpy.Group(elements=[ui_main, ui_vertical], mode=None)
 
+    ui_horizontal = thorpy.Box(horizontal)
+    ui_horizontal.set_topleft(*SETTINGS_BOX_POSITION)
+    ui_groups['horizontal'] = thorpy.Group(elements=[ui_main, ui_horizontal], mode=None)
 
     return ui_groups
 
 
 def start_stop_reaction():
-   global capturing
+   global capturing, texts
    if capturing == True:
        capturing = False
        texts.set_text(T_RUNSTOP, "Stopped")
@@ -453,8 +480,6 @@ class WFS_Counter:
 
     # called when a refresh event occurs (image isn't always updated)
     def refresh_wfs(self):
-        updated_text = False
-
         # time check 
         self.time = time.time()
         # if the time has increased by at least 1.0 second, update the wfm/s text
@@ -463,9 +488,6 @@ class WFS_Counter:
             texts.set_text(T_WFS, f'{round(self.counter/elapsed)} wfm/s')
             self.posted = self.time
             self.counter = 0
-            updated_text = True
-
-        return updated_text
  
 
 def get_screen_hardware_size():
@@ -524,8 +546,7 @@ def main():
     global st, running, capturing, texts, background_surface, ui_groups, ui_updater, screen, wfs
 
     # get settings from settings.json
-    st = settings.Settings(draw_background)
-    draw_background()
+    st = settings.Settings(None)
 
     # initialise UI
     # thorpy.Application doesn't behave well on Windows -- goes to full screen immediately
@@ -546,14 +567,16 @@ def main():
     thorpy.set_default_font(FONT, FONT_SIZE)
     thorpy.init(screen, thorpy.theme_classic)
 
+    draw_background()
     texts     = Texts()
     wfs       = WFS_Counter()
     controls  = create_controls()
-    ui_groups = initialise_ui_groups([*controls['main'], *texts.get_texts()], \
+    ui_groups = initialise_ui_groups([*controls['main']], \
                                      [*controls['vertical']], \
-                                     None, \
+                                     [*controls['horizontal']], \
                                      None, \
                                      None)
+    # start with the main group enabled
     ui_updater = ui_groups['main'].get_updater()
 
     # now set up the initial text states

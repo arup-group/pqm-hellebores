@@ -18,6 +18,7 @@ def bound(lower, upper, value):
 def main():
    # load settings into st object from settings.json
    st = settings.Settings(lambda: None)
+   ymax = st.y_pixels-1
 
    for line in sys.stdin: # receive data from standard input
         try:
@@ -25,13 +26,13 @@ def main():
             # % X_PIXELS forces x coordinate to be between 0 and 699
             x = int((float(t) + st.time_shift) * st.horizontal_pixels_per_division/st.time_axis_per_division) % st.x_pixels
             # % Y_PIXELS forces y coordinate to be between 0 and 479
-            y0 = bound(0, st.y_pixels, \
+            y0 = bound(0, ymax, \
                     (int(-float(c0) * st.vertical_pixels_per_division/st.voltage_axis_per_division) + st.half_y_pixels))
-            y1 = bound(0, st.y_pixels, \
+            y1 = bound(0, ymax, \
                     (int(-float(c1) * st.vertical_pixels_per_division/st.current_axis_per_division) + st.half_y_pixels))
-            y2 = bound(0, st.y_pixels, \
+            y2 = bound(0, ymax, \
                     (int(-float(c2) * st.vertical_pixels_per_division/st.power_axis_per_division) + st.half_y_pixels))
-            y3 = bound(0, st.y_pixels, \
+            y3 = bound(0, ymax, \
                     (int(-float(c3) * st.vertical_pixels_per_division/st.earth_leakage_current_axis_per_division) + st.half_y_pixels))
             print(x, y0, y1, y2, y3)
         except ValueError:

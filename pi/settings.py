@@ -162,6 +162,7 @@ class Settings():
                 self.save_settings()
  
 
+
     default_settings = '''
 {
     "frequency": 51.0,
@@ -171,16 +172,64 @@ class Settings():
     "vertical_axis_divisions": 8,
     "horizontal_pixels_per_division": 70,
     "vertical_pixels_per_division": 60,
-    "time_display_ranges": [0.1,0.2,0.4,1,2,4,10,20,40,100],
+    "time_display_ranges": [
+        0.1,
+        0.2,
+        0.4,
+        1,
+        2,
+        4,
+        10,
+        20,
+        40,
+        100
+    ],
     "time_display_index": 5,
-    "voltage_display_ranges": [50,100,200,500],
-    "voltage_display_index": 1,
-    "current_display_ranges": [0.001,0.002,0.005,0.01,0.02,0.05,0.1,0.2,0.5,1.0,2.0],
-    "current_display_index": 6,
-    "power_display_ranges": [0.1,0.2,0.5,1.0,2.0,5.0,10.0,20.0,50.0,100.0,200.0,500.0],
-    "power_display_index": 6,
-    "earth_leakage_current_display_ranges": [0.0001,0.0002,0.0005,0.001,0.002,0.005],
-    "earth_leakage_current_display_index": 2,
+    "voltage_display_ranges": [
+        50,
+        100,
+        200,
+        500
+    ],
+    "voltage_display_index": 2,
+    "current_display_ranges": [
+        0.001,
+        0.002,
+        0.005,
+        0.01,
+        0.02,
+        0.05,
+        0.1,
+        0.2,
+        0.5,
+        1.0,
+        2.0
+    ],
+    "current_display_index": 8,
+    "power_display_ranges": [
+        0.1,
+        0.2,
+        0.5,
+        1.0,
+        2.0,
+        5.0,
+        10.0,
+        20.0,
+        50.0,
+        100.0,
+        200.0,
+        500.0
+    ],
+    "power_display_index": 8,
+    "earth_leakage_current_display_ranges": [
+        0.0001,
+        0.0002,
+        0.0005,
+        0.001,
+        0.002,
+        0.005
+    ],
+    "earth_leakage_current_display_index": 4,
     "adc_offset_trim_c0": 23,
     "adc_offset_trim_c1": -36,
     "adc_offset_trim_c2": -30,

@@ -19,7 +19,6 @@ def main():
    # load settings into st object from settings.json
    st = settings.Settings(lambda: None)
    ymax = st.y_pixels-1
-
    for line in sys.stdin: # receive data from standard input
         try:
             t, c0, c1, c2, c3 = line.split() # take this line and split on whitespace

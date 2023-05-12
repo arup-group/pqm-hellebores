@@ -13,7 +13,7 @@ def from_twos_complement(v):
 
 
 def main():
-    st = settings.Settings(lambda: None)
+    st = settings.Settings()
 
     i = 0   # sample index
     for line in sys.stdin:

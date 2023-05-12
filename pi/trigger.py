@@ -82,14 +82,17 @@ def main():
 
     # read data from standard input
     for line in sys.stdin:
-
+        #
         # SPECIAL CASE, NO TRIGGER
+        #
         if st.trigger_channel == -1:
             # just pass the data through unaltered
             sys.stdout.write(line)
             continue
 
+        #
         # FILLING BUFFER
+        #
         try:
             # we store each incoming line in a circular buffer
             buf.buf[ii] = [float(w) for w in line.split()]
@@ -98,7 +101,9 @@ def main():
         except ValueError:
             print('trigger.py, main(): Failed to read contents of line "' + line + '".', file=sys.stderr)
 
-        # DRAINING BUFFER 
+        #
+        # TRIGGER TEST
+        #
         # if hold off is clear, and we are not currently triggered, we check to see if any samples that 
         # haven't yet been outputs meet the trigger qualification. If they do they will increase gc, the
         # trigger 'gate counter'.
@@ -125,18 +130,23 @@ def main():
                 hc, oc, gc = (0, 0, 0)
             else:
                 oi = next_index(oi)  
-   
+
+        #
+        # DRAINING BUFFER 
+        #
         # if triggered, print out all buffered/outstanding samples up to the current input pointer
         while triggered and (oi != ii):
-            print('{:12.4f} {:10.3f} {:10.5f} {:10.3f} {:12.7f}'.format(st.interval *\
+            output = '{:12.4f} {:10.3f} {:10.5f} {:10.3f} {:12.7f}'.format(st.interval *\
                       (oc - st.pre_trigger_samples), *interpolate(buf.buf[prev_index(oi)][1:],\
-                      buf.buf[oi][1:], interpolation_fraction)))
+                      buf.buf[oi][1:], interpolation_fraction))
             # if we've finished a whole frame of data, clear the trigger and position the output
             # index counter 2ms behind the current input index
             if oc >= st.frame_samples:
+                print(f'{output} END')
                 triggered = False
                 oi = (ii - int(0.002 * st.sample_rate)) % INPUT_BUFFER_SIZE
             else:
+                print(output)
                 oi = next_index(oi)
             oc = oc + 1
 

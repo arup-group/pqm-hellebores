@@ -151,13 +151,13 @@ def create_main_controls(texts):
     button_options.set_size(BUTTON_SIZE)
     button_options.at_unclick    = options_reaction
 
-    return [ button_runstop, \
-             button_mode, \
-             button_horizontal, \
-             button_vertical, \
-             button_trigger, \
-             button_options, \
-             *texts.get_texts() ]
+    return thorpy.Box([button_runstop, \
+                       button_mode, \
+                       button_horizontal, \
+                       button_vertical, \
+                       button_trigger, \
+                       button_options, \
+                       *texts.get_texts()]) 
 
 
 def create_vertical(st):
@@ -221,11 +221,11 @@ def create_vertical(st):
     leakage_current_up        = thorpy.ArrowButton('down', ARROW_BUTTON_SIZE)
     leakage_current_up.at_unclick       = lambda: update_leakage_current_range(leakage_currents, 1)
 
-    return [thorpy.TitleBox(text='Vertical', children=[button_done, \
-            thorpy.Group(elements=[display_voltage, down_voltage, up_voltage], mode='h'), \
-            thorpy.Group(elements=[current_display, current_down, current_up], mode='h'), \
-            thorpy.Group(elements=[power_display, power_down, power_up], mode='h'),
-            thorpy.Group(elements=[leakage_current_display, leakage_current_down, leakage_current_up], mode='h') ])]
+    return thorpy.TitleBox(text='Vertical', children=[button_done, \
+           thorpy.Group(elements=[display_voltage, down_voltage, up_voltage], mode='h'), \
+           thorpy.Group(elements=[current_display, current_down, current_up], mode='h'), \
+           thorpy.Group(elements=[power_display, power_down, power_up], mode='h'),
+           thorpy.Group(elements=[leakage_current_display, leakage_current_down, leakage_current_up], mode='h') ])
 
 
 def create_horizontal(st):
@@ -234,7 +234,7 @@ def create_horizontal(st):
     #####
     def update_time_range(times, offset):
         times.change_range(offset)
-        display_time.set_text(f'{times.get_value()} ms/div')
+        display_time.set_text(f'{times.get_value()} ms/div', adapt_parent=False)
         st.time_display_index = times.get_index()
         signal_other_processes(st)
 
@@ -249,8 +249,8 @@ def create_horizontal(st):
     up_time                   = thorpy.ArrowButton('right', ARROW_BUTTON_SIZE)
     up_time.at_unclick        = lambda: update_time_range(times, 1)
  
-    return [thorpy.TitleBox(text='Horizontal', children=[button_done, \
-        thorpy.Group(elements=[display_time, down_time, up_time], mode='h') ])]
+    gp = thorpy.Group(elements=[display_time, down_time, up_time], mode='h')
+    return thorpy.TitleBox(text='Horizontal', children=[button_done, gp])
  
 
 # More UI is needed for the following:
@@ -320,16 +320,16 @@ def create_ui_groups(st, texts):
     ui_datetime.set_topleft(0,0)
     ui_groups['datetime'] = ui_datetime
  
-    ui_main = thorpy.Box(create_main_controls(texts))
+    ui_main = create_main_controls(texts)
     ui_main.set_size(CONTROLS_BOX_SIZE)
     ui_main.set_topleft(*CONTROLS_BOX_POSITION)
     ui_groups['main'] = thorpy.Group(elements=[ui_main, ui_datetime], mode=None)
 
-    ui_vertical = thorpy.Box(create_vertical(st))
+    ui_vertical = create_vertical(st)
     ui_vertical.set_topleft(*SETTINGS_BOX_POSITION)
     ui_groups['vertical'] = thorpy.Group(elements=[ui_main, ui_vertical, ui_datetime], mode=None)
 
-    ui_horizontal = thorpy.Box(create_horizontal(st))
+    ui_horizontal = create_horizontal(st)
     ui_horizontal.set_topleft(*SETTINGS_BOX_POSITION)
     ui_groups['horizontal'] = thorpy.Group(elements=[ui_main, ui_horizontal, ui_datetime], mode=None)
 
@@ -394,34 +394,37 @@ def draw_background(st):
 
 
 def draw_lines(screen, lines):
-    # can handle up to six lines
+    # can handle up to six lines...
     colours = [ GREEN, YELLOW, MAGENTA, CYAN, RED, BLUE ]
     try:
         for i in range(len(lines)):
             pygame.draw.lines(screen, colours[i], False, lines[i], 2)
-    except:
-        pass
+    except ValueError:
+        # the pygame.draw.lines will throw an exception if there are not at
+        # least two points in each line - (sounds reasonable)
+        sys.stderr.write('Exception in hellebores.py: draw_lines().\n')
 
 
 class WFS_Counter:
 
-    def __init__(self):
+    def __init__(self, texts):
+        self.wfs_text = texts.texts[T_WFS]
         self.counter = 0           # number of waveforms since last posting
         self.time = time.time()    # keep track of time in milliseconds
         self.posted = self.time    # time when the wfs/s was lasted posted to screen
 
     # called whenever we update the waveform on screen 
-    def increment_wfs(self):
+    def increment(self):
         self.counter = self.counter + 1
 
-    # called when a refresh event occurs (image isn't always updated)
-    def refresh_wfs(self, texts):
+    # called when a refresh event occurs
+    def update_text(self):
         # time check 
         self.time = time.time()
         # if the time has increased by at least 1.0 second, update the wfm/s text
         elapsed = self.time - self.posted
         if elapsed >= 1.0:
-            texts.set_text(T_WFS, f'{round(self.counter/elapsed)} wfm/s')
+            self.wfs_text.set_text(f'{round(self.counter/elapsed)} wfm/s')
             self.posted = self.time
             self.counter = 0
  
@@ -444,45 +447,52 @@ def is_data_available(f, t):
 
 
 class Lines:
-    # working points buffer, persistent across multiple calls to read_lines()
-    ps = []
+    # working points buffer for four lines
+    ps = [[] for i in range(4)] 
 
     # lines history buffer
     # future extension is to use this buffer for electrical event history
     # (eg triggered by power fluctuation etc)
-    lines_history = ['' for i in range(LINES_BUFFER_SIZE+1)]
+    lines_history = [[] for i in range(LINES_BUFFER_SIZE+1)]
 
-    # this function will perform best if the source process (eg trigger.py) flushes its
-    # output buffer every frame. That way, the 'is_data_available()' function will succeed
-    # when there is a complete new frame available, rather than half-way through a frame.
+    def end_frame(self, wfs):
+        self.lines_history[LINES_BUFFER_SIZE] = self.ps
+        wfs.increment()
+        # reset the working buffer
+        self.ps = [[] for i in range(4)]
+
+    def add_sample(self, x, ws):
+        self.ps[0].append((x, int(ws[1])))
+        self.ps[1].append((x, int(ws[2])))
+        self.ps[2].append((x, int(ws[3])))
+        self.ps[3].append((x, int(ws[4])))
+
     def read_lines(self, f, wfs):
-        xp = 0
-        x_max = st.x_pixels - 1
-        # the loop will exit
-        # (a) there is no more data waiting to be read, 
-        # (b) if the time coordinate 'goes backwards', or
-        # (c) if the line is empty and can't be split()
+        # the loop will exit if:
+        # (a) there is no data currently waiting to be read, 
+        # (b) extra word in the incoming data indicates 'end of frame'
+        # (c) the x coordinate 'goes backwards'
+        # (d) the line is empty, can't be split() or any other kind of read error
+        xp = 0                 # tracks previous 'x coordinate'
         while is_data_available(f, 0.02): 
             try:
                 ws = f.readline().split()
                 x = int(ws[0])
                 if x < xp:
-                    break       # exit now if x (time) coordinate is lower than previous one
-                ws = ws[1:]
-                for i in range(len(ws)):
-                    try:
-                        self.ps[i].append((x, int(ws[i])))   # extend an existing line
-                    except IndexError:
-                        self.ps.append( [(x, int(ws[i]))] )  # or add another line if it doesn't exist yet
+                    # end the frame before adding sample to a new one
+                    self.end_frame(wfs)    
+                    self.add_sample(x, ws)
+                    break
+                elif len(ws) > 5:
+                    # add current sample then end the frame
+                    self.add_sample(x, ws)
+                    self.end_frame(wfs)
+                    break
+                else:
+                    self.add_sample(x, ws)
+                xp = x
             except:
-                break           # exit if we have any other type of error with the input data
-            xp = x
-        # if we got a complete capture, save it as last item in history
-        # and increment the wfs counter
-        if self.ps != [] and self.ps[0][-1][0] == x_max:
-            self.lines_history[LINES_BUFFER_SIZE] = self.ps
-            wfs.increment_wfs()
-            self.ps = []
+                break   # break if we have any type of error with the input data
         return self.lines_history[LINES_BUFFER_SIZE]
 
     def save_lines(self):
@@ -520,12 +530,12 @@ def main():
     thorpy.init(screen, thorpy.theme_classic)
 
     # get settings from settings.json
-    st = settings.Settings(None)
+    st = settings.Settings()
 
     # create objects that hold the state of the UI
     background_surface = draw_background(st)
     texts     = Texts()
-    wfs       = WFS_Counter()
+    wfs       = WFS_Counter(texts)
     ui_groups = create_ui_groups(st, texts)
 
     # start with the main group enabled
@@ -550,10 +560,9 @@ def main():
             if (e.type == pygame.QUIT) or (e.type == pygame.KEYDOWN and e.key == pygame.K_q):
                 running = False
         refresh_reaction(lines, screen, background_surface, wfs)
-        wfs.refresh_wfs(texts)
+        wfs.update_text()
         if capturing:
             ui_groups['datetime'].set_text(time.ctime())
-        #ui_groups['datetime'].draw()
         ui_updater.update(events=events)
         pygame.display.flip()
 

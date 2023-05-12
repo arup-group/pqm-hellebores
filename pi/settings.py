@@ -11,34 +11,34 @@ class Settings():
     sfile = 'settings.json'
 
     def set_derived_settings(self):
-            self.interval                   = 1000.0 / self.sample_rate
-            self.time_axis_per_division     = self.time_display_ranges[self.time_display_index]
-            self.voltage_axis_per_division  = self.voltage_display_ranges[self.voltage_display_index]
-            self.current_axis_per_division  = self.current_display_ranges[self.current_display_index]
-            self.power_axis_per_division    = self.power_display_ranges[self.power_display_index]
-            self.earth_leakage_current_axis_per_division  = \
-                self.earth_leakage_current_display_ranges[self.earth_leakage_current_display_index]
-            self.pre_trigger_time           = self.time_axis_pre_trigger_divisions * self.time_axis_per_division
-            self.post_trigger_time          = self.time_axis_divisions * self.time_axis_per_division - self.pre_trigger_time
-            self.post_trigger_samples       = int(self.post_trigger_time / self.interval)
-            self.pre_trigger_samples        = int(self.pre_trigger_time / self.interval)
-            self.frame_samples              = self.pre_trigger_samples + self.post_trigger_samples
-            # we set a hold-off threshold (minimum number of samples to next trigger) to be slightly less
-            # (2ms) than one full screenful of data
-            self.holdoff_samples            = self.frame_samples - int(0.002 * self.sample_rate)
-            if self.trigger_direction == 'rising':
-                self.trigger_hysteresis = 'LLLLLHHHHH'
-            elif self.trigger_direction == 'falling':
-                self.trigger_hysteresis = 'HHHHHLLLLL'
-            self.trigger_gate_length = len(self.trigger_hysteresis)
-            for i in range(self.trigger_gate_length):
-                if self.trigger_hysteresis[i] != self.trigger_hysteresis[0]:
-                    self.trigger_gate_transition = i
-                    break
-            self.time_shift                 = self.time_axis_pre_trigger_divisions * self.time_axis_per_division
-            self.x_pixels                   = self.time_axis_divisions * self.horizontal_pixels_per_division
-            self.y_pixels                   = self.vertical_axis_divisions * self.vertical_pixels_per_division
-            self.half_y_pixels              = self.y_pixels // 2
+        self.interval                   = 1000.0 / self.sample_rate
+        self.time_axis_per_division     = self.time_display_ranges[self.time_display_index]
+        self.voltage_axis_per_division  = self.voltage_display_ranges[self.voltage_display_index]
+        self.current_axis_per_division  = self.current_display_ranges[self.current_display_index]
+        self.power_axis_per_division    = self.power_display_ranges[self.power_display_index]
+        self.earth_leakage_current_axis_per_division  = \
+            self.earth_leakage_current_display_ranges[self.earth_leakage_current_display_index]
+        self.pre_trigger_time           = self.time_axis_pre_trigger_divisions * self.time_axis_per_division
+        self.post_trigger_time          = self.time_axis_divisions * self.time_axis_per_division - self.pre_trigger_time
+        self.post_trigger_samples       = int(self.post_trigger_time / self.interval)
+        self.pre_trigger_samples        = int(self.pre_trigger_time / self.interval)
+        self.frame_samples              = self.pre_trigger_samples + self.post_trigger_samples
+        # we set a hold-off threshold (minimum number of samples to next trigger) to be slightly less
+        # (2ms) than one full screenful of data
+        self.holdoff_samples            = self.frame_samples - int(0.002 * self.sample_rate)
+        if self.trigger_direction == 'rising':
+            self.trigger_hysteresis = 'LLLLLHHHHH'
+        elif self.trigger_direction == 'falling':
+            self.trigger_hysteresis = 'HHHHHLLLLL'
+        self.trigger_gate_length = len(self.trigger_hysteresis)
+        for i in range(self.trigger_gate_length):
+            if self.trigger_hysteresis[i] != self.trigger_hysteresis[0]:
+                self.trigger_gate_transition = i
+                break
+        self.time_shift                 = self.time_axis_pre_trigger_divisions * self.time_axis_per_division
+        self.x_pixels                   = self.time_axis_divisions * self.horizontal_pixels_per_division
+        self.y_pixels                   = self.vertical_axis_divisions * self.vertical_pixels_per_division
+        self.half_y_pixels              = self.y_pixels // 2
  
 
     def set_settings(self, js):
@@ -123,7 +123,7 @@ class Settings():
             f.close()
         except:
             print("settings.py, get_settings(): couldn't read settings.json, regenerating...", file=sys.stderr)
-            js = json.loads(self.default_settings)
+            js = json.loads(default_settings)
             self.save_settings(js)
         return js
 
@@ -163,7 +163,7 @@ class Settings():
  
 
 
-    default_settings = '''
+default_settings = '''
 {
     "frequency": 51.0,
     "sample_rate": 7812.5,

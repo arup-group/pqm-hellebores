@@ -4,8 +4,6 @@
 
 import sys
 import serial
-import binascii
-import signal
 import settings
 
 
@@ -13,7 +11,7 @@ import settings
 def main():
     # load settings from settings.json
     # settings aren't used yet, but will be added to adjust ADC
-    st = settings.Settings(lambda: None)
+    st = settings.Settings()
     
     try:
         ser = serial.Serial('/dev/ttyACM0')

@@ -42,6 +42,7 @@ def main():
                            + st.half_y_pixels))
             if ws[-1] == 'END':
                 print(f'{x} {y0} {y1} {y2} {y3} END')
+                sys.stdout.flush()
             else:
                 print(f'{x} {y0} {y1} {y2} {y3}')
 

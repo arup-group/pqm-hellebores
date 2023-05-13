@@ -144,6 +144,7 @@ def main():
             if oc >= st.frame_samples:
                 print(f'{output} END')
                 triggered = False
+                sys.stdout.flush()
                 oi = (ii - int(0.002 * st.sample_rate)) % INPUT_BUFFER_SIZE
             else:
                 print(output)

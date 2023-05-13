@@ -142,7 +142,7 @@ class Settings():
         self.callback_fn()
 
 
-    def __init__(self, callback_fn):
+    def __init__(self, callback_fn = lambda: None):
         # load initial settings
         self.set_settings(self.load_settings())
 

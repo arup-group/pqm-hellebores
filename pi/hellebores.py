@@ -67,10 +67,10 @@ B_OPTIONS     = 5
 # text message cell enumerations
 T_RUNSTOP     = 0
 T_WFS         = 1
-T_UNDEF2      = 2
-T_UNDEF3      = 3
-T_UNDEF4      = 4
-T_UNDEF5      = 5
+T_VOLTSDIV    = 2
+T_AMPSDIV     = 3
+T_WATTSDIV    = 4
+T_LEAKDIV     = 5
 
 
 def signal_other_processes(st):
@@ -78,14 +78,11 @@ def signal_other_processes(st):
     st.set_derived_settings()
     st.save_settings()
     if sys.platform == 'linux':
-        os.system("pkill -f --signal=SIGUSR1 'python3 ./rain.py'")
-        os.system("pkill -f --signal=SIGUSR1 'python3 ./reader.py'")
-        os.system("pkill -f --signal=SIGUSR1 'python3 ./scaler.py'")
-        os.system("pkill -f --signal=SIGUSR1 'python3 ./trigger.py'")
-        os.system("pkill -f --signal=SIGUSR1 'python3 ./mapper.py'")
+        # all running processes in the form 'python3 ./[something].py' will be signalled
+        os.system("pkill --signal=SIGUSR1 -f 'python3 \./.*\.py'")
     # update the background, in case the graticule has changed
     draw_background(st)
-    
+
 
 class Range_controller:
     ranges = []
@@ -127,37 +124,18 @@ def create_main_controls(texts):
     #####
     # Main controls, on right of screen
     #####
-    button_runstop       = thorpy.Button('Run/Stop')
-    button_runstop.set_size(BUTTON_SIZE)
-    button_runstop.at_unclick    = lambda: start_stop_reaction(texts)
+    button_texts = ['Run/Stop', 'Mode', 'Horizontal', 'Vertical', 'Trigger', 'Options']
+    button_functions = [lambda: start_stop_reaction(texts), mode_reaction, horizontal_reaction, \
+                        vertical_reaction, trigger_reaction, options_reaction]
+    buttons = [ thorpy.Button(b) for b in button_texts ]
+    for i in range(len(buttons)):
+        buttons[i].set_font_color(BLACK)
+        buttons[i].set_size(BUTTON_SIZE)
+        buttons[i].at_unclick = button_functions[i] 
 
-    button_mode          = thorpy.Button('Mode')
-    button_mode.set_size(BUTTON_SIZE)
-    button_mode.at_unclick       = mode_reaction
-
-    button_horizontal    = thorpy.Button('Horizontal')
-    button_horizontal.set_size(BUTTON_SIZE)
-    button_horizontal.at_unclick = horizontal_reaction
-
-    button_vertical      = thorpy.Button('Vertical')
-    button_vertical.set_size(BUTTON_SIZE)
-    button_vertical.at_unclick   = vertical_reaction
-
-    button_trigger       = thorpy.Button('Trigger')
-    button_trigger.set_size(BUTTON_SIZE)
-    button_trigger.at_unclick    = trigger_reaction
-
-    button_options       = thorpy.Button('Options')
-    button_options.set_size(BUTTON_SIZE)
-    button_options.at_unclick    = options_reaction
-
-    return thorpy.Box([button_runstop, \
-                       button_mode, \
-                       button_horizontal, \
-                       button_vertical, \
-                       button_trigger, \
-                       button_options, \
-                       *texts.get_texts()]) 
+    main = thorpy.Box([ *texts.get()[0:2], *buttons, *texts.get()[2:] ])
+    #main.set_bck_color(DARK_GREY)
+    return main
 
 
 def create_vertical(st):
@@ -185,8 +163,6 @@ def create_vertical(st):
     def update_leakage_current_range(leakage_currents, offset):
         leakage_currents.change_range(offset)
         leakage_current_display.set_text(f'{leakage_currents.get_value()*1000.0} mA/div')
-        st.earth_leakage_current_display_index = leakage_currents.get_index()
-        signal_other_processes(st)
 
     button_done               = thorpy.Button('Done')
     button_done.set_size(BUTTON_SIZE)
@@ -221,11 +197,13 @@ def create_vertical(st):
     leakage_current_up        = thorpy.ArrowButton('down', ARROW_BUTTON_SIZE)
     leakage_current_up.at_unclick       = lambda: update_leakage_current_range(leakage_currents, 1)
 
-    return thorpy.TitleBox(text='Vertical', children=[button_done, \
-           thorpy.Group(elements=[display_voltage, down_voltage, up_voltage], mode='h'), \
-           thorpy.Group(elements=[current_display, current_down, current_up], mode='h'), \
-           thorpy.Group(elements=[power_display, power_down, power_up], mode='h'),
-           thorpy.Group(elements=[leakage_current_display, leakage_current_down, leakage_current_up], mode='h') ])
+    vertical = thorpy.TitleBox(text='Vertical', children=[button_done, \
+                 thorpy.Group(elements=[display_voltage, down_voltage, up_voltage], mode='h'), \
+                 thorpy.Group(elements=[current_display, current_down, current_up], mode='h'), \
+                 thorpy.Group(elements=[power_display, power_down, power_up], mode='h'),
+                 thorpy.Group(elements=[leakage_current_display, leakage_current_down, leakage_current_up], mode='h') ])
+    #vertical.set_bck_color(DARK_GREY)
+    return vertical
 
 
 def create_horizontal(st):
@@ -293,23 +271,38 @@ def back_to_main_reaction():
 class Texts:
     # array of thorpy text objects
     texts = []
+    colours = [None, None, GREEN, YELLOW, MAGENTA, CYAN]
 
-    def __init__(self):
-        for s in range(0,7):
+    def __init__(self, st, wfs):
+        self.wfs = wfs              # make a note of the wfs object
+        for s in range(0,6):
             t = thorpy.Text('')
             t.set_size(TEXT_SIZE)
+            if self.colours[s] != None:
+                t.set_font_color(self.colours[s])
             self.texts.append(t)
-
-    def get_texts(self):
+ 
+    def get(self):
         return self.texts
 
+    def refresh(self):
+        global capturing
+        if capturing:
+            self.texts[T_RUNSTOP].set_bck_color(GREEN)
+            self.texts[T_RUNSTOP].set_text('Running', adapt_parent=False)
+        else:
+            self.texts[T_RUNSTOP].set_bck_color(RED)
+            self.texts[T_RUNSTOP].set_text('Stopped', adapt_parent=False)
+        self.texts[T_WFS].set_text(f'{self.wfs.get()} wfm/s', adapt_parent=False)
+        self.texts[T_VOLTSDIV].set_text(f'{st.voltage_display_ranges[st.voltage_display_index]} V/div', adapt_parent=False)
+        self.texts[T_AMPSDIV].set_text(f'{st.current_display_ranges[st.current_display_index]} A/div', adapt_parent=False)
+        self.texts[T_WATTSDIV].set_text(f'{st.power_display_ranges[st.power_display_index]} W/div', adapt_parent=False)
+        self.texts[T_LEAKDIV].set_text(f'{st.earth_leakage_current_display_ranges[st.earth_leakage_current_display_index]} mA/div', adapt_parent=False)
+
     # update text message string
-    def set_text(self, item, value):
+    def set(self, item, value):
         self.texts[item].set_text(value)
 
-    def clear_texts(self):
-        for t in self.texts:
-            t.set_text('')
 
 
 def create_ui_groups(st, texts):
@@ -338,13 +331,9 @@ def create_ui_groups(st, texts):
 
 def start_stop_reaction(texts):
    global capturing
-   if capturing == True:
-       capturing = False
-       texts.set_text(T_RUNSTOP, "Stopped")
-   else:
-       capturing = True
-       texts.set_text(T_RUNSTOP, "Running")
-       
+   capturing = not capturing
+   texts.refresh()    
+
 
 def options_reaction():
     alert = thorpy.Alert(title="hellebores.py",
@@ -407,27 +396,31 @@ def draw_lines(screen, lines):
 
 class WFS_Counter:
 
-    def __init__(self, texts):
-        self.wfs_text = texts.texts[T_WFS]
-        self.counter = 0           # number of waveforms since last posting
-        self.time = time.time()    # keep track of time in milliseconds
-        self.posted = self.time    # time when the wfs/s was lasted posted to screen
+    def __init__(self):
+        self.wfs          = 0    # last computed wfs
+        self.counter      = 0    # number of waveforms since last posting
+        self.update_time  = 0    # time when the wfs/s was lasted posted to screen
 
     # called whenever we update the waveform on screen 
     def increment(self):
         self.counter = self.counter + 1
 
-    # called when a refresh event occurs
-    def update_text(self):
-        # time check 
-        self.time = time.time()
+    def time_to_update(self):
+        # time now 
+        tn = time.time()
         # if the time has increased by at least 1.0 second, update the wfm/s text
-        elapsed = self.time - self.posted
+        elapsed = tn - self.update_time
         if elapsed >= 1.0:
-            self.wfs_text.set_text(f'{round(self.counter/elapsed)} wfm/s')
-            self.posted = self.time
+            self.wfs = round(self.counter/elapsed)
+            self.update_time = tn
             self.counter = 0
+            return True
+        else:
+            return False
  
+    def get(self):
+        return self.wfs
+        
 
 def get_screen_hardware_size():
     i = pygame.display.Info()
@@ -512,7 +505,6 @@ def main():
     global st, capturing, ui_groups, ui_updater
 
     # initialise pygame
-    #application = thorpy.Application(PI_SCREEN_SIZE, 'pqm-hellebores')
     pygame.init()
     pygame.display.set_caption('pqm-hellebores')
 
@@ -527,30 +519,30 @@ def main():
 
     # initialise thorpy
     thorpy.set_default_font(FONT, FONT_SIZE)
-    thorpy.init(screen, thorpy.theme_classic)
+    thorpy.init(screen, thorpy.theme_round)
 
     # get settings from settings.json
     st = settings.Settings()
 
+    # initialise flags
+    capturing = True        # allow/stop update of the lines on the screen
+    running   = True        # program runs until this flag is cleared
+
     # create objects that hold the state of the UI
     background_surface = draw_background(st)
-    texts     = Texts()
-    wfs       = WFS_Counter(texts)
+    wfs       = WFS_Counter()
+    texts     = Texts(st, wfs)
     ui_groups = create_ui_groups(st, texts)
 
     # start with the main group enabled
     ui_updater = ui_groups['main'].get_updater()
 
     # set up the initial text states
-    texts.set_text(T_RUNSTOP, "Running")
+    texts.refresh()
 
     # set up lines object
     lines = Lines()
     
-    # initialise flags
-    capturing = True        # allow/stop update of the lines on the screen
-    running   = True        # program runs until this flag is cleared
-
     # main loop
     while running:
         # hack to make the cursor invisible while still responding
@@ -560,8 +552,8 @@ def main():
             if (e.type == pygame.QUIT) or (e.type == pygame.KEYDOWN and e.key == pygame.K_q):
                 running = False
         refresh_reaction(lines, screen, background_surface, wfs)
-        wfs.update_text()
-        if capturing:
+        if wfs.time_to_update():
+            texts.refresh()
             ui_groups['datetime'].set_text(time.ctime())
         ui_updater.update(events=events)
         pygame.display.flip()

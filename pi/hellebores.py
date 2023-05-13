@@ -163,6 +163,8 @@ def create_vertical(st):
     def update_leakage_current_range(leakage_currents, offset):
         leakage_currents.change_range(offset)
         leakage_current_display.set_text(f'{leakage_currents.get_value()*1000.0} mA/div')
+        st.earth_leakage_current_display_index = leakage_currents.get_index()
+        signal_other_processes(st)
 
     button_done               = thorpy.Button('Done')
     button_done.set_size(BUTTON_SIZE)

@@ -134,7 +134,7 @@ def create_main_controls(texts):
         buttons[i].at_unclick = button_functions[i] 
 
     main = thorpy.Box([ *texts.get()[0:2], *buttons, *texts.get()[2:] ])
-    #main.set_bck_color(DARK_GREY)
+    main.set_bck_color(BLACK)
     return main
 
 
@@ -273,7 +273,7 @@ def back_to_main_reaction():
 class Texts:
     # array of thorpy text objects
     texts = []
-    colours = [None, None, GREEN, YELLOW, MAGENTA, CYAN]
+    colours = [BLACK, WHITE, GREEN, YELLOW, MAGENTA, CYAN]
 
     def __init__(self, st, wfs):
         self.wfs = wfs              # make a note of the wfs object
@@ -318,15 +318,15 @@ def create_ui_groups(st, texts):
     ui_main = create_main_controls(texts)
     ui_main.set_size(CONTROLS_BOX_SIZE)
     ui_main.set_topleft(*CONTROLS_BOX_POSITION)
-    ui_groups['main'] = thorpy.Group(elements=[ui_main, ui_datetime], mode=None)
+    ui_groups['main'] = thorpy.Group(elements=[ui_main], mode=None)
 
     ui_vertical = create_vertical(st)
     ui_vertical.set_topleft(*SETTINGS_BOX_POSITION)
-    ui_groups['vertical'] = thorpy.Group(elements=[ui_main, ui_vertical, ui_datetime], mode=None)
+    ui_groups['vertical'] = thorpy.Group(elements=[ui_main, ui_vertical], mode=None)
 
     ui_horizontal = create_horizontal(st)
     ui_horizontal.set_topleft(*SETTINGS_BOX_POSITION)
-    ui_groups['horizontal'] = thorpy.Group(elements=[ui_main, ui_horizontal, ui_datetime], mode=None)
+    ui_groups['horizontal'] = thorpy.Group(elements=[ui_main, ui_horizontal], mode=None)
 
     return ui_groups
 
@@ -345,16 +345,6 @@ def options_reaction():
     alert.cannot_drag_outside = True
     alert.launch_nonblocking()
 
-
-def refresh_reaction(lines, screen, background_surface, wfs):
-    global capturing
-    if capturing:
-        lines.read_lines(sys.stdin, wfs)
-    # blit the screen with background image (graticule)
-    # if we didn't capture new lines, we still redraw the old ones
-    screen.blit(background_surface, (0,0))
-    draw_lines(screen, lines.get_lines())
-    
 
 def draw_background(st):
     xmax = SCOPE_BOX_SIZE[0] - 1
@@ -384,16 +374,18 @@ def draw_background(st):
     return background_surface
 
 
-def draw_lines(screen, lines):
+def redraw_lines(lines, screen, background_surface):
     # can handle up to six lines...
     colours = [ GREEN, YELLOW, MAGENTA, CYAN, RED, BLUE ]
+    screen.blit(background_surface, (0,0))
+    linedata = lines.get_lines()
     try:
-        for i in range(len(lines)):
-            pygame.draw.lines(screen, colours[i], False, lines[i], 2)
+        for i in range(len(linedata)):
+            pygame.draw.lines(screen, colours[i], False, linedata[i], 2)
     except ValueError:
         # the pygame.draw.lines will throw an exception if there are not at
         # least two points in each line - (sounds reasonable)
-        sys.stderr.write('Exception in hellebores.py: draw_lines().\n')
+        sys.stderr.write('Exception in hellebores.py: redraw_lines().\n')
 
 
 class WFS_Counter:
@@ -431,64 +423,68 @@ def get_screen_hardware_size():
 
 def is_data_available(f, t):
     # f file object, t time in seconds
-    # unfortunately this test won't work on windows, so we return a default response
-    is_available = True
+    # unfortunately this test won't work on windows, so we return a default 'True' response
     if sys.platform == 'linux':
         # wait at most 't' seconds for new data to appear
+        # r will be an empty list unless there is data ready to read
         r, _, _ = select.select( [f], [], [], t)
-        if len(r) == 0:   
-           is_available = False 
-    return is_available
+        return r != []
+    else:
+        return True 
 
 
 class Lines:
     # working points buffer for four lines
-    ps = [[] for i in range(4)] 
+    ps = [ [],[],[],[] ] 
 
     # lines history buffer
     # future extension is to use this buffer for electrical event history
     # (eg triggered by power fluctuation etc)
     lines_history = [[] for i in range(LINES_BUFFER_SIZE+1)]
 
-    def end_frame(self, wfs):
-        self.lines_history[LINES_BUFFER_SIZE] = self.ps
-        wfs.increment()
+    def end_frame(self, capturing, wfs):
+        if capturing:
+            self.lines_history[LINES_BUFFER_SIZE] = self.ps
+            wfs.increment()
         # reset the working buffer
-        self.ps = [[] for i in range(4)]
+        self.ps = [ [],[],[],[] ]
 
-    def add_sample(self, x, ws):
-        self.ps[0].append((x, int(ws[1])))
-        self.ps[1].append((x, int(ws[2])))
-        self.ps[2].append((x, int(ws[3])))
-        self.ps[3].append((x, int(ws[4])))
+    def add_sample(self, sample):
+        self.ps[0].append((sample[0], sample[1]))
+        self.ps[1].append((sample[0], sample[2]))
+        self.ps[2].append((sample[0], sample[3]))
+        self.ps[3].append((sample[0], sample[4]))
 
-    def read_lines(self, f, wfs):
+    def read_lines(self, f, capturing, wfs):
         # the loop will exit if:
         # (a) there is no data currently waiting to be read, 
-        # (b) extra word in the incoming data indicates 'end of frame'
-        # (c) the x coordinate 'goes backwards'
+        # (b) negative x coordinate indicates last sample of current frame
+        # (c) the x coordinate 'goes backwards' indicating a new frame has started
         # (d) the line is empty, can't be split() or any other kind of read error
-        xp = 0                 # tracks previous 'x coordinate'
-        while is_data_available(f, 0.02): 
+        # returns 'True' if we have completed a new frame
+        xp = -1                 # tracks previous 'x coordinate'
+        while is_data_available(f, 0.1): 
             try:
-                ws = f.readline().split()
-                x = int(ws[0])
-                if x < xp:
-                    # end the frame before adding sample to a new one
-                    self.end_frame(wfs)    
-                    self.add_sample(x, ws)
-                    break
-                elif len(ws) > 5:
+                sample = [ int(w) for w in f.readline().split() ]
+                if sample[-1] < 0:
+                    # negative integer was appended to indicate end of frame...
                     # add current sample then end the frame
-                    self.add_sample(x, ws)
-                    self.end_frame(wfs)
-                    break
+                    self.add_sample(sample)
+                    self.end_frame(capturing, wfs)
+                    return True
+                elif sample[0] < xp:
+                    # x coordinate has reset to indicate start of new frame...
+                    # end the frame before adding current sample to a new one
+                    self.end_frame(capturing, wfs)    
+                    self.add_sample(sample)
+                    return True
                 else:
-                    self.add_sample(x, ws)
-                xp = x
+                    # an ordinary, non-special, sample
+                    self.add_sample(sample)
+                xp = sample[0]
             except:
                 break   # break if we have any type of error with the input data
-        return self.lines_history[LINES_BUFFER_SIZE]
+        return False
 
     def save_lines(self):
         self.lines_history = self.lines_history[1:]
@@ -553,10 +549,21 @@ def main():
         for e in events:
             if (e.type == pygame.QUIT) or (e.type == pygame.KEYDOWN and e.key == pygame.K_q):
                 running = False
-        refresh_reaction(lines, screen, background_surface, wfs)
         if wfs.time_to_update():
+            if capturing:
+                ui_groups['datetime'].set_text(time.ctime())
             texts.refresh()
-            ui_groups['datetime'].set_text(time.ctime())
+        # ALWAYS read new data, even if we are not capturing it, to keep the incoming data
+        # pipeline flowing. If the read rate doesn't keep up with the pipe, then we see 
+        # artifacts on screen. Check the BUFFER led on PCB if performance problems are
+        # suspected here.
+        # Also, control refresh speed when not capturing, by waiting for new data.
+        got_new_frame = lines.read_lines(sys.stdin, capturing, wfs)
+        # check if we should refresh the main display
+        # note that for shorter time axis, we don't refresh until the first condition is true
+        if (capturing and got_new_frame) or not capturing:
+            redraw_lines(lines, screen, background_surface) 
+            ui_groups['datetime'].draw()
         ui_updater.update(events=events)
         pygame.display.flip()
 

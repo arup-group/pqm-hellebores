@@ -142,9 +142,9 @@ def main():
             # if we've finished a whole frame of data, clear the trigger and position the output
             # index counter 2ms behind the current input index
             if oc >= st.frame_samples:
-                print(f'{output} END')
-                triggered = False
+                print(f'{output} END_FRAME')
                 sys.stdout.flush()
+                triggered = False
                 oi = (ii - int(0.002 * st.sample_rate)) % INPUT_BUFFER_SIZE
             else:
                 print(output)

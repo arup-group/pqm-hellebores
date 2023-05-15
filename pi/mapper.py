@@ -40,8 +40,10 @@ def main():
             y3 = bound(0, ymax, \
                     (int(-float(c3) * st.vertical_pixels_per_division/st.earth_leakage_current_axis_per_division) \
                            + st.half_y_pixels))
-            if ws[-1] == 'END':
-                print(f'{x} {y0} {y1} {y2} {y3} END')
+            if ws[-1] == 'END_FRAME':
+                # negative number at end is a flag in numerical form to indicate that this is the last 
+                # sample of the current frame
+                print(f'{x} {y0} {y1} {y2} {y3} -1')
                 sys.stdout.flush()
             else:
                 print(f'{x} {y0} {y1} {y2} {y3}')

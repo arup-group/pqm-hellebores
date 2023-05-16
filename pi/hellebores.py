@@ -33,6 +33,7 @@ BLACK = (0, 0, 0)
 DARK_GREY = (30, 30, 30)
 GREY = (75, 75, 75)
 LIGHT_GREY = (100, 100, 100)
+VERY_LIGHT_GREY = (150, 150, 150)
 PI_SCREEN_SIZE = (800,480)
 SCOPE_BOX_SIZE = (700,480)
 CONTROLS_BOX_SIZE = (100,480)
@@ -67,10 +68,11 @@ B_OPTIONS     = 5
 # text message cell enumerations
 T_RUNSTOP     = 0
 T_WFS         = 1
-T_VOLTSDIV    = 2
-T_AMPSDIV     = 3
-T_WATTSDIV    = 4
-T_LEAKDIV     = 5
+T_TIMEDIV     = 2
+T_VOLTSDIV    = 3
+T_AMPSDIV     = 4
+T_WATTSDIV    = 5
+T_LEAKDIV     = 6
 
 
 def signal_other_processes(st):
@@ -129,12 +131,13 @@ def create_main_controls(texts):
                         vertical_reaction, trigger_reaction, options_reaction]
     buttons = [ thorpy.Button(b) for b in button_texts ]
     for i in range(len(buttons)):
-        buttons[i].set_font_color(BLACK)
+        buttons[i].set_bck_color(VERY_LIGHT_GREY, 'normal')
+        buttons[i].set_font_color(WHITE)
         buttons[i].set_size(BUTTON_SIZE)
         buttons[i].at_unclick = button_functions[i] 
 
     main = thorpy.Box([ *texts.get()[0:2], *buttons, *texts.get()[2:] ])
-    main.set_bck_color(BLACK)
+    main.set_bck_color(LIGHT_GREY)
     return main
 
 
@@ -144,63 +147,77 @@ def create_vertical(st):
     #####
     def update_voltage_range(voltages, offset):
         voltages.change_range(offset)
-        display_voltage.set_text(f'{voltages.get_value()} V/div')
+        voltage_display.set_text(f'{voltages.get_value()} V/div', adapt_parent=False)
         st.voltage_display_index = voltages.get_index()
         signal_other_processes(st)
 
     def update_current_range(currents, offset):
         currents.change_range(offset)
-        current_display.set_text(f'{currents.get_value()} A/div')
+        current_display.set_text(f'{currents.get_value()} A/div', adapt_parent=False)
         st.current_display_index = currents.get_index()
         signal_other_processes(st)
 
     def update_power_range(powers, offset):
         powers.change_range(offset)
-        power_display.set_text(f'{powers.get_value()} W/div')
+        power_display.set_text(f'{powers.get_value()} W/div', adapt_parent=False)
         st.power_display_index = powers.get_index()
         signal_other_processes(st)
 
     def update_leakage_current_range(leakage_currents, offset):
         leakage_currents.change_range(offset)
-        leakage_current_display.set_text(f'{leakage_currents.get_value()*1000.0} mA/div')
+        leakage_current_display.set_text(f'{leakage_currents.get_value()*1000.0} mA/div', adapt_parent=False)
         st.earth_leakage_current_display_index = leakage_currents.get_index()
         signal_other_processes(st)
 
     button_done               = thorpy.Button('Done')
+    #button_done.set_font_color(BLACK, 'normal')
+    button_done.set_bck_color(VERY_LIGHT_GREY, 'normal')
     button_done.set_size(BUTTON_SIZE)
     button_done.at_unclick    = back_to_main_reaction
 
     voltages                  = Range_controller(st.voltage_display_ranges, st.voltage_display_index)
-    display_voltage           = thorpy.Text(f'{voltages.get_value()} V/div') 
+    voltage_display           = thorpy.Text(f'{voltages.get_value()} V/div') 
+    voltage_display.set_size(BUTTON_SIZE)
     down_voltage              = thorpy.ArrowButton('up', ARROW_BUTTON_SIZE)
+    down_voltage.set_bck_color(VERY_LIGHT_GREY, 'normal')
     down_voltage.at_unclick   = lambda: update_voltage_range(voltages, -1)
     up_voltage                = thorpy.ArrowButton('down', ARROW_BUTTON_SIZE)
+    up_voltage.set_bck_color(VERY_LIGHT_GREY, 'normal')
     up_voltage.at_unclick     = lambda: update_voltage_range(voltages, 1)
  
     currents                  = Range_controller(st.current_display_ranges, st.current_display_index)
     current_display           = thorpy.Text(f'{currents.get_value()} A/div')
+    current_display.set_size(BUTTON_SIZE)
     current_down              = thorpy.ArrowButton('up', ARROW_BUTTON_SIZE)
+    current_down.set_bck_color(VERY_LIGHT_GREY, 'normal')
     current_down.at_unclick   = lambda: update_current_range(currents, -1)
     current_up                = thorpy.ArrowButton('down', ARROW_BUTTON_SIZE)
+    current_up.set_bck_color(VERY_LIGHT_GREY, 'normal')
     current_up.at_unclick     = lambda: update_current_range(currents, 1)
     
     powers                    = Range_controller(st.power_display_ranges, st.power_display_index)
     power_display             = thorpy.Text(f'{powers.get_value()} W/div')
+    power_display.set_size(BUTTON_SIZE)
     power_down                = thorpy.ArrowButton('up', ARROW_BUTTON_SIZE)
+    power_down.set_bck_color(VERY_LIGHT_GREY, 'normal')
     power_down.at_unclick     = lambda: update_power_range(powers, -1)
     power_up                  = thorpy.ArrowButton('down', ARROW_BUTTON_SIZE)
+    power_up.set_bck_color(VERY_LIGHT_GREY, 'normal')
     power_up.at_unclick       = lambda: update_power_range(powers, 1)
   
     leakage_currents          = Range_controller(st.earth_leakage_current_display_ranges, \
                                                    st.earth_leakage_current_display_index)
     leakage_current_display   = thorpy.Text(f'{leakage_currents.get_value()*1000.0} mA/div')
+    leakage_current_display.set_size(BUTTON_SIZE)
     leakage_current_down      = thorpy.ArrowButton('up', ARROW_BUTTON_SIZE)
+    leakage_current_down.set_bck_color(VERY_LIGHT_GREY, 'normal')
     leakage_current_down.at_unclick     = lambda: update_leakage_current_range(leakage_currents, -1)
     leakage_current_up        = thorpy.ArrowButton('down', ARROW_BUTTON_SIZE)
+    leakage_current_up.set_bck_color(VERY_LIGHT_GREY, 'normal')
     leakage_current_up.at_unclick       = lambda: update_leakage_current_range(leakage_currents, 1)
 
     vertical = thorpy.TitleBox(text='Vertical', children=[button_done, \
-                 thorpy.Group(elements=[display_voltage, down_voltage, up_voltage], mode='h'), \
+                 thorpy.Group(elements=[voltage_display, down_voltage, up_voltage], mode='h'), \
                  thorpy.Group(elements=[current_display, current_down, current_up], mode='h'), \
                  thorpy.Group(elements=[power_display, power_down, power_up], mode='h'),
                  thorpy.Group(elements=[leakage_current_display, leakage_current_down, leakage_current_up], mode='h') ])
@@ -219,14 +236,18 @@ def create_horizontal(st):
         signal_other_processes(st)
 
     button_done               = thorpy.Button('Done')
+    #button_done.set_font_color(BLACK, 'normal')
+    button_done.set_bck_color(VERY_LIGHT_GREY, 'normal')
     button_done.set_size(BUTTON_SIZE)
     button_done.at_unclick    = back_to_main_reaction
 
     times                     = Range_controller(st.time_display_ranges, st.time_display_index)
     display_time              = thorpy.Text(f'{times.get_value()} ms/div') 
     down_time                 = thorpy.ArrowButton('left', ARROW_BUTTON_SIZE)
+    down_time.set_bck_color(VERY_LIGHT_GREY, 'normal')
     down_time.at_unclick      = lambda: update_time_range(times, -1)
     up_time                   = thorpy.ArrowButton('right', ARROW_BUTTON_SIZE)
+    up_time.set_bck_color(VERY_LIGHT_GREY, 'normal')
     up_time.at_unclick        = lambda: update_time_range(times, 1)
  
     gp = thorpy.Group(elements=[display_time, down_time, up_time], mode='h')
@@ -273,11 +294,11 @@ def back_to_main_reaction():
 class Texts:
     # array of thorpy text objects
     texts = []
-    colours = [BLACK, WHITE, GREEN, YELLOW, MAGENTA, CYAN]
+    colours = [BLACK, WHITE, WHITE, GREEN, YELLOW, MAGENTA, CYAN]
 
     def __init__(self, st, wfs):
         self.wfs = wfs              # make a note of the wfs object
-        for s in range(0,6):
+        for s in range(len(self.colours)):
             t = thorpy.Text('')
             t.set_size(TEXT_SIZE)
             if self.colours[s] != None:
@@ -296,10 +317,11 @@ class Texts:
             self.texts[T_RUNSTOP].set_bck_color(RED)
             self.texts[T_RUNSTOP].set_text('Stopped', adapt_parent=False)
         self.texts[T_WFS].set_text(f'{self.wfs.get()} wfm/s', adapt_parent=False)
-        self.texts[T_VOLTSDIV].set_text(f'{st.voltage_display_ranges[st.voltage_display_index]} V/div', adapt_parent=False)
-        self.texts[T_AMPSDIV].set_text(f'{st.current_display_ranges[st.current_display_index]} A/div', adapt_parent=False)
-        self.texts[T_WATTSDIV].set_text(f'{st.power_display_ranges[st.power_display_index]} W/div', adapt_parent=False)
-        self.texts[T_LEAKDIV].set_text(f'{st.earth_leakage_current_display_ranges[st.earth_leakage_current_display_index]} mA/div', adapt_parent=False)
+        self.texts[T_TIMEDIV].set_text(f'{st.time_display_ranges[st.time_display_index]} ms/', adapt_parent=False)
+        self.texts[T_VOLTSDIV].set_text(f'{st.voltage_display_ranges[st.voltage_display_index]} V/', adapt_parent=False)
+        self.texts[T_AMPSDIV].set_text(f'{st.current_display_ranges[st.current_display_index]} A/', adapt_parent=False)
+        self.texts[T_WATTSDIV].set_text(f'{st.power_display_ranges[st.power_display_index]} W/', adapt_parent=False)
+        self.texts[T_LEAKDIV].set_text(f'{st.earth_leakage_current_display_ranges[st.earth_leakage_current_display_index]*1000} mA/', adapt_parent=False)
 
     # update text message string
     def set(self, item, value):
@@ -463,7 +485,7 @@ class Lines:
         # (d) the line is empty, can't be split() or any other kind of read error
         # returns 'True' if we have completed a new frame
         xp = -1                 # tracks previous 'x coordinate'
-        while is_data_available(f, 0.1): 
+        while is_data_available(f, 0.05): 
             try:
                 sample = [ int(w) for w in f.readline().split() ]
                 if sample[-1] < 0:
@@ -517,7 +539,7 @@ def main():
 
     # initialise thorpy
     thorpy.set_default_font(FONT, FONT_SIZE)
-    thorpy.init(screen, thorpy.theme_round)
+    thorpy.init(screen, thorpy.theme_simple)
 
     # get settings from settings.json
     st = settings.Settings()

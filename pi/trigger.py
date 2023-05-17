@@ -49,7 +49,6 @@ class Buffer:
         self.buf[self.ii] = samples
         self.ii = (self.ii + 1) % INPUT_BUFFER_SIZE
 
-  
     # the following functions all operate/manipulate the output pointer, which can be
     # moved depending on the trigger logic required
     def shift_pointer(self, offset):
@@ -152,8 +151,8 @@ def main():
                 # figure out the 'pre-trigger' index and set the output pointer to that position
                 # output to stdout will start from this position in the buffer
                 buf.shift_pointer(-st.pre_trigger_samples)
-                # set the holdoff counter, output counter and gate counter to zero
-                hc, oc, gc = (0, 0, 0)
+                # set the holdoff counter and output counter to zero
+                hc, oc = (0, 0)
             else:
                 # move on to the next sample
                 buf.drain()
@@ -167,11 +166,12 @@ def main():
             output = (f'{st.interval*(oc-st.pre_trigger_samples) :12.4f} {ip[0] :10.3f} '
                       f'{ip[1] :10.5f} {ip[2] :10.3f} {ip[3] :10.7f}')
             # if we've finished a whole frame of data, mark the last sample and clear the trigger
-            if oc == st.frame_samples:
+            if oc >= st.frame_samples:
                 print(output + ' END_FRAME')
                 # this pushes everything we've printed recently out of the system buffers
                 sys.stdout.flush()
                 triggered = False
+                gc = 0
                 # reverse the output index to approx 10% of frame length from the current input 
                 # position, up to a maximum of 2ms advance. This positioning helps the trigger 
                 # to work in a stable way on a repetitive waveform that has a period that is

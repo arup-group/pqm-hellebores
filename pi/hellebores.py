@@ -121,21 +121,35 @@ def create_datetime():
     return [ text_datetime ]
 
 
-
+def configure_arrow_button(direction, callback_function):
+    button = thorpy.ArrowButton(direction, BUTTON_SIZE) 
+    button.set_bck_color(VERY_LIGHT_GREY, 'normal')
+    button.set_bck_color(VERY_LIGHT_GREY, 'hover')
+    button.set_font_color(WHITE)
+    button.at_unclick = callback_function
+    return button
+ 
+def configure_button(text, callback_function):
+    button = thorpy.Button(text) 
+    button.set_bck_color(VERY_LIGHT_GREY, 'normal')
+    button.set_bck_color(VERY_LIGHT_GREY, 'hover')
+    button.set_font_color(WHITE)
+    button.set_size(BUTTON_SIZE)
+    button.at_unclick = callback_function
+    return button
+    
 def create_main_controls(texts):
     #####
     # Main controls, on right of screen
     #####
-    button_texts = ['Run/Stop', 'Mode', 'Horizontal', 'Vertical', 'Trigger', 'Options']
-    button_functions = [lambda: start_stop_reaction(texts), mode_reaction, horizontal_reaction, \
-                        vertical_reaction, trigger_reaction, options_reaction]
-    buttons = [ thorpy.Button(b) for b in button_texts ]
-    for i in range(len(buttons)):
-        buttons[i].set_bck_color(VERY_LIGHT_GREY, 'normal')
-        buttons[i].set_font_color(WHITE)
-        buttons[i].set_size(BUTTON_SIZE)
-        buttons[i].at_unclick = button_functions[i] 
-
+    button_setup = [ ('Run/Stop', lambda: start_stop_reaction(texts)),\
+                     ('Mode', mode_reaction), \
+                     ('Horizontal', horizontal_reaction), \
+                     ('Vertical', vertical_reaction), \
+                     ('Trigger', trigger_reaction), \
+                     ('Options', options_reaction) ]
+    buttons = [ configure_button(bt, bf) for bt, bf in button_setup ]
+ 
     main = thorpy.Box([ *texts.get()[0:2], *buttons, *texts.get()[2:] ])
     main.set_bck_color(LIGHT_GREY)
     return main
@@ -169,59 +183,46 @@ def create_vertical(st):
         st.earth_leakage_current_display_index = leakage_currents.get_index()
         signal_other_processes(st)
 
-    button_done               = thorpy.Button('Done')
-    #button_done.set_font_color(BLACK, 'normal')
-    button_done.set_bck_color(VERY_LIGHT_GREY, 'normal')
-    button_done.set_size(BUTTON_SIZE)
-    button_done.at_unclick    = back_to_main_reaction
+    button_done = configure_button('Done', back_to_main_reaction)
 
     voltages                  = Range_controller(st.voltage_display_ranges, st.voltage_display_index)
     voltage_display           = thorpy.Text(f'{voltages.get_value()} V/div') 
     voltage_display.set_size(BUTTON_SIZE)
-    down_voltage              = thorpy.ArrowButton('up', ARROW_BUTTON_SIZE)
-    down_voltage.set_bck_color(VERY_LIGHT_GREY, 'normal')
-    down_voltage.at_unclick   = lambda: update_voltage_range(voltages, -1)
-    up_voltage                = thorpy.ArrowButton('down', ARROW_BUTTON_SIZE)
-    up_voltage.set_bck_color(VERY_LIGHT_GREY, 'normal')
-    up_voltage.at_unclick     = lambda: update_voltage_range(voltages, 1)
- 
+    voltage_down              = configure_arrow_button('up', \
+                                    lambda: update_voltage_range(voltages, -1))
+    voltage_up                = configure_arrow_button('down', \
+                                    lambda: update_voltage_range(voltages, 1))
+
     currents                  = Range_controller(st.current_display_ranges, st.current_display_index)
     current_display           = thorpy.Text(f'{currents.get_value()} A/div')
     current_display.set_size(BUTTON_SIZE)
-    current_down              = thorpy.ArrowButton('up', ARROW_BUTTON_SIZE)
-    current_down.set_bck_color(VERY_LIGHT_GREY, 'normal')
-    current_down.at_unclick   = lambda: update_current_range(currents, -1)
-    current_up                = thorpy.ArrowButton('down', ARROW_BUTTON_SIZE)
-    current_up.set_bck_color(VERY_LIGHT_GREY, 'normal')
-    current_up.at_unclick     = lambda: update_current_range(currents, 1)
+    current_down              = configure_arrow_button('up', \
+                                    lambda: update_current_range(currents, -1))
+    current_up                = configure_arrow_button('down', \
+                                    lambda: update_current_range(currents, 1))
     
     powers                    = Range_controller(st.power_display_ranges, st.power_display_index)
     power_display             = thorpy.Text(f'{powers.get_value()} W/div')
     power_display.set_size(BUTTON_SIZE)
-    power_down                = thorpy.ArrowButton('up', ARROW_BUTTON_SIZE)
-    power_down.set_bck_color(VERY_LIGHT_GREY, 'normal')
-    power_down.at_unclick     = lambda: update_power_range(powers, -1)
-    power_up                  = thorpy.ArrowButton('down', ARROW_BUTTON_SIZE)
-    power_up.set_bck_color(VERY_LIGHT_GREY, 'normal')
-    power_up.at_unclick       = lambda: update_power_range(powers, 1)
+    power_down                = configure_arrow_button('up', \
+                                    lambda: update_power_range(powers, -1))
+    power_up                  = configure_arrow_button('down', \
+                                    lambda: update_power_range(powers, 1))
   
     leakage_currents          = Range_controller(st.earth_leakage_current_display_ranges, \
                                                    st.earth_leakage_current_display_index)
     leakage_current_display   = thorpy.Text(f'{leakage_currents.get_value()*1000.0} mA/div')
     leakage_current_display.set_size(BUTTON_SIZE)
-    leakage_current_down      = thorpy.ArrowButton('up', ARROW_BUTTON_SIZE)
-    leakage_current_down.set_bck_color(VERY_LIGHT_GREY, 'normal')
-    leakage_current_down.at_unclick     = lambda: update_leakage_current_range(leakage_currents, -1)
-    leakage_current_up        = thorpy.ArrowButton('down', ARROW_BUTTON_SIZE)
-    leakage_current_up.set_bck_color(VERY_LIGHT_GREY, 'normal')
-    leakage_current_up.at_unclick       = lambda: update_leakage_current_range(leakage_currents, 1)
-
+    leakage_current_down      = configure_arrow_button('up', \
+                                    lambda: update_leakage_current_range(leakage_currents, -1))
+    leakage_current_up        = configure_arrow_button('down', \
+                                    lambda: update_leakage_current_range(leakage_currents, 1))
+ 
     vertical = thorpy.TitleBox(text='Vertical', children=[button_done, \
-                 thorpy.Group(elements=[voltage_display, down_voltage, up_voltage], mode='h'), \
+                 thorpy.Group(elements=[voltage_display, voltage_down, voltage_up], mode='h'), \
                  thorpy.Group(elements=[current_display, current_down, current_up], mode='h'), \
                  thorpy.Group(elements=[power_display, power_down, power_up], mode='h'),
                  thorpy.Group(elements=[leakage_current_display, leakage_current_down, leakage_current_up], mode='h') ])
-    #vertical.set_bck_color(DARK_GREY)
     return vertical
 
 
@@ -231,26 +232,21 @@ def create_horizontal(st):
     #####
     def update_time_range(times, offset):
         times.change_range(offset)
-        display_time.set_text(f'{times.get_value()} ms/div', adapt_parent=False)
+        time_display.set_text(f'{times.get_value()} ms/div', adapt_parent=False)
         st.time_display_index = times.get_index()
         signal_other_processes(st)
 
-    button_done               = thorpy.Button('Done')
-    #button_done.set_font_color(BLACK, 'normal')
-    button_done.set_bck_color(VERY_LIGHT_GREY, 'normal')
-    button_done.set_size(BUTTON_SIZE)
-    button_done.at_unclick    = back_to_main_reaction
+    button_done = configure_button('Done', back_to_main_reaction)
 
     times                     = Range_controller(st.time_display_ranges, st.time_display_index)
-    display_time              = thorpy.Text(f'{times.get_value()} ms/div') 
-    down_time                 = thorpy.ArrowButton('left', ARROW_BUTTON_SIZE)
-    down_time.set_bck_color(VERY_LIGHT_GREY, 'normal')
-    down_time.at_unclick      = lambda: update_time_range(times, -1)
-    up_time                   = thorpy.ArrowButton('right', ARROW_BUTTON_SIZE)
-    up_time.set_bck_color(VERY_LIGHT_GREY, 'normal')
-    up_time.at_unclick        = lambda: update_time_range(times, 1)
+    time_display              = thorpy.Text(f'{times.get_value()} ms/div') 
+    time_display.set_size(BUTTON_SIZE)
+    time_down                 = configure_arrow_button('left', \
+                                    lambda: update_time_range(times, -1))
+    time_up                   = configure_arrow_button('right', \
+                                    lambda: update_time_range(times, 1))
  
-    gp = thorpy.Group(elements=[display_time, down_time, up_time], mode='h')
+    gp = thorpy.Group(elements=[time_display, time_down, time_up], mode='h')
     return thorpy.TitleBox(text='Horizontal', children=[button_done, gp])
  
 
@@ -304,6 +300,7 @@ class Texts:
             if self.colours[s] != None:
                 t.set_font_color(self.colours[s])
             self.texts.append(t)
+        self.refresh()
  
     def get(self):
         return self.texts
@@ -442,18 +439,25 @@ def get_screen_hardware_size():
     i = pygame.display.Info()
     return i.current_w, i.current_h
 
-
-def is_data_available(f, t):
+def is_data_available_linux(f, t):
     # f file object, t time in seconds
-    # unfortunately this test won't work on windows, so we return a default 'True' response
-    if sys.platform == 'linux':
-        # wait at most 't' seconds for new data to appear
-        # r will be an empty list unless there is data ready to read
-        r, _, _ = select.select( [f], [], [], t)
-        return r != []
-    else:
-        return True 
+    # wait at most 't' seconds for new data to appear
+    # r will be an empty list unless there is data ready to read
+    r, _, _ = select.select( [f], [], [], t)
+    return r != []
 
+def is_data_available_windows(f, t):
+    # unfortunately this test isn't easy to implement on windows
+    # so we return a default 'True' response
+    return True
+
+# the version of is_data_available that we will use is selected
+# once at runtime
+if sys.platform == 'linux':
+    is_data_available = is_data_available_linux
+else:
+    is_data_available = is_data_available_windows
+ 
 
 class Lines:
     # working points buffer for four lines
@@ -557,9 +561,6 @@ def main():
     # start with the main group enabled
     ui_updater = ui_groups['main'].get_updater()
 
-    # set up the initial text states
-    texts.refresh()
-
     # set up lines object
     lines = Lines()
     
@@ -567,26 +568,32 @@ def main():
     while running:
         # hack to make the cursor invisible while still responding
         # pygame.mouse.set_cursor((8,8),(0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0))
-        events = pygame.event.get()
-        for e in events:
-            if (e.type == pygame.QUIT) or (e.type == pygame.KEYDOWN and e.key == pygame.K_q):
-                running = False
+        # we update all of the texts every second, not just the datetime
         if wfs.time_to_update():
             if capturing:
                 ui_groups['datetime'].set_text(time.ctime())
             texts.refresh()
         # ALWAYS read new data, even if we are not capturing it, to keep the incoming data
-        # pipeline flowing. If the read rate doesn't keep up with the pipe, then we see 
+        # pipeline flowing. If the read rate doesn't keep up with the pipe, then we will see 
         # artifacts on screen. Check the BUFFER led on PCB if performance problems are
         # suspected here.
-        # Also, control refresh speed when not capturing, by waiting for new data.
+        # The read_lines() function also implicitly manages display refresh speed when not
+        # capturing, by waiting for a definite time for new data.
         got_new_frame = lines.read_lines(sys.stdin, capturing, wfs)
         # check if we should refresh the main display
-        # note that for shorter time axis, we don't refresh until the first condition is true
+        # note that when we are capturing we only refresh when we have something new 
         if (capturing and got_new_frame) or not capturing:
             redraw_lines(lines, screen, background_surface) 
             ui_groups['datetime'].draw()
+        # here we process mouse/touch/keyboard events.
+        events = pygame.event.get()
+        for e in events:
+            if (e.type == pygame.QUIT) or (e.type == pygame.KEYDOWN and e.key == pygame.K_q):
+                running = False
+        # ui_updater.update() is an expensive function, so we use the simplest possible
+        # thorpy theme for performance
         ui_updater.update(events=events)
+        # push all of our updated work into the active display framebuffer
         pygame.display.flip()
 
     pygame.quit()

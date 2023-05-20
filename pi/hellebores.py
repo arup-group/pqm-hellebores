@@ -82,6 +82,8 @@ def signal_other_processes(st):
     if sys.platform == 'linux':
         # all running processes in the form 'python3 ./[something].py' will be signalled
         os.system("pkill --signal=SIGUSR1 -f 'python3 \./.*\.py'")
+    else:
+        print(f"hellebores.py: don't know how to send SIGUSR1 on {sys.platform}", file=sys.stderr)
     # update the background, in case the graticule has changed
     draw_background(st)
 

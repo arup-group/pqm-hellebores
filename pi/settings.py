@@ -124,7 +124,7 @@ class Settings():
         except:
             print("settings.py, get_settings(): couldn't read settings.json, regenerating...", file=sys.stderr)
             js = json.loads(default_settings)
-            self.save_settings(js)
+            self.save_settings()
         return js
 
 

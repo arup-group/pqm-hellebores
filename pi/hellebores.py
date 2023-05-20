@@ -269,12 +269,12 @@ def mode_reaction():
    pass
 
 def horizontal_reaction():
-   global ui_groups, ui_updater
-   ui_updater = ui_groups['horizontal'].get_updater() 
+   global ui_groups, ui_current_updater
+   ui_current_updater = ui_groups['horizontal'].get_updater() 
 
 def vertical_reaction():
-   global ui_groups, ui_updater
-   ui_updater = ui_groups['vertical'].get_updater() 
+   global ui_groups, ui_current_updater
+   ui_current_updater = ui_groups['vertical'].get_updater() 
 
 
 def trigger_reaction():
@@ -285,8 +285,8 @@ def options_reaction():
 
 
 def back_to_main_reaction():
-    global ui_groups, ui_updater
-    ui_updater = ui_groups['main'].get_updater() 
+    global ui_groups, ui_current_updater
+    ui_current_updater = ui_groups['main'].get_updater() 
 
 
 class Texts:
@@ -528,7 +528,7 @@ class Lines:
 
 
 def main():
-    global st, capturing, ui_groups, ui_updater
+    global st, capturing, ui_groups, ui_current_updater
 
     # initialise pygame
     pygame.init()
@@ -561,7 +561,7 @@ def main():
     ui_groups = create_ui_groups(st, texts)
 
     # start with the main group enabled
-    ui_updater = ui_groups['main'].get_updater()
+    ui_current_updater = ui_groups['main'].get_updater()
 
     # set up lines object
     lines = Lines()
@@ -592,9 +592,9 @@ def main():
         for e in events:
             if (e.type == pygame.QUIT) or (e.type == pygame.KEYDOWN and e.key == pygame.K_q):
                 running = False
-        # ui_updater.update() is an expensive function, so we use the simplest possible
+        # ui_current_updater.update() is an expensive function, so we use the simplest possible
         # thorpy theme for performance
-        ui_updater.update(events=events)
+        ui_current_updater.update(events=events)
         # push all of our updated work into the active display framebuffer
         pygame.display.flip()
 

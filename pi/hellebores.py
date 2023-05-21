@@ -10,7 +10,6 @@
 #
 
 import thorpy
-import math
 import pygame
 import time
 import sys
@@ -111,7 +110,6 @@ class Range_controller:
             self.range_selector = max(0, self.range_selector-1)
         else:
             sys.stderr.write("Range_controller.change_range: can only change range by +1 or -1.") 
-
 
 
 def create_datetime():
@@ -240,21 +238,58 @@ def create_horizontal(st):
 
     button_done = configure_button('Done', back_to_main_reaction)
 
-    times                     = Range_controller(st.time_display_ranges, st.time_display_index)
-    time_display              = thorpy.Text(f'{times.get_value()} ms/div') 
+    times               = Range_controller(st.time_display_ranges, st.time_display_index)
+    time_display        = thorpy.Text(f'{times.get_value()} ms/div') 
     time_display.set_size(BUTTON_SIZE)
-    time_down                 = configure_arrow_button('left', \
-                                    lambda: update_time_range(times, -1))
-    time_up                   = configure_arrow_button('right', \
-                                    lambda: update_time_range(times, 1))
+    time_down           = configure_arrow_button('left', \
+                              lambda: update_time_range(times, -1))
+    time_up             = configure_arrow_button('right', \
+                              lambda: update_time_range(times, 1))
  
-    gp = thorpy.Group(elements=[time_display, time_down, time_up], mode='h')
-    return thorpy.TitleBox(text='Horizontal', children=[button_done, gp])
+    return thorpy.TitleBox(text='Horizontal', children=[button_done, \
+             thorpy.Group(elements=[time_display, time_down, time_up], mode='h')])
  
+
+def create_trigger(st):
+    #####
+    # Trigger controls
+    #####
+    def update_trigger_position(trigger_positions, offset):
+        trigger_positions.change_range(offset)
+        trigger_position_display.set_text(f'{trigger_positions.get_value()} div', adapt_parent=False)
+        st.trigger_position_index = trigger_positions.get_index()
+        st.time_axis_pre_trigger_divisions = st.trigger_position_index
+        draw_background(st)
+        signal_other_processes(st)
+
+    def update_trigger_level(trigger_levels, offset):
+        trigger_levels.change_range(offset)
+        trigger_level_display.set_text(f'{trigger_levels.get_value()} div', adapt_parent=False)
+        st.trigger_level_index = trigger_levels.get_index()
+        signal_other_processes(st)
+
+
+    button_done = configure_button('Done', back_to_main_reaction)
+
+    trigger_positions        = Range_controller(range(st.time_axis_divisions), st.trigger_position)
+    trigger_position_display = thorpy.Text(f'{trigger_positions.get_value()} div')
+    trigger_position_left    = configure_arrow_button('left', lambda: update_trigger_position(trigger_positions, -1))
+    trigger_position_right   = configure_arrow_button('right', lambda: update_trigger_position(trigger_positions, 1))
+    # need to add functions for level and channel likewise
+    trigger_levels           = Range_controller(st.trigger_levels, st.trigger_level_index)
+    trigger_level_display    = thorpy.Text(f'{trigger_levels.get_value()} div')
+    trigger_level_up         = configure_arrow_button('up', lambda: update_trigger_level(trigger_levels, 1))
+    trigger_level_down       = configure_arrow_button('down', lambda: update_trigger_level(trigger_levels, -1))
+    trigger_channel          = thorpy.TogglablesPool('Channel', ('Voltage', 'Current', 'Power', 'Leakage'), 'Voltage', togglable_type='radio')
+    trigger_direction        = thorpy.TogglablesPool('Direction', ('Rising', 'Falling'), 'Rising', togglable_type='radio')
+    return thorpy.TitleBox(text='Trigger', children=[button_done, \
+        thorpy.Group(elements=[trigger_position_display, trigger_position_left, trigger_position_right], mode='h'), \
+        thorpy.Group(elements=[trigger_level_display, trigger_level_up, trigger_level_down], mode='h'), \
+        thorpy.Group(elements=[trigger_channel, trigger_direction], mode='h')])
+
 
 # More UI is needed for the following:
 #
-# Trigger settings
 # Measurements-1 (summary)
 # Measurements-2 (harmonics)
 # Wifi setting
@@ -262,7 +297,6 @@ def create_horizontal(st):
 # Software update, rollback and Raspberry Pi OS update
 # About (including software version, kernel version, uuid of Pi and Pico)
 # Exit to desktop
-
 
 
 def mode_reaction():
@@ -276,9 +310,9 @@ def vertical_reaction():
    global ui_groups, ui_current_updater
    ui_current_updater = ui_groups['vertical'].get_updater() 
 
-
 def trigger_reaction():
-   pass
+   global ui_groups, ui_current_updater
+   ui_current_updater = ui_groups['trigger'].get_updater()
 
 def options_reaction():
    pass
@@ -327,7 +361,6 @@ class Texts:
         self.texts[item].set_text(value)
 
 
-
 def create_ui_groups(st, texts):
  
     ui_groups = {}
@@ -349,6 +382,10 @@ def create_ui_groups(st, texts):
     ui_horizontal.set_topleft(*SETTINGS_BOX_POSITION)
     ui_groups['horizontal'] = thorpy.Group(elements=[ui_main, ui_horizontal], mode=None)
 
+    ui_trigger = create_trigger(st)
+    ui_trigger.set_topleft(*SETTINGS_BOX_POSITION)
+    ui_groups['trigger'] = thorpy.Group(elements=[ui_main, ui_trigger], mode=None)
+
     return ui_groups
 
 
@@ -368,6 +405,7 @@ def options_reaction():
 
 
 def draw_background(st):
+    global background_surface
     xmax = SCOPE_BOX_SIZE[0] - 1
     ymax = SCOPE_BOX_SIZE[1] - 1
 
@@ -528,7 +566,7 @@ class Lines:
 
 
 def main():
-    global st, capturing, ui_groups, ui_current_updater
+    global st, capturing, ui_groups, ui_current_updater, background_surface
 
     # initialise pygame
     pygame.init()

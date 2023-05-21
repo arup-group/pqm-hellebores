@@ -73,7 +73,9 @@ class Settings():
         self.scale_c3                                  = js['scale_c3']
         self.trigger_channel                           = js['trigger_channel']
         self.trigger_direction                         = js['trigger_direction']
-        self.trigger_threshold                         = js['trigger_threshold']
+        self.trigger_levels                            = js['trigger_levels']
+        self.trigger_level_index                       = js['trigger_level_index']
+        self.trigger_position                          = js['trigger_position']
         # now settings that are derived from the above
         self.set_derived_settings()
 
@@ -111,7 +113,9 @@ class Settings():
         js['scale_c3']                                 = self.scale_c3
         js['trigger_channel']                          = self.trigger_channel
         js['trigger_direction']                        = self.trigger_direction
-        js['trigger_threshold']                        = self.trigger_threshold
+        js['trigger_levels']                           = self.trigger_levels
+        js['trigger_level_index']                      = self.trigger_level_index
+        js['trigger_position']                         = self.trigger_position
         # return the resulting json dictionary 
         return js 
  
@@ -244,7 +248,37 @@ default_settings = '''
     "scale_c3": 0.0489,
     "trigger_channel": 0,
     "trigger_direction": "rising",
-    "trigger_threshold": 0.0
+    "trigger_levels": [
+        -1000.0,
+        -500.0,
+        -200.0,
+        -100.0,
+        -50.0,
+        -20.0,
+        -10.0,
+        -5.0,
+        -2.0,
+        -1.0,
+        -0.5,
+        -0.2,
+        -0.1,
+        0.0,
+        0.1,
+        0.2,
+        0.5,
+        1.0,
+        2.0,
+        5.0,
+        10.0,
+        20.0,
+        50.0,
+        100.0,
+        200.0,
+        500.0,
+        1000.0
+    ],
+    "trigger_level_index": 13,
+    "trigger_position": 5
 }
 '''
 

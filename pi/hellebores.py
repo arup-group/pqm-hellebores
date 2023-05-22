@@ -254,11 +254,16 @@ def create_trigger(st):
     #####
     # Trigger controls
     #####
-    def update_trigger_position(trigger_positions, offset):
-        trigger_positions.change_range(offset)
-        trigger_position_display.set_text(f'{trigger_positions.get_value()} div', adapt_parent=False)
-        st.trigger_position_index = trigger_positions.get_index()
-        st.time_axis_pre_trigger_divisions = st.trigger_position_index
+    # not working very well
+    # update with simple multi-button selection of trigger position horizontally (immediate action)
+    # and toggle selection of rising or falling trigger.
+    # and selection buttons for freerun, sync and inrush trigger.
+    # in freerun mode, trigger source is set to -1
+    # in sync mode, trigger source is set to ch0 and level to 0.0 (Volts), direction rising
+    # in inrush single mode, trigger source is set to ch3 and level to 0.1 (Watts), direction rising
+    # inrush mode causes waveform update to stop on first trigger.
+    def update_trigger_position(position):
+        st.time_axis_pre_trigger_divisions = position
         draw_background(st)
         signal_other_processes(st)
 
@@ -268,22 +273,28 @@ def create_trigger(st):
         st.trigger_level_index = trigger_levels.get_index()
         signal_other_processes(st)
 
+    def trigger_apply_reaction():
+        st.time_axis_pre_trigger_divisions = trigger_position.get_value()
+        st.trigger_position = trigger_position.get_value()
+        st.trigger_level_index = trigger_levels.get_index()
+        draw_background(st)
+        signal_other_processes(st)
+
 
     button_done = configure_button('Done', back_to_main_reaction)
+    button_apply = configure_button('Apply', trigger_apply_reaction)
 
-    trigger_positions        = Range_controller(range(st.time_axis_divisions), st.trigger_position)
-    trigger_position_display = thorpy.Text(f'{trigger_positions.get_value()} div')
-    trigger_position_left    = configure_arrow_button('left', lambda: update_trigger_position(trigger_positions, -1))
-    trigger_position_right   = configure_arrow_button('right', lambda: update_trigger_position(trigger_positions, 1))
-    # need to add functions for level and channel likewise
+    #trigger_positions = [ configure_button(str(i), lambda: update_trigger_position(i)) for i in range(1, st.time_axis_divisions) ]
+
+    trigger_position         = thorpy.SliderWithText('Position', 1, st.time_axis_divisions, st.trigger_position, \
+                                   200, mode='h') 
     trigger_levels           = Range_controller(st.trigger_levels, st.trigger_level_index)
     trigger_level_display    = thorpy.Text(f'{trigger_levels.get_value()} div')
     trigger_level_up         = configure_arrow_button('up', lambda: update_trigger_level(trigger_levels, 1))
     trigger_level_down       = configure_arrow_button('down', lambda: update_trigger_level(trigger_levels, -1))
     trigger_channel          = thorpy.TogglablesPool('Channel', ('Voltage', 'Current', 'Power', 'Leakage'), 'Voltage', togglable_type='radio')
     trigger_direction        = thorpy.TogglablesPool('Direction', ('Rising', 'Falling'), 'Rising', togglable_type='radio')
-    return thorpy.TitleBox(text='Trigger', children=[button_done, \
-        thorpy.Group(elements=[trigger_position_display, trigger_position_left, trigger_position_right], mode='h'), \
+    return thorpy.TitleBox(text='Trigger', children=[button_done, button_apply, trigger_position, \
         thorpy.Group(elements=[trigger_level_display, trigger_level_up, trigger_level_down], mode='h'), \
         thorpy.Group(elements=[trigger_channel, trigger_direction], mode='h')])
 
@@ -297,6 +308,34 @@ def create_trigger(st):
 # Software update, rollback and Raspberry Pi OS update
 # About (including software version, kernel version, uuid of Pi and Pico)
 # Exit to desktop
+
+def create_ui_groups(st, texts):
+ 
+    ui_groups = {}
+
+    ui_datetime = create_datetime()[0]
+    ui_datetime.set_topleft(0,0)
+    ui_groups['datetime'] = ui_datetime
+ 
+    ui_main = create_main_controls(texts)
+    ui_main.set_size(CONTROLS_BOX_SIZE)
+    ui_main.set_topleft(*CONTROLS_BOX_POSITION)
+    ui_groups['main'] = thorpy.Group(elements=[ui_main], mode=None)
+
+    ui_vertical = create_vertical(st)
+    ui_vertical.set_topleft(*SETTINGS_BOX_POSITION)
+    ui_groups['vertical'] = thorpy.Group(elements=[ui_main, ui_vertical], mode=None)
+
+    ui_horizontal = create_horizontal(st)
+    ui_horizontal.set_topleft(*SETTINGS_BOX_POSITION)
+    ui_groups['horizontal'] = thorpy.Group(elements=[ui_main, ui_horizontal], mode=None)
+
+    ui_trigger = create_trigger(st)
+    ui_trigger.set_topleft(*SETTINGS_BOX_POSITION)
+    ui_groups['trigger'] = thorpy.Group(elements=[ui_main, ui_trigger], mode=None)
+
+    return ui_groups
+
 
 
 def mode_reaction():
@@ -359,34 +398,6 @@ class Texts:
     # update text message string
     def set(self, item, value):
         self.texts[item].set_text(value)
-
-
-def create_ui_groups(st, texts):
- 
-    ui_groups = {}
-
-    ui_datetime = create_datetime()[0]
-    ui_datetime.set_topleft(0,0)
-    ui_groups['datetime'] = ui_datetime
- 
-    ui_main = create_main_controls(texts)
-    ui_main.set_size(CONTROLS_BOX_SIZE)
-    ui_main.set_topleft(*CONTROLS_BOX_POSITION)
-    ui_groups['main'] = thorpy.Group(elements=[ui_main], mode=None)
-
-    ui_vertical = create_vertical(st)
-    ui_vertical.set_topleft(*SETTINGS_BOX_POSITION)
-    ui_groups['vertical'] = thorpy.Group(elements=[ui_main, ui_vertical], mode=None)
-
-    ui_horizontal = create_horizontal(st)
-    ui_horizontal.set_topleft(*SETTINGS_BOX_POSITION)
-    ui_groups['horizontal'] = thorpy.Group(elements=[ui_main, ui_horizontal], mode=None)
-
-    ui_trigger = create_trigger(st)
-    ui_trigger.set_topleft(*SETTINGS_BOX_POSITION)
-    ui_groups['trigger'] = thorpy.Group(elements=[ui_main, ui_trigger], mode=None)
-
-    return ui_groups
 
 
 def start_stop_reaction(texts):
@@ -604,6 +615,7 @@ def main():
     # set up lines object
     lines = Lines()
     
+
     # main loop
     while running:
         # hack to make the cursor invisible while still responding
@@ -635,7 +647,6 @@ def main():
         ui_current_updater.update(events=events)
         # push all of our updated work into the active display framebuffer
         pygame.display.flip()
-
     pygame.quit()
 
 

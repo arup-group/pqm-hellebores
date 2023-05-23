@@ -74,9 +74,9 @@ class Settings():
         self.scale_c3                                  = js['scale_c3']
         self.trigger_channel                           = js['trigger_channel']
         self.trigger_direction                         = js['trigger_direction']
-        self.trigger_levels                            = js['trigger_levels']
-        self.trigger_level_index                       = js['trigger_level_index']
         self.trigger_position                          = js['trigger_position']
+        self.trigger_level                             = js['trigger_level']
+        self.trigger_condition                         = js['trigger_condition']
         # now settings that are derived from the above
         self.set_derived_settings()
 
@@ -114,9 +114,9 @@ class Settings():
         js['scale_c3']                                 = self.scale_c3
         js['trigger_channel']                          = self.trigger_channel
         js['trigger_direction']                        = self.trigger_direction
-        js['trigger_levels']                           = self.trigger_levels
-        js['trigger_level_index']                      = self.trigger_level_index
         js['trigger_position']                         = self.trigger_position
+        js['trigger_level']                            = self.trigger_level
+        js['trigger_condition']                        = self.trigger_condition
         # return the resulting json dictionary 
         return js 
  

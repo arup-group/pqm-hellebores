@@ -254,50 +254,68 @@ def create_trigger(st):
     #####
     # Trigger controls
     #####
-    # not working very well
-    # update with simple multi-button selection of trigger position horizontally (immediate action)
-    # and toggle selection of rising or falling trigger.
-    # and selection buttons for freerun, sync and inrush trigger.
     # in freerun mode, trigger source is set to -1
     # in sync mode, trigger source is set to ch0 and level to 0.0 (Volts), direction rising
     # in inrush single mode, trigger source is set to ch3 and level to 0.1 (Watts), direction rising
     # inrush mode causes waveform update to stop on first trigger.
-    def update_trigger_position(position):
+    def update_trigger_position(position, status):
         st.time_axis_pre_trigger_divisions = position
         draw_background(st)
+        update_trigger_status(status)
         signal_other_processes(st)
 
-    def update_trigger_level(trigger_levels, offset):
-        trigger_levels.change_range(offset)
-        trigger_level_display.set_text(f'{trigger_levels.get_value()} div', adapt_parent=False)
-        st.trigger_level_index = trigger_levels.get_index()
+    def update_trigger_direction(direction, status):
+        st.trigger_direction = direction
+        update_trigger_status(status)
         signal_other_processes(st)
 
-    def trigger_apply_reaction():
-        st.time_axis_pre_trigger_divisions = trigger_position.get_value()
-        st.trigger_position = trigger_position.get_value()
-        st.trigger_level_index = trigger_levels.get_index()
-        draw_background(st)
+    def update_trigger_condition(condition, status):
+        if condition == 'freerun':
+            st.trigger_channel = -1
+            draw_background(st)
+        elif condition == 'sync':
+            st.trigger_channel = 0
+            st.trigger_level = 0.0
+        elif condition == 'inrush':
+            st.trigger_channel = 2
+            st.trigger_level = 0.1
+        else:
+            print('hellebores.py: update_trigger_condition(), invalid condition requested.', sys.stderr)
+        st.trigger_condition = condition
+        update_trigger_status(status)
         signal_other_processes(st)
 
+    def update_trigger_status(status):
+        if st.trigger_condition == 'freerun':
+            status.set_text(f'Free-run: the trigger is disabled.', adapt_parent=False)
+        elif st.trigger_condition == 'sync':
+            status.set_text(f'Sync: the trigger is enabled to find the {st.trigger_direction} edge of the voltage signal at magitude 0.0V.', adapt_parent=False)
+        elif st.trigger_condition == 'inrush':
+            status.set_text(f'Inrush: the trigger is enabled for single-shot current detection, magnitude +/- {st.trigger_level}A. Press Run/Stop to reset.', adapt_parent=False)
+        else:
+            print('hellebores.py: update_trigger_status(), invalid trigger_condition requested.', sys.stderr)
+        status.set_max_text_width(280)
 
+    # fill with temporary text so that the correct size is allocated for the enclosing box
+    text_trigger_status = thorpy.Text('Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.')
+    text_trigger_status.set_max_text_width(280)
     button_done = configure_button('Done', back_to_main_reaction)
-    button_apply = configure_button('Apply', trigger_apply_reaction)
-
-    #trigger_positions = [ configure_button(str(i), lambda: update_trigger_position(i)) for i in range(1, st.time_axis_divisions) ]
-
-    trigger_position         = thorpy.SliderWithText('Position', 1, st.time_axis_divisions, st.trigger_position, \
-                                   200, mode='h') 
-    trigger_levels           = Range_controller(st.trigger_levels, st.trigger_level_index)
-    trigger_level_display    = thorpy.Text(f'{trigger_levels.get_value()} div')
-    trigger_level_up         = configure_arrow_button('up', lambda: update_trigger_level(trigger_levels, 1))
-    trigger_level_down       = configure_arrow_button('down', lambda: update_trigger_level(trigger_levels, -1))
-    trigger_channel          = thorpy.TogglablesPool('Channel', ('Voltage', 'Current', 'Power', 'Leakage'), 'Voltage', togglable_type='radio')
-    trigger_direction        = thorpy.TogglablesPool('Direction', ('Rising', 'Falling'), 'Rising', togglable_type='radio')
-    return thorpy.TitleBox(text='Trigger', children=[button_done, button_apply, trigger_position, \
-        thorpy.Group(elements=[trigger_level_display, trigger_level_up, trigger_level_down], mode='h'), \
-        thorpy.Group(elements=[trigger_channel, trigger_direction], mode='h')])
-
+    button_freerun = configure_button('Free-run', lambda: update_trigger_condition('freerun', text_trigger_status))
+    button_sync = configure_button('Sync', lambda: update_trigger_condition('sync', text_trigger_status))
+    button_inrush = configure_button('Inrush', lambda: update_trigger_condition('inrush', text_trigger_status))
+    button_left = configure_button('Left', lambda: update_trigger_position(2, text_trigger_status))
+    button_centre = configure_button('Centre', lambda: update_trigger_position(st.time_axis_divisions // 2, text_trigger_status))
+    button_right = configure_button('Right', lambda: update_trigger_position(st.time_axis_divisions - 2, text_trigger_status))
+    button_rising = configure_button('Rising', lambda: update_trigger_direction('rising', text_trigger_status))
+    button_falling = configure_button('Falling', lambda: update_trigger_direction('falling', text_trigger_status))
+    trigger_box = thorpy.TitleBox(text='Trigger', children=[button_done, \
+        thorpy.Group(elements=[button_freerun, button_sync, button_inrush], mode='h'), \
+        thorpy.Group(elements=[button_left, button_centre, button_right], mode='h'), \
+        thorpy.Group(elements=[button_rising, button_falling], mode='h'), \
+        text_trigger_status]) 
+    # put the text status in after forming the box, so that the box dimensions are not affected by the text.
+    update_trigger_status(text_trigger_status)
+    return trigger_box
 
 # More UI is needed for the following:
 #
@@ -428,7 +446,7 @@ def draw_background(st):
     for dx in range(1, st.time_axis_divisions):
         x = st.horizontal_pixels_per_division * dx
         # mark the trigger position (t=0) with a thicker line
-        if dx == st.time_axis_pre_trigger_divisions:
+        if (dx == st.time_axis_pre_trigger_divisions) and (st.trigger_channel != -1):
             lc = WHITE
         else:
             lc = LIGHT_GREY

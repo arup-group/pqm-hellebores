@@ -132,7 +132,7 @@ def main():
         # 'fired'.
         while (not triggered) and (hc >= st.holdoff_samples) and (not buf.drained()):
         #while not triggered and not buf.drained():
-            gc = trigger_gate(buf, st.trigger_channel, st.trigger_levels[st.trigger_level_index],\
+            gc = trigger_gate(buf, st.trigger_channel, st.trigger_level,\
                                   st.trigger_hysteresis, st.trigger_gate_transition, gc)
             if gc == st.trigger_gate_length:
                 # trigger qualifications (ie entire hysteresis pattern) has been met!

@@ -269,28 +269,28 @@ def create_trigger(st):
         update_trigger_status(status)
         signal_other_processes(st)
 
-    def update_trigger_condition(condition, status):
-        if condition == 'freerun':
+    def update_trigger_mode(mode, status):
+        if mode == 'freerun':
             st.trigger_channel = -1
             draw_background(st)
-        elif condition == 'sync':
+        elif mode == 'sync':
             st.trigger_channel = 0
             st.trigger_level = 0.0
-        elif condition == 'inrush':
+        elif mode == 'inrush':
             st.trigger_channel = 2
             st.trigger_level = 0.1
         else:
             print('hellebores.py: update_trigger_condition(), invalid condition requested.', sys.stderr)
-        st.trigger_condition = condition
+        st.trigger_mode = mode
         update_trigger_status(status)
         signal_other_processes(st)
 
     def update_trigger_status(status):
-        if st.trigger_condition == 'freerun':
+        if st.trigger_mode == 'freerun':
             status.set_text(f'Free-run: the trigger is disabled.', adapt_parent=False)
-        elif st.trigger_condition == 'sync':
+        elif st.trigger_mode == 'sync':
             status.set_text(f'Sync: the trigger is enabled to find the {st.trigger_direction} edge of the voltage signal at magitude 0.0V.', adapt_parent=False)
-        elif st.trigger_condition == 'inrush':
+        elif st.trigger_mode == 'inrush':
             status.set_text(f'Inrush: the trigger is enabled for single-shot current detection, magnitude +/- {st.trigger_level}A. Press Run/Stop to reset.', adapt_parent=False)
         else:
             print('hellebores.py: update_trigger_status(), invalid trigger_condition requested.', sys.stderr)
@@ -300,9 +300,9 @@ def create_trigger(st):
     text_trigger_status = thorpy.Text('Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.')
     text_trigger_status.set_max_text_width(280)
     button_done = configure_button('Done', back_to_main_reaction)
-    button_freerun = configure_button('Free-run', lambda: update_trigger_condition('freerun', text_trigger_status))
-    button_sync = configure_button('Sync', lambda: update_trigger_condition('sync', text_trigger_status))
-    button_inrush = configure_button('Inrush', lambda: update_trigger_condition('inrush', text_trigger_status))
+    button_freerun = configure_button('Free-run', lambda: update_trigger_mode('freerun', text_trigger_status))
+    button_sync = configure_button('Sync', lambda: update_trigger_mode('sync', text_trigger_status))
+    button_inrush = configure_button('Inrush', lambda: update_trigger_mode('inrush', text_trigger_status))
     button_left = configure_button('Left', lambda: update_trigger_position(2, text_trigger_status))
     button_centre = configure_button('Centre', lambda: update_trigger_position(st.time_axis_divisions // 2, text_trigger_status))
     button_right = configure_button('Right', lambda: update_trigger_position(st.time_axis_divisions - 2, text_trigger_status))

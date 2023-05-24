@@ -1,6 +1,6 @@
 {
     "frequency": 49.98,
-    "sample_rate": 15625,
+    "sample_rate": 7812.5,
     "time_axis_divisions": 10,
     "time_axis_pre_trigger_divisions": 5,
     "vertical_axis_divisions": 8,
@@ -78,7 +78,7 @@
     "scale_c3": 0.0489,
     "trigger_channel": 0,
     "trigger_direction": "rising",
-    "trigger_position": 5,
     "trigger_level": 0.0,
-    "trigger_condition": "sync"
+    "trigger_position": 5,
+    "trigger_mode": "sync"
 }

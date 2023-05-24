@@ -74,9 +74,9 @@ class Settings():
         self.scale_c3                                  = js['scale_c3']
         self.trigger_channel                           = js['trigger_channel']
         self.trigger_direction                         = js['trigger_direction']
-        self.trigger_position                          = js['trigger_position']
         self.trigger_level                             = js['trigger_level']
-        self.trigger_condition                         = js['trigger_condition']
+        self.trigger_position                          = js['trigger_position']
+        self.trigger_mode                              = js['trigger_mode']
         # now settings that are derived from the above
         self.set_derived_settings()
 
@@ -114,9 +114,9 @@ class Settings():
         js['scale_c3']                                 = self.scale_c3
         js['trigger_channel']                          = self.trigger_channel
         js['trigger_direction']                        = self.trigger_direction
-        js['trigger_position']                         = self.trigger_position
         js['trigger_level']                            = self.trigger_level
-        js['trigger_condition']                        = self.trigger_condition
+        js['trigger_position']                         = self.trigger_position
+        js['trigger_mode']                             = self.trigger_mode
         # return the resulting json dictionary 
         return js 
  
@@ -249,37 +249,9 @@ default_settings = '''
     "scale_c3": 0.0489,
     "trigger_channel": 0,
     "trigger_direction": "rising",
-    "trigger_levels": [
-        -1000.0,
-        -500.0,
-        -200.0,
-        -100.0,
-        -50.0,
-        -20.0,
-        -10.0,
-        -5.0,
-        -2.0,
-        -1.0,
-        -0.5,
-        -0.2,
-        -0.1,
-        0.0,
-        0.1,
-        0.2,
-        0.5,
-        1.0,
-        2.0,
-        5.0,
-        10.0,
-        20.0,
-        50.0,
-        100.0,
-        200.0,
-        500.0,
-        1000.0
-    ],
-    "trigger_level_index": 13,
-    "trigger_position": 5
+    "trigger_level": 0.0,
+    "trigger_position": 5,
+    "trigger_mode": "sync"
 }
 '''
 

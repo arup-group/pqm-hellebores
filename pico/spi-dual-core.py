@@ -81,9 +81,9 @@ def setup_adc(spi, cs, reset):
     # XXXXXXXX XXXX---- --------
     # channel ->   3332 22111000
     G = { '32x':0b101, '16x':0b100, '8x':0b011, '4x':0b010, '2x':0b001, '1x':0b000 } 
-    g0 = G['32x']    # differential current
-    g1 = G['2x']     # current 1
-    g2 = G['2x']     # current 2
+    g0 = G['1x']     # differential current
+    g1 = G['1x']     # current 1
+    g2 = G['1x']     # current 2
     g3 = G['1x']     # voltage
     gains = (g3 << 9) + (g2 << 6) + (g1 << 3) + g0 
     bs = [0x00, gains >> 8, gains & 0b11111111]

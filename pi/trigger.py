@@ -84,13 +84,28 @@ def interpolate(s1, s2, frac):
     return [ s1[i]*frac + s2[i]*(1-frac) for i in [0,1,2,3] ]
 
 
+
+FREERUN = 1
+TRIGGER = 2
+
+def reset():
+    global st, mode, buf
+    if st.trigger_mode == 'freerun':
+        mode = FREERUN
+    else:
+        mode = TRIGGER
+    buf.clear()
+
+
+
 def main():
+    global st, mode, buf
     # we make a buffer to temporarily hold a history of samples -- this allows us to output
     # a frame of waveform that includes samples 'before the trigger'
     buf = Buffer()
 
     # load settings into st object
-    st = settings.Settings(buf.clear)
+    st = settings.Settings(reset)
 
     # output counter, number of samples output in current frame
     oc = 0
@@ -103,12 +118,17 @@ def main():
     # flag for controlling when output is required
     triggered = False
 
+   
+    reset() 
+    # new approach shifts time axis only without changing y axis values.
+    # less computation, we could further reduce by retaining y values as text.
+
     # read data from standard input
     for line in sys.stdin:
         #
         # SPECIAL CASE, NO TRIGGER
         #
-        if st.trigger_channel == -1:
+        if mode == FREERUN:
             # just pass the data through unaltered
             sys.stdout.write(line)
             continue
@@ -150,9 +170,9 @@ def main():
                     interpolation_fraction = s1 / (s1 - s0)
                 # figure out the 'pre-trigger' index and set the output pointer to that position
                 # output to stdout will start from this position in the buffer
-                buf.shift_pointer(-st.pre_trigger_samples)
-                # set the holdoff counter and output counter to zero
-                hc, oc = (0, 0)
+                buf.shift_pointer(-st.pre_trigger_samples+1)
+                # reset the holdoff counter and output counters
+                hc, oc = (0, 1)
             else:
                 # move on to the next sample
                 buf.drain()
@@ -162,13 +182,16 @@ def main():
         #
         # if triggered, print out all outstanding samples up to a count of st.frame_samples
         while triggered and not buf.drained():
-            ip = interpolate(buf.peek_previous()[1:], buf.peek()[1:], interpolation_fraction)
-            output = (f'{st.interval*(oc-st.pre_trigger_samples) :12.4f} {ip[0] :10.3f} '
-                      f'{ip[1] :10.5f} {ip[2] :10.3f} {ip[3] :10.7f}')
+            #ip = interpolate(buf.peek_previous()[1:], buf.peek()[1:], interpolation_fraction)
+            #output = (f'{st.interval*(oc-st.pre_trigger_samples) :12.4f} {ip[0] :10.3f} '
+            #          f'{ip[1] :10.5f} {ip[2] :10.3f} {ip[3] :10.7f}')
+            o = buf.peek()
+            output = (f'{st.interval*(oc-st.pre_trigger_samples+interpolation_fraction) :12.4f} {o[1] :10.3f} {o[2] :10.5f} {o[3] :10.3f} {o[4] :10.7f}')
             # if we've finished a whole frame of data, mark the last sample and clear the trigger
             if oc >= st.frame_samples:
                 print(output + ' END_FRAME')
-                # this pushes everything we've printed recently out of the system buffers
+                # this pushes everything we've printed recently out of the runtime and into system 
+                # buffers
                 sys.stdout.flush()
                 triggered = False
                 gc = 0

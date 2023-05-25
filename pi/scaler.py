@@ -31,7 +31,10 @@ def main():
             if st.current_axis_per_division <= 0.1:
                 current = (from_twos_complement(cs[1]) + st.adc_offset_trim_c1) * st.scale_c1
             else:
-                current = (from_twos_complement(cs[2]) + st.adc_offset_trim_c2) * st.scale_c2
+                #current = (from_twos_complement(cs[2]) + st.adc_offset_trim_c2) * st.scale_c2
+                # *2 hack here for prototype only, due to having 0.5 ohm sense resistor
+                # instead of 1 ohm per the design.
+                current = (from_twos_complement(cs[2]) + st.adc_offset_trim_c2) * st.scale_c2 * 2
             power = voltage * current
             leakage_current = (from_twos_complement(cs[0]) + st.adc_offset_trim_c0) * st.scale_c0 
 

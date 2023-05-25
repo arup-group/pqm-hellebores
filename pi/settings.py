@@ -232,7 +232,8 @@ default_settings = '''
         0.0005,
         0.001,
         0.002,
-        0.005
+        0.005,
+        0.01
     ],
     "earth_leakage_current_display_index": 4,
     "adc_offset_trim_c0": 23,
@@ -243,9 +244,9 @@ default_settings = '''
     "adc_amplifier_gain_c1": 2,
     "adc_amplifier_gain_c2": 2,
     "adc_amplifier_gain_c3": 1,
-    "scale_c0": 1.27e-08,
-    "scale_c1": 1.22e-05,
-    "scale_c2": 0.00061,
+    "scale_c0": -4.08e-07,
+    "scale_c1": 2.44e-05,
+    "scale_c2": 0.001017,
     "scale_c3": 0.0489,
     "trigger_channel": 0,
     "trigger_direction": "rising",

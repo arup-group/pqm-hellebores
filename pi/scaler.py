@@ -25,8 +25,9 @@ def main():
             cs = [int(w.strip(), base=16) for w in line.split()][1:]
             # calculate floating point values, using appropriate scaling factors
             voltage = (from_twos_complement(cs[3]) + st.adc_offset_trim_c3) * st.scale_c3
-            # if st.current_axis_per_division is less than or equal to 0.1 A/div, we use channel 1 for
-            # current measurements. If it is more than 0.1 A/div, we use channel 2.
+            # if st.current_axis_per_division is less than or equal to 0.1 A/div,
+            # we use channel 1 for current measurements. If it is more than 0.1 A/div,
+            # we use channel 2.
             if st.current_axis_per_division <= 0.1:
                 current = (from_twos_complement(cs[1]) + st.adc_offset_trim_c1) * st.scale_c1
             else:

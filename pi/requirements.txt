@@ -1,4 +1,5 @@
 pyserial
 pygame
 thorpy
-
+pillow
+numpy

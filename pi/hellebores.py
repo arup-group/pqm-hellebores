@@ -303,9 +303,9 @@ def create_trigger(st):
     button_freerun = configure_button('Free-run', lambda: update_trigger_mode('freerun', text_trigger_status))
     button_sync = configure_button('Sync', lambda: update_trigger_mode('sync', text_trigger_status))
     button_inrush = configure_button('Inrush', lambda: update_trigger_mode('inrush', text_trigger_status))
-    button_left = configure_button('Left', lambda: update_trigger_position(2, text_trigger_status))
+    button_left = configure_button('Left', lambda: update_trigger_position(1, text_trigger_status))
     button_centre = configure_button('Centre', lambda: update_trigger_position(st.time_axis_divisions // 2, text_trigger_status))
-    button_right = configure_button('Right', lambda: update_trigger_position(st.time_axis_divisions - 2, text_trigger_status))
+    button_right = configure_button('Right', lambda: update_trigger_position(st.time_axis_divisions - 1, text_trigger_status))
     button_rising = configure_button('Rising', lambda: update_trigger_direction('rising', text_trigger_status))
     button_falling = configure_button('Falling', lambda: update_trigger_direction('falling', text_trigger_status))
     trigger_box = thorpy.TitleBox(text='Trigger', children=[button_done, \
@@ -473,7 +473,7 @@ def redraw_lines(lines, screen, background_surface):
     except ValueError:
         # the pygame.draw.lines will throw an exception if there are not at
         # least two points in each line - (sounds reasonable)
-        sys.stderr.write('Exception in hellebores.py: redraw_lines().\n')
+        sys.stderr.write(f'Exception in hellebores.py: redraw_lines(). Linedata is: {linedata}.\n')
 
 
 class WFS_Counter:

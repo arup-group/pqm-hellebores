@@ -496,24 +496,21 @@ def get_screen_hardware_size():
     i = pygame.display.Info()
     return i.current_w, i.current_h
 
-def is_data_available_linux(f, t):
+def _is_data_available(f, t):
     # f file object, t time in seconds
     # wait at most 't' seconds for new data to appear
     # r will be an empty list unless there is data ready to read
     r, _, _ = select.select( [f], [], [], t)
     return r != []
 
-def is_data_available_windows(f, t):
-    # unfortunately this test isn't easy to implement on windows
-    # so we return a default 'True' response
-    return True
-
 # the version of is_data_available that we will use is selected
 # once at runtime
-if sys.platform == 'linux':
-    is_data_available = is_data_available_linux
+if os.name == 'posix':
+    is_data_available = _is_data_available
 else:
-    is_data_available = is_data_available_windows
+    # unfortunately this test isn't easy to implement on windows
+    # so we return a default 'True' response
+    is_data_available = lambda f, t: True
  
 
 class Lines:

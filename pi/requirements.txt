@@ -3,3 +3,4 @@ pygame
 thorpy
 pillow
 numpy
+psutil

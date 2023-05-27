@@ -5,6 +5,7 @@ import os
 import signal
 import json
 import psutil
+import time
 
 
 class Settings():
@@ -195,6 +196,8 @@ class Settings():
                 # (NB 0 means the command succeeded, the directory exists)
                 self.sfile = f'/tmp/pqm-hellebores/{self.sfile}'
                 self.save_settings()
+            # wait a moment before gathering process pids, to make sure all the programs have started
+            time.sleep(0.5)
             self.pids = self.get_process_pids()
             self.send_to_all = self._send_to_all
             # hellebores.py is not interested in settings updates initiated by itself

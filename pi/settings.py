@@ -157,27 +157,24 @@ class Settings():
             os.kill(pid, signal.SIGUSR1)
  
 
-    def get_process_pids(self):
-        # our strategy to get the PIDs of all the programs is to search for the ones that were initiated in
-        # the same working directory. So first we get the name of our working directory
-        my_cwd = os.getcwd()
-        my_pid = os.getpid()
-        # next we use the psutils module to find other programs that are running here
+    def get_program_pids(self, other_programs):
+        # we use the psutils module to find the other programs
         pids = {}
         for p in psutil.process_iter():
             try:
                 # we check for python to avoid sending signals to the shell
                 # and we also check to avoid sending signals to ourself
                 pcmd = ' '.join(p.cmdline())
-                if (p.cwd() == my_cwd) and ('python' in pcmd) and (p.pid != my_pid):
-                    pids[p.pid] = pcmd
+                for program in other_programs:
+                    if program in pcmd:
+                        pids[p.pid] = pcmd
             except:
-                # p.cwd() generates permission errors on some system processes
+                # p.cmdline() generates permission errors on some system processes
                 pass 
         return pids.keys()
 
 
-    def __init__(self, callback_fn = lambda: None):
+    def __init__(self, callback_fn = lambda: None, other_programs=[]):
         # load initial settings
         self.set_settings(self.load_settings())
 
@@ -196,7 +193,7 @@ class Settings():
                 self.save_settings()
             # wait a moment before gathering process pids, to make sure all the programs have started
             time.sleep(0.5)
-            self.pids = self.get_process_pids()
+            self.pids = self.get_program_pids(other_programs)
             self.send_to_all = self._send_to_all
             signal.signal(signal.SIGUSR1, self.signal_handler)
         else: 

@@ -602,7 +602,7 @@ def main():
     thorpy.init(screen, thorpy.theme_simple)
 
     # get settings from settings.json
-    st = settings.Settings()
+    st = settings.Settings(other_programs=['rain.py', 'reader.py', 'scaler.py', 'trigger.py', 'mapper.py'])
 
     # initialise flags
     capturing = True        # allow/stop update of the lines on the screen

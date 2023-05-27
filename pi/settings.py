@@ -4,7 +4,7 @@ import sys
 import os
 import signal
 import json
-
+import psutil
 
 
 class Settings():
@@ -81,7 +81,7 @@ class Settings():
         self.set_derived_settings()
 
 
-    def get_json(self):
+    def make_json(self):
         js = {}
         js['frequency']                                = self.frequency
         js['sample_rate']                              = self.sample_rate
@@ -136,7 +136,7 @@ class Settings():
     def save_settings(self):
         try:
             f = open(self.sfile, 'w')
-            f.write(json.dumps(self.get_json(), indent=4))
+            f.write(json.dumps(self.make_json(), indent=4))
             f.close()
         except:
             print("settings.py, save_settings(): couldn't write settings.json.", file=sys.stderr)
@@ -146,8 +146,37 @@ class Settings():
         self.set_settings(self.load_settings())
         self.callback_fn()
 
+    # settings objects are created in each running program.
+    # The send_to_all function allows one program (hellebores.py) to inform all the others that settings
+    # have been changed. When they receive this signal, they will re-load the settings from file.
+    def _send_to_all(self):
+        self.set_derived_settings()
+        self.save_settings()
+        for pid in self.pids:
+            os.kill(pid, signal.SIGUSR1)
+ 
 
-    def __init__(self, callback_fn = lambda: None):
+    def get_process_pids(self):
+        # our strategy to get the PIDs of all the programs is to search for the ones that were initiated in
+        # the same working directory. So first we get the name of our working directory
+        my_cwd = os.getcwd()
+        my_pid = os.getpid()
+        # next we use the psutils module to find other programs that are running here
+        pids = {}
+        for p in psutil.process_iter():
+            try:
+                # we check for python to avoid sending signals to the shell
+                # and we also check to avoid sending signals to ourself
+                pcmd = ' '.join(p.cmdline())
+                if (p.cwd() == my_cwd) and ('python' in pcmd) and (p.pid != my_pid):
+                    pids[p.pid] = pcmd
+            except:
+                # p.cwd() generates permission errors on some system processes
+                pass 
+        return pids.keys()
+
+
+    def __init__(self, callback_fn = lambda: None, interested_in_updates = True):
         # load initial settings
         self.set_settings(self.load_settings())
 
@@ -155,17 +184,24 @@ class Settings():
         # every time a signal is received just after settings have been updated
         self.callback_fn = callback_fn
 
-        # if we receive 'SIGUSR1' signal (on linux) set things up so that updated settings will
+        # if we receive 'SIGUSR1' signal (on linux/unix) set things up so that updated settings will
         # be read from settings.json via the signal_handler function
-        if sys.platform == 'linux':
-            signal.signal(signal.SIGUSR1, self.signal_handler)
+        if os.name == 'posix':
+            if interested_in_updates:
+                signal.signal(signal.SIGUSR1, self.signal_handler)
             # for faster update performance, and to reduce SD card wear, we save the settings.json
             # file to RAM disk in /tmp, and we'll use the temporary version from now on
             if os.system(f'[ -d /tmp/pqm-hellebores ] || mkdir /tmp/pqm-hellebores') == 0:
                 # (NB 0 means the command succeeded, the directory exists)
                 self.sfile = f'/tmp/pqm-hellebores/{self.sfile}'
                 self.save_settings()
- 
+            self.pids = self.get_process_pids()
+            self.send_to_all = self._send_to_all
+            # hellebores.py is not interested in settings updates initiated by itself
+            if interested_in_updates:
+                signal.signal(signal.SIGUSR1, self.signal_handler)
+        else: 
+            self.send_to_all = lambda: print(f"settings.py: send_to_all() function hasn't been implemented on {sys.platform}.", file=sys.stderr)
 
 
 default_settings = '''

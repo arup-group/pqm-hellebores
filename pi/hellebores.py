@@ -74,19 +74,6 @@ T_WATTSDIV    = 5
 T_LEAKDIV     = 6
 
 
-def signal_other_processes(st):
-    # send a signal to everyone to update their settings
-    st.set_derived_settings()
-    st.save_settings()
-    if sys.platform == 'linux':
-        # all running processes in the form 'python3 ./[something].py' will be signalled
-        os.system("pkill --signal=SIGUSR1 -f 'python3 \./.*\.py'")
-    else:
-        print(f"hellebores.py: don't know how to send SIGUSR1 on {sys.platform}", file=sys.stderr)
-    # update the background, in case the graticule has changed
-    draw_background(st)
-
-
 class Range_controller:
     ranges = []
     range_selector = 0
@@ -163,25 +150,25 @@ def create_vertical(st):
         voltages.change_range(offset)
         voltage_display.set_text(f'{voltages.get_value()} V/div', adapt_parent=False)
         st.voltage_display_index = voltages.get_index()
-        signal_other_processes(st)
+        st.send_to_all()
 
     def update_current_range(currents, offset):
         currents.change_range(offset)
         current_display.set_text(f'{currents.get_value()} A/div', adapt_parent=False)
         st.current_display_index = currents.get_index()
-        signal_other_processes(st)
+        st.send_to_all() 
 
     def update_power_range(powers, offset):
         powers.change_range(offset)
         power_display.set_text(f'{powers.get_value()} W/div', adapt_parent=False)
         st.power_display_index = powers.get_index()
-        signal_other_processes(st)
+        st.send_to_all()
 
     def update_leakage_current_range(leakage_currents, offset):
         leakage_currents.change_range(offset)
         leakage_current_display.set_text(f'{leakage_currents.get_value()*1000.0} mA/div', adapt_parent=False)
         st.earth_leakage_current_display_index = leakage_currents.get_index()
-        signal_other_processes(st)
+        st.send_to_all()
 
     button_done = configure_button('Done', back_to_main_reaction)
 
@@ -234,7 +221,7 @@ def create_horizontal(st):
         times.change_range(offset)
         time_display.set_text(f'{times.get_value()} ms/div', adapt_parent=False)
         st.time_display_index = times.get_index()
-        signal_other_processes(st)
+        st.send_to_all()
 
     button_done = configure_button('Done', back_to_main_reaction)
 
@@ -262,12 +249,12 @@ def create_trigger(st):
         st.time_axis_pre_trigger_divisions = position
         draw_background(st)
         update_trigger_status(status)
-        signal_other_processes(st)
+        st.send_to_all()
 
     def update_trigger_direction(direction, status):
         st.trigger_direction = direction
         update_trigger_status(status)
-        signal_other_processes(st)
+        st.send_to_all()
 
     def update_trigger_mode(mode, status):
         if mode == 'freerun':
@@ -283,7 +270,7 @@ def create_trigger(st):
             print('hellebores.py: update_trigger_condition(), invalid condition requested.', sys.stderr)
         st.trigger_mode = mode
         update_trigger_status(status)
-        signal_other_processes(st)
+        st.send_to_all()
 
     def update_trigger_status(status):
         if st.trigger_mode == 'freerun':
@@ -615,7 +602,7 @@ def main():
     thorpy.init(screen, thorpy.theme_simple)
 
     # get settings from settings.json
-    st = settings.Settings()
+    st = settings.Settings(interested_in_updates=True)
 
     # initialise flags
     capturing = True        # allow/stop update of the lines on the screen

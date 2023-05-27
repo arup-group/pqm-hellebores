@@ -177,7 +177,7 @@ class Settings():
         return pids.keys()
 
 
-    def __init__(self, callback_fn = lambda: None, interested_in_updates = True):
+    def __init__(self, callback_fn = lambda: None):
         # load initial settings
         self.set_settings(self.load_settings())
 
@@ -188,8 +188,6 @@ class Settings():
         # if we receive 'SIGUSR1' signal (on linux/unix) set things up so that updated settings will
         # be read from settings.json via the signal_handler function
         if os.name == 'posix':
-            if interested_in_updates:
-                signal.signal(signal.SIGUSR1, self.signal_handler)
             # for faster update performance, and to reduce SD card wear, we save the settings.json
             # file to RAM disk in /tmp, and we'll use the temporary version from now on
             if os.system(f'[ -d /tmp/pqm-hellebores ] || mkdir /tmp/pqm-hellebores') == 0:
@@ -200,9 +198,7 @@ class Settings():
             time.sleep(0.5)
             self.pids = self.get_process_pids()
             self.send_to_all = self._send_to_all
-            # hellebores.py is not interested in settings updates initiated by itself
-            if interested_in_updates:
-                signal.signal(signal.SIGUSR1, self.signal_handler)
+            signal.signal(signal.SIGUSR1, self.signal_handler)
         else: 
             self.send_to_all = lambda: print(f"settings.py: send_to_all() function hasn't been implemented on {sys.platform}.", file=sys.stderr)
 

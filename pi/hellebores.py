@@ -269,6 +269,7 @@ def create_trigger(st):
         else:
             print('hellebores.py: update_trigger_condition(), invalid condition requested.', sys.stderr)
         st.trigger_mode = mode
+        draw_background(st)
         update_trigger_status(status)
         st.send_to_all()
 
@@ -594,15 +595,17 @@ def main():
     # to return correct coordinates from the touchscreen
     if get_screen_hardware_size() == PI_SCREEN_SIZE:
         screen    = pygame.display.set_mode(PI_SCREEN_SIZE, flags=pygame.FULLSCREEN)
+        hide_mouse_pointer = True
     else:
         screen    = pygame.display.set_mode(PI_SCREEN_SIZE)
+        hide_mouse_pointer = False
 
     # initialise thorpy
     thorpy.set_default_font(FONT, FONT_SIZE)
     thorpy.init(screen, thorpy.theme_simple)
 
     # get settings from settings.json
-    st = settings.Settings(interested_in_updates=True)
+    st = settings.Settings()
 
     # initialise flags
     capturing = True        # allow/stop update of the lines on the screen
@@ -624,7 +627,8 @@ def main():
     # main loop
     while running:
         # hack to make the cursor invisible while still responding
-        # pygame.mouse.set_cursor((8,8),(0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0))
+        if hide_mouse_pointer:
+            pygame.mouse.set_cursor((8,8),(0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0))
         # we update all of the texts every second, not just the datetime
         if wfs.time_to_update():
             if capturing:

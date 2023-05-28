@@ -268,7 +268,7 @@ default_settings = '''
         0.01
     ],
     "earth_leakage_current_display_index": 4,
-    "adc_offset_trim_c0": 23,
+    "adc_offset_trim_c0": -30,
     "adc_offset_trim_c1": -36,
     "adc_offset_trim_c2": -30,
     "adc_offset_trim_c3": 0,

@@ -27,6 +27,7 @@
         1000
     ],
     "voltage_display_index": 2,
+    "voltage_display_status": true,
     "current_display_ranges": [
         0.001,
         0.002,
@@ -42,6 +43,7 @@
         5.0
     ],
     "current_display_index": 8,
+    "current_display_status": true,
     "power_display_ranges": [
         0.1,
         0.2,
@@ -58,6 +60,7 @@
         1000.0
     ],
     "power_display_index": 8,
+    "power_display_status": false,
     "earth_leakage_current_display_ranges": [
         0.0001,
         0.0002,
@@ -69,6 +72,7 @@
         0.020
     ],
     "earth_leakage_current_display_index": 7,
+    "earth_leakage_current_display_status": false,
     "adc_offset_trim_c0": -30,
     "adc_offset_trim_c1": -36,
     "adc_offset_trim_c2": -30,

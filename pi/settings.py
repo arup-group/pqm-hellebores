@@ -55,12 +55,16 @@ class Settings():
         self.time_display_index                        = js['time_display_index']
         self.voltage_display_ranges                    = js['voltage_display_ranges']
         self.voltage_display_index                     = js['voltage_display_index'] 
+        self.voltage_display_status                    = js['voltage_display_status']
         self.current_display_ranges                    = js['current_display_ranges']
         self.current_display_index                     = js['current_display_index']
+        self.current_display_status                    = js['current_display_status']
         self.power_display_ranges                      = js['power_display_ranges']
         self.power_display_index                       = js['power_display_index']
+        self.power_display_status                      = js['power_display_status']
         self.earth_leakage_current_display_ranges      = js['earth_leakage_current_display_ranges']
         self.earth_leakage_current_display_index       = js['earth_leakage_current_display_index']
+        self.earth_leakage_current_display_status      = js['earth_leakage_current_display_status']
         self.adc_offset_trim_c0                        = js['adc_offset_trim_c0']
         self.adc_offset_trim_c1                        = js['adc_offset_trim_c1']
         self.adc_offset_trim_c2                        = js['adc_offset_trim_c2']
@@ -95,12 +99,16 @@ class Settings():
         js['time_display_index']                       = self.time_display_index
         js['voltage_display_ranges']                   = self.voltage_display_ranges
         js['voltage_display_index']                    = self.voltage_display_index
+        js['voltage_display_status']                   = self.voltage_display_status
         js['current_display_ranges']                   = self.current_display_ranges
         js['current_display_index']                    = self.current_display_index
+        js['current_display_status']                   = self.current_display_status 
         js['power_display_ranges']                     = self.power_display_ranges
         js['power_display_index']                      = self.power_display_index
+        js['power_display_status']                     = self.power_display_status
         js['earth_leakage_current_display_ranges']     = self.earth_leakage_current_display_ranges
         js['earth_leakage_current_display_index']      = self.earth_leakage_current_display_index
+        js['earth_leakage_current_display_status']     = self.earth_leakage_current_display_status
         js['adc_offset_trim_c0']                       = self.adc_offset_trim_c0
         js['adc_offset_trim_c1']                       = self.adc_offset_trim_c1
         js['adc_offset_trim_c2']                       = self.adc_offset_trim_c2
@@ -229,6 +237,7 @@ default_settings = '''
         500
     ],
     "voltage_display_index": 2,
+    "voltage_display_status": true,
     "current_display_ranges": [
         0.001,
         0.002,
@@ -243,6 +252,7 @@ default_settings = '''
         2.0
     ],
     "current_display_index": 8,
+    "current_display_status": true,
     "power_display_ranges": [
         0.1,
         0.2,
@@ -258,6 +268,7 @@ default_settings = '''
         500.0
     ],
     "power_display_index": 8,
+    "power_display_status": true,
     "earth_leakage_current_display_ranges": [
         0.0001,
         0.0002,
@@ -268,6 +279,7 @@ default_settings = '''
         0.01
     ],
     "earth_leakage_current_display_index": 4,
+    "earth_leakage_current_display_status": true,
     "adc_offset_trim_c0": -30,
     "adc_offset_trim_c1": -36,
     "adc_offset_trim_c2": -30,

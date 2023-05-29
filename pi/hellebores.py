@@ -36,9 +36,9 @@ VERY_LIGHT_GREY = (150, 150, 150)
 PI_SCREEN_SIZE = (800,480)
 SCOPE_BOX_SIZE = (700,480)
 CONTROLS_BOX_SIZE = (100,480)
-CONTROLS_BOX_POSITION = (700,0)
+CONTROLS_BOX_POSITION = (799,0)
 SETTINGS_BOX_SIZE = (500,400)
-SETTINGS_BOX_POSITION = (380,100)
+SETTINGS_BOX_POSITION = (690,100)
 BUTTON_SIZE = (86,50) 
 ARROW_BUTTON_SIZE = (80,50)
 TEXT_SIZE = (100,16)
@@ -108,6 +108,14 @@ def create_datetime():
     return [ text_datetime ]
 
 
+def configure_switch_button(value, callback_function):
+    button = thorpy.Checkbox(value=value)
+    button.set_bck_color(VERY_LIGHT_GREY, 'normal')
+    button.set_bck_color(VERY_LIGHT_GREY, 'hover')
+    button.set_font_color(WHITE)
+    button.at_unclick = callback_function
+    return button
+
 def configure_arrow_button(direction, callback_function):
     button = thorpy.ArrowButton(direction, BUTTON_SIZE) 
     button.set_bck_color(VERY_LIGHT_GREY, 'normal')
@@ -139,6 +147,8 @@ def create_main_controls(texts):
  
     main = thorpy.Box([ *texts.get()[0:2], *buttons, *texts.get()[2:] ])
     main.set_bck_color(LIGHT_GREY)
+    for e in main.get_all_descendants():
+        e.hand_cursor = False    
     return main
 
 
@@ -170,9 +180,24 @@ def create_vertical(st):
         st.earth_leakage_current_display_index = leakage_currents.get_index()
         st.send_to_all()
 
+    def flip_display_switch(channel, switch_status):
+        if channel == 'voltage':
+            st.voltage_display_status = not switch_status
+        elif channel == 'current':
+            st.current_display_status = not switch_status
+        elif channel == 'power':
+            st.power_display_status = not switch_status
+        elif channel == 'leakage':
+            st.earth_leakage_current_display_status = not switch_status
+        else:
+            print('hellebores.py: flip_display_switch() channel not recognised.', file=sys.stderr)
+        st.send_to_all()
+
     button_done = configure_button('Done', back_to_main_reaction)
 
     voltages                  = Range_controller(st.voltage_display_ranges, st.voltage_display_index)
+    voltage_onoff             = configure_switch_button(st.voltage_display_status, \
+                                    lambda: flip_display_switch('voltage', voltage_onoff.value))
     voltage_display           = thorpy.Text(f'{voltages.get_value()} V/div') 
     voltage_display.set_size(BUTTON_SIZE)
     voltage_down              = configure_arrow_button('up', \
@@ -181,6 +206,8 @@ def create_vertical(st):
                                     lambda: update_voltage_range(voltages, 1))
 
     currents                  = Range_controller(st.current_display_ranges, st.current_display_index)
+    current_onoff             = configure_switch_button(st.current_display_status, \
+                                    lambda: flip_display_switch('current', current_onoff.value))
     current_display           = thorpy.Text(f'{currents.get_value()} A/div')
     current_display.set_size(BUTTON_SIZE)
     current_down              = configure_arrow_button('up', \
@@ -189,6 +216,8 @@ def create_vertical(st):
                                     lambda: update_current_range(currents, 1))
     
     powers                    = Range_controller(st.power_display_ranges, st.power_display_index)
+    power_onoff               = configure_switch_button(st.power_display_status, \
+                                    lambda: flip_display_switch('power', power_onoff.value))
     power_display             = thorpy.Text(f'{powers.get_value()} W/div')
     power_display.set_size(BUTTON_SIZE)
     power_down                = configure_arrow_button('up', \
@@ -198,6 +227,8 @@ def create_vertical(st):
   
     leakage_currents          = Range_controller(st.earth_leakage_current_display_ranges, \
                                                    st.earth_leakage_current_display_index)
+    leakage_current_onoff     = configure_switch_button(st.earth_leakage_current_display_status, \
+                                    lambda: flip_display_switch('leakage', leakage_current_onoff.value))
     leakage_current_display   = thorpy.Text(f'{leakage_currents.get_value()*1000.0} mA/div')
     leakage_current_display.set_size(BUTTON_SIZE)
     leakage_current_down      = configure_arrow_button('up', \
@@ -206,10 +237,13 @@ def create_vertical(st):
                                     lambda: update_leakage_current_range(leakage_currents, 1))
  
     vertical = thorpy.TitleBox(text='Vertical', children=[button_done, \
-                 thorpy.Group(elements=[voltage_display, voltage_down, voltage_up], mode='h'), \
-                 thorpy.Group(elements=[current_display, current_down, current_up], mode='h'), \
-                 thorpy.Group(elements=[power_display, power_down, power_up], mode='h'),
-                 thorpy.Group(elements=[leakage_current_display, leakage_current_down, leakage_current_up], mode='h') ])
+                 thorpy.Group(elements=[voltage_onoff, voltage_display, voltage_down, voltage_up], mode='h'), \
+                 thorpy.Group(elements=[current_onoff, current_display, current_down, current_up], mode='h'), \
+                 thorpy.Group(elements=[power_onoff, power_display, power_down, power_up], mode='h'), \
+                 thorpy.Group(elements=[leakage_current_onoff, leakage_current_display, leakage_current_down, \
+                                            leakage_current_up], mode='h') ])
+    for e in vertical.get_all_descendants():
+        e.hand_cursor = False    
     return vertical
 
 
@@ -232,9 +266,12 @@ def create_horizontal(st):
                               lambda: update_time_range(times, -1))
     time_up             = configure_arrow_button('right', \
                               lambda: update_time_range(times, 1))
- 
-    return thorpy.TitleBox(text='Horizontal', children=[button_done, \
+
+    horizontal = thorpy.TitleBox(text='Horizontal', children=[button_done, \
              thorpy.Group(elements=[time_display, time_down, time_up], mode='h')])
+    for e in horizontal.get_all_descendants():
+        e.hand_cursor = False    
+    return horizontal
  
 
 def create_trigger(st):
@@ -296,14 +333,16 @@ def create_trigger(st):
     button_right = configure_button('Right', lambda: update_trigger_position(st.time_axis_divisions - 1, text_trigger_status))
     button_rising = configure_button('Rising', lambda: update_trigger_direction('rising', text_trigger_status))
     button_falling = configure_button('Falling', lambda: update_trigger_direction('falling', text_trigger_status))
-    trigger_box = thorpy.TitleBox(text='Trigger', children=[button_done, \
+    trigger = thorpy.TitleBox(text='Trigger', children=[button_done, \
         thorpy.Group(elements=[button_freerun, button_sync, button_inrush], mode='h'), \
         thorpy.Group(elements=[button_left, button_centre, button_right], mode='h'), \
         thorpy.Group(elements=[button_rising, button_falling], mode='h'), \
         text_trigger_status]) 
-    # put the text status in after forming the box, so that the box dimensions are not affected by the text.
+    for e in trigger.get_all_descendants():
+        e.hand_cursor = False    
+   # put the text status in after forming the box, so that the box dimensions are not affected by the text.
     update_trigger_status(text_trigger_status)
-    return trigger_box
+    return trigger
 
 # More UI is needed for the following:
 #
@@ -325,19 +364,19 @@ def create_ui_groups(st, texts):
  
     ui_main = create_main_controls(texts)
     ui_main.set_size(CONTROLS_BOX_SIZE)
-    ui_main.set_topleft(*CONTROLS_BOX_POSITION)
+    ui_main.set_topright(*CONTROLS_BOX_POSITION)
     ui_groups['main'] = thorpy.Group(elements=[ui_main], mode=None)
 
     ui_vertical = create_vertical(st)
-    ui_vertical.set_topleft(*SETTINGS_BOX_POSITION)
+    ui_vertical.set_topright(*SETTINGS_BOX_POSITION)
     ui_groups['vertical'] = thorpy.Group(elements=[ui_main, ui_vertical], mode=None)
 
     ui_horizontal = create_horizontal(st)
-    ui_horizontal.set_topleft(*SETTINGS_BOX_POSITION)
+    ui_horizontal.set_topright(*SETTINGS_BOX_POSITION)
     ui_groups['horizontal'] = thorpy.Group(elements=[ui_main, ui_horizontal], mode=None)
 
     ui_trigger = create_trigger(st)
-    ui_trigger.set_topleft(*SETTINGS_BOX_POSITION)
+    ui_trigger.set_topright(*SETTINGS_BOX_POSITION)
     ui_groups['trigger'] = thorpy.Group(elements=[ui_main, ui_trigger], mode=None)
 
     return ui_groups
@@ -345,23 +384,22 @@ def create_ui_groups(st, texts):
 
 
 def mode_reaction():
-   pass
+    pass
 
 def horizontal_reaction():
-   global ui_groups, ui_current_updater
-   ui_current_updater = ui_groups['horizontal'].get_updater() 
+    global ui_groups, ui_current_updater
+    ui_current_updater = ui_groups['horizontal'].get_updater() 
 
 def vertical_reaction():
-   global ui_groups, ui_current_updater
-   ui_current_updater = ui_groups['vertical'].get_updater() 
+    global ui_groups, ui_current_updater
+    ui_current_updater = ui_groups['vertical'].get_updater() 
 
 def trigger_reaction():
-   global ui_groups, ui_current_updater
-   ui_current_updater = ui_groups['trigger'].get_updater()
+    global ui_groups, ui_current_updater
+    ui_current_updater = ui_groups['trigger'].get_updater()
 
 def options_reaction():
-   pass
-
+    pass
 
 def back_to_main_reaction():
     global ui_groups, ui_current_updater
@@ -371,15 +409,24 @@ def back_to_main_reaction():
 class Texts:
     # array of thorpy text objects
     texts = []
-    colours = [BLACK, WHITE, WHITE, GREEN, YELLOW, MAGENTA, CYAN]
+
+    def set_colours(self):
+        colours = [BLACK, WHITE, WHITE, GREEN, YELLOW, MAGENTA, CYAN]
+        # grey out lines that are currently switched off
+        colour_filter = [ True, True, True, st.voltage_display_status, \
+                             st.current_display_status, st.power_display_status, \
+                             st.earth_leakage_current_display_status ]
+        for i in range(len(self.texts)):
+            if colour_filter[i] == True:
+                self.texts[i].set_font_color(colours[i])
+            else:
+                self.texts[i].set_font_color(DARK_GREY)
 
     def __init__(self, st, wfs):
         self.wfs = wfs              # make a note of the wfs object
-        for s in range(len(self.colours)):
+        for s in range(7):
             t = thorpy.Text('')
             t.set_size(TEXT_SIZE)
-            if self.colours[s] != None:
-                t.set_font_color(self.colours[s])
             self.texts.append(t)
         self.refresh()
  
@@ -394,6 +441,7 @@ class Texts:
         else:
             self.texts[T_RUNSTOP].set_bck_color(RED)
             self.texts[T_RUNSTOP].set_text('Stopped', adapt_parent=False)
+        self.set_colours()
         self.texts[T_WFS].set_text(f'{self.wfs.get()} wfm/s', adapt_parent=False)
         self.texts[T_TIMEDIV].set_text(f'{st.time_display_ranges[st.time_display_index]} ms/', adapt_parent=False)
         self.texts[T_VOLTSDIV].set_text(f'{st.voltage_display_ranges[st.voltage_display_index]} V/', adapt_parent=False)
@@ -407,9 +455,9 @@ class Texts:
 
 
 def start_stop_reaction(texts):
-   global capturing
-   capturing = not capturing
-   texts.refresh()    
+    global capturing
+    capturing = not capturing
+    texts.refresh()    
 
 
 def options_reaction():
@@ -418,6 +466,8 @@ def options_reaction():
                          ok_text="Ok, I've read")
     alert.set_draggable()
     alert.cannot_drag_outside = True
+    for e in alert.get_all_descendants():
+        e.hand_cursor = False
     alert.launch_nonblocking()
 
 
@@ -455,9 +505,12 @@ def redraw_lines(lines, screen, background_surface):
     colours = [ GREEN, YELLOW, MAGENTA, CYAN, RED, BLUE ]
     screen.blit(background_surface, (0,0))
     linedata = lines.get_lines()
+    display_status = [ st.voltage_display_status, st.current_display_status, st.power_display_status, \
+                          st.earth_leakage_current_display_status ]
     try:
         for i in range(len(linedata)):
-            pygame.draw.lines(screen, colours[i], False, linedata[i], 2)
+            if display_status[i] == True:
+                pygame.draw.lines(screen, colours[i], False, linedata[i], 2)
     except ValueError:
         # the pygame.draw.lines will throw an exception if there are not at
         # least two points in each line - (sounds reasonable)

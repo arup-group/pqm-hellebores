@@ -9,7 +9,7 @@ or
 python3 -m pip install pyserial thorpy pygame
 
 Raspberry Pi OS may also need SDL2 libraries:
-sudo apt install libsdl2-mixer-2.0-0 libsdl2-ttf-2.0-0
+sudo apt install libsdl2-mixer-2.0-0 libsdl2-ttf-2.0-0 libsdl2-image-2.0-0
 
 http://www.thorpy.org/documentation
 

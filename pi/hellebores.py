@@ -109,7 +109,8 @@ def create_datetime():
 
 
 def configure_switch_button(value, callback_function):
-    button = thorpy.Checkbox(value=value)
+    button = thorpy.SwitchButton(value, size=BUTTON_SIZE, \
+                 drag_size=(BUTTON_SIZE[0]//3, BUTTON_SIZE[1]//2))
     button.set_bck_color(VERY_LIGHT_GREY, 'normal')
     button.set_bck_color(VERY_LIGHT_GREY, 'hover')
     button.set_font_color(WHITE)
@@ -182,13 +183,13 @@ def create_vertical(st):
 
     def flip_display_switch(channel, switch_status):
         if channel == 'voltage':
-            st.voltage_display_status = not switch_status
+            st.voltage_display_status = switch_status
         elif channel == 'current':
-            st.current_display_status = not switch_status
+            st.current_display_status = switch_status
         elif channel == 'power':
-            st.power_display_status = not switch_status
+            st.power_display_status = switch_status
         elif channel == 'leakage':
-            st.earth_leakage_current_display_status = not switch_status
+            st.earth_leakage_current_display_status = switch_status
         else:
             print('hellebores.py: flip_display_switch() channel not recognised.', file=sys.stderr)
         st.send_to_all()
@@ -237,11 +238,14 @@ def create_vertical(st):
                                     lambda: update_leakage_current_range(leakage_currents, 1))
  
     vertical = thorpy.TitleBox(text='Vertical', children=[button_done, \
-                 thorpy.Group(elements=[voltage_onoff, voltage_display, voltage_down, voltage_up], mode='h'), \
-                 thorpy.Group(elements=[current_onoff, current_display, current_down, current_up], mode='h'), \
-                 thorpy.Group(elements=[power_onoff, power_display, power_down, power_up], mode='h'), \
-                 thorpy.Group(elements=[leakage_current_onoff, leakage_current_display, leakage_current_down, \
-                                            leakage_current_up], mode='h') ])
+                 thorpy.Group(elements=[voltage_display, voltage_down, voltage_up, voltage_onoff], \
+                     mode='h'), \
+                 thorpy.Group(elements=[current_display, current_down, current_up, current_onoff], \
+                     mode='h'), \
+                 thorpy.Group(elements=[power_display, power_down, power_up, power_onoff], \
+                     mode='h'), \
+                 thorpy.Group(elements=[leakage_current_display, leakage_current_down, \
+                                            leakage_current_up, leakage_current_onoff], mode='h') ])
     for e in vertical.get_all_descendants():
         e.hand_cursor = False    
     return vertical

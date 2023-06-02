@@ -202,6 +202,7 @@ class Settings():
             # wait a moment before gathering process pids, to make sure all the programs have started
             time.sleep(0.5)
             self.pids = self.get_program_pids(other_programs)
+            # link to the send_to_all function and set up a signal handler
             self.send_to_all = self._send_to_all
             signal.signal(signal.SIGUSR1, self.signal_handler)
         else: 

@@ -35,13 +35,14 @@ LIGHT_GREY = (100, 100, 100)
 VERY_LIGHT_GREY = (150, 150, 150)
 PI_SCREEN_SIZE = (800,480)
 SCOPE_BOX_SIZE = (700,480)
-CONTROLS_BOX_SIZE = (100,480)
-CONTROLS_BOX_POSITION = (799,0)
-SETTINGS_BOX_SIZE = (500,400)
-SETTINGS_BOX_POSITION = (690,100)
-BUTTON_SIZE = (86,50) 
-ARROW_BUTTON_SIZE = (80,50)
-TEXT_SIZE = (100,16)
+CONTROLS_BOX_SIZE = (100,480)        # main buttons and status texts
+CONTROLS_BOX_POSITION = (800,0)      # top right corner
+SETTINGS_BOX_SIZE = (500,400)        # 'dialog' boxes
+SETTINGS_BOX_POSITION = (690,100)    # top right corner
+BUTTON_SIZE = (90,50) 
+ARROW_BUTTON_SIZE = (90,50)
+TEXT_SIZE = (90,16)
+TEXT2_SIZE = (120,16)
 FONT = 'dejavusansmono'
 FONT_SIZE = 14
 LINES_BUFFER_SIZE = 100 
@@ -200,7 +201,7 @@ def create_vertical(st):
     voltage_onoff             = configure_switch_button(st.voltage_display_status, \
                                     lambda: flip_display_switch('voltage', voltage_onoff.value))
     voltage_display           = thorpy.Text(f'{voltages.get_value()} V/div') 
-    voltage_display.set_size(BUTTON_SIZE)
+    voltage_display.set_size(TEXT2_SIZE)
     voltage_down              = configure_arrow_button('up', \
                                     lambda: update_voltage_range(voltages, -1))
     voltage_up                = configure_arrow_button('down', \
@@ -210,7 +211,7 @@ def create_vertical(st):
     current_onoff             = configure_switch_button(st.current_display_status, \
                                     lambda: flip_display_switch('current', current_onoff.value))
     current_display           = thorpy.Text(f'{currents.get_value()} A/div')
-    current_display.set_size(BUTTON_SIZE)
+    current_display.set_size(TEXT2_SIZE)
     current_down              = configure_arrow_button('up', \
                                     lambda: update_current_range(currents, -1))
     current_up                = configure_arrow_button('down', \
@@ -220,7 +221,7 @@ def create_vertical(st):
     power_onoff               = configure_switch_button(st.power_display_status, \
                                     lambda: flip_display_switch('power', power_onoff.value))
     power_display             = thorpy.Text(f'{powers.get_value()} W/div')
-    power_display.set_size(BUTTON_SIZE)
+    power_display.set_size(TEXT2_SIZE)
     power_down                = configure_arrow_button('up', \
                                     lambda: update_power_range(powers, -1))
     power_up                  = configure_arrow_button('down', \
@@ -231,7 +232,7 @@ def create_vertical(st):
     leakage_current_onoff     = configure_switch_button(st.earth_leakage_current_display_status, \
                                     lambda: flip_display_switch('leakage', leakage_current_onoff.value))
     leakage_current_display   = thorpy.Text(f'{leakage_currents.get_value()*1000.0} mA/div')
-    leakage_current_display.set_size(BUTTON_SIZE)
+    leakage_current_display.set_size(TEXT2_SIZE)
     leakage_current_down      = configure_arrow_button('up', \
                                     lambda: update_leakage_current_range(leakage_currents, -1))
     leakage_current_up        = configure_arrow_button('down', \
@@ -265,7 +266,7 @@ def create_horizontal(st):
 
     times               = Range_controller(st.time_display_ranges, st.time_display_index)
     time_display        = thorpy.Text(f'{times.get_value()} ms/div') 
-    time_display.set_size(BUTTON_SIZE)
+    time_display.set_size(TEXT2_SIZE)
     time_down           = configure_arrow_button('left', \
                               lambda: update_time_range(times, -1))
     time_up             = configure_arrow_button('right', \
@@ -386,6 +387,10 @@ def create_ui_groups(st, texts):
     return ui_groups
 
 
+def start_stop_reaction(texts):
+    global capturing
+    capturing = not capturing
+    texts.refresh()    
 
 def mode_reaction():
     pass
@@ -403,7 +408,18 @@ def trigger_reaction():
     ui_current_updater = ui_groups['trigger'].get_updater()
 
 def options_reaction():
-    pass
+    alert = thorpy.Alert(title="hellebores.py",
+                         text="Power quality meter, v0.1",
+                         ok_text="Ok, I've read")
+    alert.set_draggable()
+    alert.cannot_drag_outside = True
+    for e in alert.get_all_descendants():
+       if isinstance(e, thorpy.elements.Button):
+           e.set_bck_color(VERY_LIGHT_GREY, 'normal')
+           e.set_bck_color(VERY_LIGHT_GREY, 'hover')
+           e.set_font_color(WHITE)
+       e.hand_cursor = False
+    alert.launch_nonblocking()
 
 def back_to_main_reaction():
     global ui_groups, ui_current_updater
@@ -437,6 +453,9 @@ class Texts:
     def get(self):
         return self.texts
 
+    def set(self, item, value):
+        self.texts[item].set_text(value)
+
     def refresh(self):
         global capturing
         if capturing:
@@ -453,27 +472,6 @@ class Texts:
         self.texts[T_WATTSDIV].set_text(f'{st.power_display_ranges[st.power_display_index]} W/', adapt_parent=False)
         self.texts[T_LEAKDIV].set_text(f'{st.earth_leakage_current_display_ranges[st.earth_leakage_current_display_index]*1000} mA/', adapt_parent=False)
 
-    # update text message string
-    def set(self, item, value):
-        self.texts[item].set_text(value)
-
-
-def start_stop_reaction(texts):
-    global capturing
-    capturing = not capturing
-    texts.refresh()    
-
-
-def options_reaction():
-    alert = thorpy.Alert(title="hellebores.py",
-                         text="Power quality meter, v0.03",
-                         ok_text="Ok, I've read")
-    alert.set_draggable()
-    alert.cannot_drag_outside = True
-    for e in alert.get_all_descendants():
-        e.hand_cursor = False
-    alert.launch_nonblocking()
-
 
 def draw_background(st):
     global background_surface
@@ -487,7 +485,7 @@ def draw_background(st):
     # draw the graticule lines
     for dx in range(1, st.time_axis_divisions):
         x = st.horizontal_pixels_per_division * dx
-        # mark the trigger position (t=0) with a thicker line
+        # mark the trigger position (t=0) with an emphasized line
         if (dx == st.time_axis_pre_trigger_divisions) and (st.trigger_channel != -1):
             lc = WHITE
         else:
@@ -495,7 +493,7 @@ def draw_background(st):
         pygame.draw.line(background_surface, lc, (x, 0), (x, ymax), 1)
     for dy in range(1, st.vertical_axis_divisions):
         y = st.vertical_pixels_per_division * dy
-        # mark the central position (v, i = 0) with a thicker line
+        # mark the central position (v, i = 0) with an emphasized line
         if dy == st.vertical_axis_divisions // 2:
             lc = WHITE
         else:
@@ -538,7 +536,7 @@ class WFS_Counter:
         # if the time has increased by at least 1.0 second, update the wfm/s text
         elapsed = tn - self.update_time
         if elapsed >= 1.0:
-            self.wfs = round(self.counter/elapsed)
+            self.wfs = int(self.counter/elapsed)
             self.update_time = tn
             self.counter = 0
             return True
@@ -553,17 +551,14 @@ def get_screen_hardware_size():
     i = pygame.display.Info()
     return i.current_w, i.current_h
 
-def _is_data_available(f, t):
-    # f file object, t time in seconds
-    # wait at most 't' seconds for new data to appear
-    # r will be an empty list unless there is data ready to read
-    r, _, _ = select.select( [f], [], [], t)
-    return r != []
 
-# the version of is_data_available that we will use is selected
+# the version of is_data_available that we will use is determined
 # once at runtime
 if os.name == 'posix':
-    is_data_available = _is_data_available
+    # f is file object to test for reading, t is time in seconds
+    # wait at most 't' seconds for new data to appear
+    # element 0 of tuple will be an empty list unless there is data ready to read
+    is_data_available = lambda f, t: select.select( [f], [], [], t)[0] != []
 else:
     # unfortunately this test isn't easy to implement on windows
     # so we return a default 'True' response

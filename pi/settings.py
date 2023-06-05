@@ -28,9 +28,9 @@ class Settings():
         # we set a hold-off threshold (minimum number of samples to next trigger) to be slightly less
         # (2ms) than one full screenful of data
         self.holdoff_samples            = self.frame_samples - int(0.002 * self.sample_rate)
-        if self.trigger_direction == 'rising':
+        if self.trigger_slope == 'rising':
             self.trigger_hysteresis = 'LLLLLHHHHH'
-        elif self.trigger_direction == 'falling':
+        elif self.trigger_slope == 'falling':
             self.trigger_hysteresis = 'HHHHHLLLLL'
         self.trigger_gate_length = len(self.trigger_hysteresis)
         for i in range(self.trigger_gate_length):
@@ -78,7 +78,7 @@ class Settings():
         self.scale_c2                                  = js['scale_c2']
         self.scale_c3                                  = js['scale_c3']
         self.trigger_channel                           = js['trigger_channel']
-        self.trigger_direction                         = js['trigger_direction']
+        self.trigger_slope                             = js['trigger_slope']
         self.trigger_level                             = js['trigger_level']
         self.trigger_position                          = js['trigger_position']
         self.trigger_mode                              = js['trigger_mode']
@@ -122,7 +122,7 @@ class Settings():
         js['scale_c2']                                 = self.scale_c2
         js['scale_c3']                                 = self.scale_c3
         js['trigger_channel']                          = self.trigger_channel
-        js['trigger_direction']                        = self.trigger_direction
+        js['trigger_slope']                            = self.trigger_slope
         js['trigger_level']                            = self.trigger_level
         js['trigger_position']                         = self.trigger_position
         js['trigger_mode']                             = self.trigger_mode
@@ -294,7 +294,7 @@ default_settings = '''
     "scale_c2": 0.001017,
     "scale_c3": 0.0489,
     "trigger_channel": 0,
-    "trigger_direction": "rising",
+    "trigger_slope": "rising",
     "trigger_level": 0.0,
     "trigger_position": 5,
     "trigger_mode": "sync"

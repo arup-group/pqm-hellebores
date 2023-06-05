@@ -13,207 +13,136 @@ import numpy as np
 BUFFER_SIZE = 65535          # size of circular sample buffer
 
 
-def trigger_gate(buf, ch, threshold, hysteresis, transition_gate, gate_number):
-
-    def qualify(buf, ch, threshold, side):
-        if side == 'L':
-            qual = buf.peek()[ch+1] <= threshold
-            #qual = buf[i][ch+1] <= threshold
-        elif side == 'H':
-            qual = buf.peek()[ch+1] >= threshold
-            #qual = buf[i][ch+1] >= threshold
-        return qual
-
-    if qualify(buf, ch, threshold, hysteresis[gate_number]):
-        gate_number = gate_number + 1
-    # gate count transition_gate is special because it is the potential trigger position.
-    # if qualify fails when gate_number == transition_gate, we keep the counter at
-    # transition_gate because the pattern might succeed on subsequent samples.
-    # if gate_number is any other value then the pattern is not satisfied, the trigger
-    # qualification has failed and we set the gate counter back to zero again.
-    elif gate_number != transition_gate:
-        gate_number = 0
-
-    return gate_number
- 
-
 class Buffer:
-    buf = None    # numpy array, initialised in __init__
-    fp = 0        # front pointer of frame
-    tp = 0        # trigger pointer (somewhere between front and rear)
-    rp = 0        # rear pointer of frame
-    sp = 0        # storage pointer (new samples)
+    buf = None           # numpy array, BUFFER_SIZE * 5 (of float)
+    fp = 0               # front pointer of frame
+    tp = 0               # trigger pointer (somewhere between front and rear)
+    rp = 0               # rear pointer of frame
+    sp = 0               # storage pointer (new samples)
+    triggered = False    # trigger flag
+    # when there is a successful trigger, the trigger_test_fn will return an estimate
+    # of the fractional time offset between samples when the trigger took place.
+    interpolation_fraction = 0.0
+    # trigger_test_fn when defined takes two arguments, current and previous samples
+    # returns True or False depending on whether a trigger criterion (defined inside
+    # the function) is met
+    trigger_test_ch = 3
+    trigger_test_fn = None
+
 
     def __init__(self):
-        self.clear()
+        self.buf = np.zeros((BUFFER_SIZE, 5), float)
 
-    def clear(self):
-        buf = np.zeros((BUFFER_SIZE, 5), float)
+    def reset(self, test_fn, test_ch):
+        self.trigger_test_fn = test_fn
+        self.trigger_test_ch = test_ch
+     
 
     # the storage location is determined by the input pointer, which is not intended
     # to be manipulated other than here.
-    def store(self, samples):
-        self.buf[self.sp] = samples 
-        self.sp = (self.sp + 1) % BUFFER_SIZE
+    def store_line(self, line):
+        try:
+            self.buf[self.sp % BUFFER_SIZE,:] = np.fromstring(line, dtype=float, sep=' ')
+        except:
+            print(f"trigger.py, store_line(): Couldn't interpret '{line}'.", file=sys.stderr)
+        self.sp = self.sp + 1 
 
-    # the following functions all operate/manipulate the output pointer, which can be
-    # moved depending on the trigger logic required
-    def shift_pointer(self, offset):
-        self.oi = (self.oi + offset) % INPUT_BUFFER_SIZE
 
-    def reset_pointer(self):
-        self.oi = self.ii
+    # call this to check if recent samples from tp pointer onwards cause a trigger
+    def trigger_test(self):
+        while self.tp < self.sp:
+            self.triggered, self.interpolation_fraction = \
+                   self.trigger_test_fn(self.buf[self.tp % BUFFER_SIZE, self.trigger_test_ch], \
+                   self.buf[(self.tp - 1) % BUFFER_SIZE, self.trigger_test_ch])
+            if self.triggered:
+                self.fp = self.tp + st.post_trigger_samples
+                self.rp = self.tp - st.pre_trigger_samples
+                self.tp = self.tp + st.holdoff_samples
+                return True
+            self.tp = self.tp + 1
+        return False
 
-    # returns sample of 4 channels
-    def peek(self):      
-        return self.buf[self.oi]
+    # see if we have stored enough post-trigger samples to commence output
+    def output_ready(self):
+        if self.triggered and self.sp == self.fp:
+            return True
+        else:
+            return False
 
-    def peek_previous(self):
-        poi = (self.oi - 1) % INPUT_BUFFER_SIZE
-        return self.buf[poi] 
-
-    # drains -- returns sample of 4 channels and then advances the output pointer
-    def drain(self):    
-        out = self.buf[self.oi]
-        self.oi = (self.oi + 1) % INPUT_BUFFER_SIZE
-        return out
-
-    def drained(self):
-        return self.oi == self.ii
+    def generate_output(self):
+        # output the correct array slice
+        for s in range(self.rp, self.fp):
+            sample = self.buf[s % BUFFER_SIZE]
+            # update time stamps
+            sample[0] = st.interval * (s - self.rp - st.pre_trigger_samples + self.interpolation_fraction)
+            print(sample)
  
+def via_trigger(line):
+    global buf
+    buf.store_line(line)
+    buf.trigger_test()
+    if buf.output_ready():
+        buf.generate_output()
 
-# note that s1 and s2 are arrays of 1 sample of all input channels
-def interpolate(s1, s2, frac):
-    return [ s1[i]*frac + s2[i]*(1-frac) for i in [0,1,2,3] ]
-
-
-
-FREERUN = 1
-TRIGGER = 2
+def pass_through(line):
+    print(line)
 
 def reset():
-    global st, mode, buf
-    if st.trigger_mode == 'freerun':
-        mode = FREERUN
-    else:
-        mode = TRIGGER
-    buf.clear()
+    global st, process_fn, buf
+    
+    # interpolation fraction
+    def i_frac(s1, s2, threshold):
+        if s1 == s2:
+            return 0.0
+        else:
+            return (threshold-s1)/(s2-s1)
 
+    def trigger_fn_generator(slope, threshold):
+        # the lambda expressions in this function create closures (customised functions)
+        # that are sent into the buffer for trigger detection
+        if slope == 'rising':
+            return lambda s1, s2: (True, i_frac(s1,s2,threshold)) if s1 <= threshold \
+                       and s2 >= threshold else (False, 0.0)
+        elif slope == 'falling':
+            return lambda s1, s2: (True, i_frac(s1,s2,threshold)) if s1 >= threshold \
+                       and s2 <= threshold else (False, 0.0)
+        else:
+            return None
+ 
+    if st.trigger_mode == 'freerun':
+        process_fn = pass_through
+    elif st.trigger_mode == 'sync':
+        process_fn = via_trigger
+        buf.reset(trigger_fn_generator(st.trigger_slope, 0.0), 1) 
+    elif st.trigger_mode == 'inrush':
+        buf.reset(trigger_fn_generator(st.trigger_slope, st.trigger_threshold), 3)
+    else:
+        print("trigger.py, reset(): trigger_mode not recognised, defaulting to sync.", file=sys.stderr)
+        process_fn = via_trigger
+        buf.reset(trigger_fn_generator(st.trigger_slope, 0.0), 1) 
 
 
 def main():
-    global st, mode, buf
+    global st, process_fn, buf
     # we make a buffer to temporarily hold a history of samples -- this allows us to output
     # a frame of waveform that includes samples 'before the trigger'
     buf = Buffer()
 
     # load settings into st object
     st = settings.Settings(reset)
-
-    # output counter, number of samples output in current frame
-    oc = 0
-    # holdoff counter, used to prevent re-triggering for a preset number of samples
-    hc = 0
-    # the exact trigger position is normally somewhere between samples
-    interpolation_fraction = 0.0
-    # gate counter, for qualifying hysteresis at the trigger point
-    gc = 0
-    # flag for controlling when output is required
-    triggered = False
-
-   
-    reset() 
-    # new approach shifts time axis only without changing y axis values.
-    # less computation, we could further reduce by retaining y values as text.
+    
+    # setup process_fn
+    reset()
 
     # read data from standard input
-    for line in sys.stdin:
-        #
-        # SPECIAL CASE, NO TRIGGER
-        #
-        if mode == FREERUN:
-            # just pass the data through unaltered
-            sys.stdout.write(line)
-            continue
+    try:
+        for line in sys.stdin:
+            process_fn(line)
 
-        #
-        # FILLING BUFFER
-        #
-        try:
-            # we store each incoming line in a circular buffer
-            buf.store([float(w) for w in line.split()])
+    except ValueError:
+        print(f"trigger.py, main(): Failed to read contents of line '{line}'.", file=sys.stderr)
 
-        except ValueError:
-            print('trigger.py, main(): Failed to read contents of line "' + line + '".', file=sys.stderr)
 
-        #
-        # TRIGGER TEST
-        #
-        # if hold off is clear, and we are not currently triggered, we check to see if any samples that 
-        # haven't yet been tested meet the trigger qualification. If they do they will increase gc, the
-        # trigger 'gate counter'. And then, if the gc exceeds a certain threshold, the trigger will be
-        # 'fired'.
-        while (not triggered) and (hc >= st.holdoff_samples) and (not buf.drained()):
-        #while not triggered and not buf.drained():
-            gc = trigger_gate(buf, st.trigger_channel, st.trigger_level,\
-                                  st.trigger_hysteresis, st.trigger_gate_transition, gc)
-            if gc == st.trigger_gate_length:
-                # trigger qualifications (ie entire hysteresis pattern) has been met!
-                triggered = True
-                # using linear interpolation, find out the exact timing offset between
-                # samples where the trigger position is 
-                buf.shift_pointer(-st.trigger_gate_transition)
-                s1 = buf.peek()[st.trigger_channel + 1]
-                s0 = buf.peek_previous()[st.trigger_channel + 1]
-                if s0 == s1:
-                    # we need to trap situation where the samples have the same value
-                    # to avoid a divide by zero error
-                    interpolation_fraction = 0.0
-                else:
-                    interpolation_fraction = s1 / (s1 - s0)
-                # figure out the 'pre-trigger' index and set the output pointer to that position
-                # output to stdout will start from this position in the buffer
-                buf.shift_pointer(-st.pre_trigger_samples+1)
-                # reset the holdoff counter and output counters
-                hc, oc = (0, 1)
-            else:
-                # move on to the next sample
-                buf.drain()
-
-        #
-        # DRAINING BUFFER 
-        #
-        # if triggered, print out all outstanding samples up to a count of st.frame_samples
-        while triggered and not buf.drained():
-            #ip = interpolate(buf.peek_previous()[1:], buf.peek()[1:], interpolation_fraction)
-            #output = (f'{st.interval*(oc-st.pre_trigger_samples) :12.4f} {ip[0] :10.3f} '
-            #          f'{ip[1] :10.5f} {ip[2] :10.3f} {ip[3] :10.7f}')
-            o = buf.peek()
-            output = (f'{st.interval*(oc-st.pre_trigger_samples+interpolation_fraction) :12.4f} {o[1] :10.3f} {o[2] :10.5f} {o[3] :10.3f} {o[4] :10.7f}')
-            # if we've finished a whole frame of data, mark the last sample and clear the trigger
-            if oc >= st.frame_samples:
-                print(output + ' END_FRAME')
-                # this pushes everything we've printed recently out of the runtime and into system 
-                # buffers
-                sys.stdout.flush()
-                triggered = False
-                gc = 0
-                # reverse the output index to approx 10% of frame length from the current input 
-                # position, up to a maximum of 2ms advance. This positioning helps the trigger 
-                # to work in a stable way on a repetitive waveform that has a period that is
-                # slightly faster than the display period.
-                buf.reset_pointer()
-                buf.shift_pointer(-min(st.frame_samples // 10, int(0.002*st.sample_rate)))
-            # if we haven't finished yet, print the current sample and advance to the next one
-            else:
-                print(output)
-                buf.drain()
-            oc = oc + 1
-
-        # increment the holdoff counter, this has to be done once per input sample/outer loop
-        # the holdoff counter prevents early re-triggering.
-        hc = hc + 1
- 
 
 if __name__ == '__main__':
     main()

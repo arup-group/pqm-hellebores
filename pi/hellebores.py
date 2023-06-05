@@ -284,8 +284,8 @@ def create_trigger(st):
     # Trigger controls
     #####
     # in freerun mode, trigger source is set to -1
-    # in sync mode, trigger source is set to ch0 and level to 0.0 (Volts), direction rising
-    # in inrush single mode, trigger source is set to ch3 and level to 0.1 (Watts), direction rising
+    # in sync mode, trigger source is set to ch0 and level to 0.0 (Volts), rising slope
+    # in inrush single mode, trigger source is set to ch3 and level to 0.1 (Watts), rising slope
     # inrush mode causes waveform update to stop on first trigger.
     def update_trigger_position(position, status):
         st.time_axis_pre_trigger_divisions = position
@@ -293,8 +293,8 @@ def create_trigger(st):
         update_trigger_status(status)
         st.send_to_all()
 
-    def update_trigger_direction(direction, status):
-        st.trigger_direction = direction
+    def update_trigger_slope(slope, status):
+        st.trigger_slope = slope
         update_trigger_status(status)
         st.send_to_all()
 
@@ -319,7 +319,7 @@ def create_trigger(st):
         if st.trigger_mode == 'freerun':
             status.set_text(f'Free-run: the trigger is disabled.', adapt_parent=False)
         elif st.trigger_mode == 'sync':
-            status.set_text(f'Sync: the trigger is enabled to find the {st.trigger_direction} edge of the voltage signal at magitude 0.0V.', adapt_parent=False)
+            status.set_text(f'Sync: the trigger is enabled to find the {st.trigger_slope} edge of the voltage signal at magitude 0.0V.', adapt_parent=False)
         elif st.trigger_mode == 'inrush':
             status.set_text(f'Inrush: the trigger is enabled for single-shot current detection, magnitude +/- {st.trigger_level}A. Press Run/Stop to reset.', adapt_parent=False)
         else:
@@ -336,8 +336,8 @@ def create_trigger(st):
     button_left = configure_button('Left', lambda: update_trigger_position(1, text_trigger_status))
     button_centre = configure_button('Centre', lambda: update_trigger_position(st.time_axis_divisions // 2, text_trigger_status))
     button_right = configure_button('Right', lambda: update_trigger_position(st.time_axis_divisions - 1, text_trigger_status))
-    button_rising = configure_button('Rising', lambda: update_trigger_direction('rising', text_trigger_status))
-    button_falling = configure_button('Falling', lambda: update_trigger_direction('falling', text_trigger_status))
+    button_rising = configure_button('Rising', lambda: update_trigger_slope('rising', text_trigger_status))
+    button_falling = configure_button('Falling', lambda: update_trigger_slope('falling', text_trigger_status))
     trigger = thorpy.TitleBox(text='Trigger', children=[button_done, \
         thorpy.Group(elements=[button_freerun, button_sync, button_inrush], mode='h'), \
         thorpy.Group(elements=[button_left, button_centre, button_right], mode='h'), \

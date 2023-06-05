@@ -86,7 +86,7 @@
     "scale_c2": 0.00122,
     "scale_c3": 0.0489,
     "trigger_channel": 0,
-    "trigger_direction": "rising",
+    "trigger_slope": "rising",
     "trigger_level": 0.0,
     "trigger_position": 5,
     "trigger_mode": "sync"

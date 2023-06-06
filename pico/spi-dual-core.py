@@ -7,7 +7,7 @@ import _thread
 import sys
 from micropython import const
 
-DEBUG_MODE           = const(True)
+DEBUG_MODE           = const(False)
 
 # Buffer memory
 # Advantage if the buffer size is a power of two, to allow divide by two and bit masks to work easily

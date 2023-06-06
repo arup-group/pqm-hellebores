@@ -80,22 +80,21 @@ class Buffer:
         sys.stdout.flush()
  
 
-def via_trigger(line):
-    global buf
+def via_trigger(line, buf):
     buf.store_line(line)
     if buf.triggered == False:
         buf.trigger_test()
-    if buf.output_ready():
+    elif buf.output_ready():
         buf.generate_output()
         buf.triggered = False
 
 
-def pass_through(line):
+def pass_through(line, buf):
     print(line)
 
 
-def reset():
-    global st, process_fn, buf
+def receive_new_settings(buf):
+    global st, process_fn
     
     # interpolation fraction
     def i_frac(s1, s2, threshold):
@@ -130,21 +129,23 @@ def reset():
 
 
 def main():
-    global st, process_fn, buf
+    global st, process_fn
     # we make a buffer to temporarily hold a history of samples -- this allows us to output
     # a frame of waveform that includes samples 'before the trigger'
     buf = Buffer()
 
     # load settings into st object
-    st = settings.Settings(reset)
+    st = settings.Settings(lambda: receive_new_settings(buf))
     
-    # setup process_fn
-    reset()
+    # setup process_fn and set correct trigger condition
+    receive_new_settings(buf)
 
     # read data from standard input
     try:
         for line in sys.stdin:
-            process_fn(line.rstrip())
+            # the process_fn that will be executed will change dynamically depending on 
+            # trigger settings. This is setup in 'receive_new_settings'
+            process_fn(line.rstrip(), buf)
 
     except ValueError:
         print(f"trigger.py, main(): Failed to read contents of line '{line}'.", file=sys.stderr)

@@ -480,7 +480,7 @@ def draw_background(st):
 
     # empty background
     background_surface = pygame.Surface(SCOPE_BOX_SIZE)
-    background_surface.fill(BLACK)
+    background_surface.fill(GREY)
 
     # draw the graticule lines
     for dx in range(1, st.time_axis_divisions):
@@ -502,7 +502,8 @@ def draw_background(st):
     return background_surface
 
 
-def redraw_lines(lines, screen, background_surface):
+
+def draw_dots(lines, screen, background_surface):
     # can handle up to six lines...
     colours = [ GREEN, YELLOW, MAGENTA, CYAN, RED, BLUE ]
     screen.blit(background_surface, (0,0))
@@ -510,13 +511,37 @@ def redraw_lines(lines, screen, background_surface):
     display_status = [ st.voltage_display_status, st.current_display_status, st.power_display_status, \
                           st.earth_leakage_current_display_status ]
     try:
+        pa = pygame.PixelArray(screen)
         for i in range(len(linedata)):
             if display_status[i] == True:
-                pygame.draw.lines(screen, colours[i], False, linedata[i], 2)
+                for pixel in linedata[i]:
+                    pa[pixel[0], pixel[1]] = colours[i]
+                    pa[pixel[0]+1, pixel[1]] = colours[i]
+                    pa[pixel[0], pixel[1]+1] = colours[i]
+                    pa[pixel[0]+1, pixel[1]+1] = colours[i]
+        pa.close()
     except ValueError:
         # the pygame.draw.lines will throw an exception if there are not at
         # least two points in each line - (sounds reasonable)
-        sys.stderr.write(f'Exception in hellebores.py: redraw_lines(). Linedata is: {linedata}.\n')
+        sys.stderr.write(f'exception in hellebores.py: draw_dots(). linedata is: {linedata}.\n')
+
+redraw_lines = draw_dots
+
+def _redraw_lines(lines, screen, background_surface):
+    # can handle up to six lines...
+    colours = [ green, yellow, magenta, cyan, red, blue ]
+    screen.blit(background_surface, (0,0))
+    linedata = lines.get_lines()
+    display_status = [ st.voltage_display_status, st.current_display_status, st.power_display_status, \
+                          st.earth_leakage_current_display_status ]
+    try:
+        for i in range(len(linedata)):
+            if display_status[i] == True:
+                pygame.draw.lines(screen, colours[i], false, linedata[i], 2)
+    except ValueError:
+        # the pygame.draw.lines will throw an exception if there are not at
+        # least two points in each line - (sounds reasonable)
+        sys.stderr.write(f'exception in hellebores.py: redraw_lines(). linedata is: {linedata}.\n')
 
 
 class WFS_Counter:

@@ -480,7 +480,7 @@ def draw_background(st):
 
     # empty background
     background_surface = pygame.Surface(SCOPE_BOX_SIZE)
-    background_surface.fill(BLACK)
+    background_surface.fill(GREY)
 
     # draw the graticule lines
     for dx in range(1, st.time_axis_divisions):

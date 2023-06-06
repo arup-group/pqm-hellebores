@@ -595,11 +595,11 @@ class Lines:
         # (d) the line is empty, can't be split() or any other kind of read error
         # returns 'True' if we have completed a new frame
         xp = -1                 # tracks previous 'x coordinate'
-        while is_data_available(f, 0.05): 
+        while is_data_available(f, 0.01): 
             try:
-                sample = [ int(w) for w in f.readline().split() ]
-                if sample[-1] < 0:
-                    # negative integer was appended to indicate end of frame...
+                ws = f.readline().split()
+                sample = [ int(w) for w in ws[:5] ]
+                if ws[5] == '***END***':
                     # add current sample then end the frame
                     self.add_sample(sample)
                     self.end_frame(capturing, wfs)

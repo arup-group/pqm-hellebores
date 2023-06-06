@@ -23,7 +23,8 @@ def main():
    for line in sys.stdin: # receive data from standard input
         try:
             ws = line.split()    # take this line and split on whitespace
-            t, c0, c1, c2, c3 = ws[:5]
+            # time, channels 0 to 3, end marker
+            t, c0, c1, c2, c3, em = ws
             # % st.x_pixels forces x coordinate to be between 0 and 699
             x = int((float(t) + st.time_shift) \
                         * st.horizontal_pixels_per_division/st.time_axis_per_division) % st.x_pixels
@@ -40,13 +41,10 @@ def main():
             y3 = bound(0, ymax, \
                     (int(-float(c3) * st.vertical_pixels_per_division/st.earth_leakage_current_axis_per_division) \
                            + st.half_y_pixels))
-            if ws[-1] == 'END_FRAME':
-                # negative number at end is a flag in numerical form to indicate that this is the last 
-                # sample of the current frame
-                print(f'{x} {y0} {y1} {y2} {y3} -1')
+            print(f'{x :4d} {y0 :4d} {y1 :4d} {y2 :4d} {y3 :4d} {em}')
+            # make sure we get a clean flush of the buffer for single shot (eg inrush) events
+            if em == '***END***':
                 sys.stdout.flush()
-            else:
-                print(f'{x} {y0} {y1} {y2} {y3}')
 
         except ValueError:
             # if stuff goes wrong, deal with it here

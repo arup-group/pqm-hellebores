@@ -72,11 +72,14 @@ class Buffer:
     def generate_output(self):
         # output the correct array slice with a time shift
         shift = 1.0 - self.rp - st.pre_trigger_samples - self.interpolation_fraction
+        end_mark = ';'
         for s in range(self.rp, self.fp):
             sample = self.buf[s % BUFFER_SIZE]
             # modify the time stamps
             timestamp = st.interval * (s + shift)
-            print('{:12.4f} {:10.3f} {:10.5f} {:10.3f} {:12.7f}'.format(timestamp, *sample[1:]))
+            if s == self.fp - 1:
+                end_mark = '***END***'
+            print('{:12.4f} {:10.3f} {:10.5f} {:10.3f} {:12.7f} {}'.format(timestamp, *sample[1:], end_mark))
         sys.stdout.flush()
  
 

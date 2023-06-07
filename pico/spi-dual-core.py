@@ -34,7 +34,7 @@ reset_me     = machine.Pin(14, Pin.IN)     # hardware reset of Pico (active low,
 
 # SPI setup
 spi_adc = machine.SPI(0,
-                  baudrate   = 6000000,
+                  baudrate   = 2000000,
                   polarity   = 0,
                   phase      = 0,
                   bits       = 8,

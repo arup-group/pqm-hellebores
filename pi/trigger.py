@@ -7,7 +7,7 @@
 import sys
 import signal
 import settings
-import numpy as np
+#import numpy as np
 
 
 BUFFER_SIZE = 65535          # size of circular sample buffer
@@ -31,7 +31,8 @@ class Buffer:
 
 
     def __init__(self):
-        self.buf = np.zeros((BUFFER_SIZE, 5), float)
+        self.buf = [ [0.0, 0.0, 0.0, 0.0, 0.0] for i in range(BUFFER_SIZE) ]
+        #self.buf = np.zeros((BUFFER_SIZE, 5), float)
 
     def reset(self, test_fn, test_ch):
         self.trigger_test_fn = test_fn
@@ -42,7 +43,8 @@ class Buffer:
     # to be manipulated other than here.
     def store_line(self, line):
         try:
-            self.buf[self.sp % BUFFER_SIZE,:] = np.fromstring(line, dtype=float, sep=' ')
+            self.buf[self.sp % BUFFER_SIZE] = [ float(w) for w in line.split() ]
+            #self.buf[self.sp % BUFFER_SIZE,:] = np.fromstring(line, dtype=float, sep=' ')
         except:
             print(f"trigger.py, store_line(): Couldn't interpret '{line}'.", file=sys.stderr)
         self.sp = self.sp + 1 
@@ -52,8 +54,10 @@ class Buffer:
     def trigger_test(self):
         while self.tp < self.sp:
             self.triggered, self.interpolation_fraction = \
-                   self.trigger_test_fn(self.buf[(self.tp - 1) % BUFFER_SIZE, self.trigger_test_ch], \
-                                            self.buf[self.tp % BUFFER_SIZE, self.trigger_test_ch])
+                   self.trigger_test_fn(self.buf[(self.tp - 1) % BUFFER_SIZE][self.trigger_test_ch], \
+                                            self.buf[self.tp % BUFFER_SIZE][self.trigger_test_ch])
+                   #self.trigger_test_fn(self.buf[(self.tp - 1) % BUFFER_SIZE, self.trigger_test_ch], \
+                   #                         self.buf[self.tp % BUFFER_SIZE, self.trigger_test_ch])
             if self.triggered:
                 self.fp = self.tp + st.post_trigger_samples
                 self.rp = self.tp - st.pre_trigger_samples
@@ -72,13 +76,13 @@ class Buffer:
     def generate_output(self):
         # output the correct array slice with a time shift
         shift = 1.0 - self.rp - st.pre_trigger_samples - self.interpolation_fraction
-        end_mark = ';'
+        end_mark = ''
         for s in range(self.rp, self.fp):
             sample = self.buf[s % BUFFER_SIZE]
             # modify the time stamps
             timestamp = st.interval * (s + shift)
             if s == self.fp - 1:
-                end_mark = '***END***'
+                end_mark = '*END*'
             print('{:12.4f} {:10.3f} {:10.5f} {:10.3f} {:12.7f} {}'.format(timestamp, *sample[1:], end_mark))
         sys.stdout.flush()
  
@@ -124,7 +128,7 @@ def receive_new_settings(buf):
         process_fn = via_trigger
         buf.reset(trigger_fn_generator(st.trigger_slope, 0.0), 1) 
     elif st.trigger_mode == 'inrush':
-        buf.reset(trigger_fn_generator(st.trigger_slope, st.trigger_threshold), 3)
+        buf.reset(trigger_fn_generator(st.trigger_slope, st.trigger_level), 3)
     else:
         print("trigger.py, reset(): trigger_mode not recognised, defaulting to sync.", file=sys.stderr)
         process_fn = via_trigger

@@ -23,8 +23,12 @@ def main():
    for line in sys.stdin: # receive data from standard input
         try:
             ws = line.split()    # take this line and split on whitespace
-            # time, channels 0 to 3, end marker
-            t, c0, c1, c2, c3, em = ws
+            # time, channels 0 to 3, end marker may be present at ws[5]
+            t, c0, c1, c2, c3 = ws[:5]
+            if ws[-1] == '*END*':
+                em = '*END*'
+            else:
+                em = ''              
             # % st.x_pixels forces x coordinate to be between 0 and 699
             x = int((float(t) + st.time_shift) \
                         * st.horizontal_pixels_per_division/st.time_axis_per_division) % st.x_pixels
@@ -42,8 +46,9 @@ def main():
                     (int(-float(c3) * st.vertical_pixels_per_division/st.earth_leakage_current_axis_per_division) \
                            + st.half_y_pixels))
             print(f'{x :4d} {y0 :4d} {y1 :4d} {y2 :4d} {y3 :4d} {em}')
-            # make sure we get a clean flush of the buffer for single shot (eg inrush) events
-            if em == '***END***':
+            # make sure we get a clean flush of the buffer so that single shot (eg inrush) events
+            # will be immediately displayed
+            if em == '.':
                 sys.stdout.flush()
 
         except ValueError:

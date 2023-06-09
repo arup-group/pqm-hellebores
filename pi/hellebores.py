@@ -599,7 +599,7 @@ class Lines:
             try:
                 ws = f.readline().split()
                 sample = [ int(w) for w in ws[:5] ]
-                if ws[5] == '***END***':
+                if ws[-1] == '*END*':
                     # add current sample then end the frame
                     self.add_sample(sample)
                     self.end_frame(capturing, wfs)

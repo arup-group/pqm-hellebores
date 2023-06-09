@@ -2,12 +2,10 @@
 
 # Reset time t=0 in response to signal event eg voltage crossing zero
 # Time offset other sample readings with respect to the trigger
-# Lighter-weight trigger using numpy to accelerate the comparator.
 
 import sys
 import signal
 import settings
-#import numpy as np
 
 
 BUFFER_SIZE = 65535          # size of circular sample buffer
@@ -32,7 +30,6 @@ class Buffer:
 
     def __init__(self):
         self.buf = [ [0.0, 0.0, 0.0, 0.0, 0.0] for i in range(BUFFER_SIZE) ]
-        #self.buf = np.zeros((BUFFER_SIZE, 5), float)
 
     def reset(self, test_fn, test_ch):
         self.trigger_test_fn = test_fn
@@ -44,7 +41,6 @@ class Buffer:
     def store_line(self, line):
         try:
             self.buf[self.sp % BUFFER_SIZE] = [ float(w) for w in line.split() ]
-            #self.buf[self.sp % BUFFER_SIZE,:] = np.fromstring(line, dtype=float, sep=' ')
         except:
             print(f"trigger.py, store_line(): Couldn't interpret '{line}'.", file=sys.stderr)
         self.sp = self.sp + 1 
@@ -56,8 +52,6 @@ class Buffer:
             self.triggered, self.interpolation_fraction = \
                    self.trigger_test_fn(self.buf[(self.tp - 1) % BUFFER_SIZE][self.trigger_test_ch], \
                                             self.buf[self.tp % BUFFER_SIZE][self.trigger_test_ch])
-                   #self.trigger_test_fn(self.buf[(self.tp - 1) % BUFFER_SIZE, self.trigger_test_ch], \
-                   #                         self.buf[self.tp % BUFFER_SIZE, self.trigger_test_ch])
             if self.triggered:
                 self.fp = self.tp + st.post_trigger_samples
                 self.rp = self.tp - st.pre_trigger_samples

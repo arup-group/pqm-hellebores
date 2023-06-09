@@ -595,7 +595,7 @@ class Lines:
         # (d) the line is empty, can't be split() or any other kind of read error
         # returns 'True' if we have completed a new frame
         xp = -1                 # tracks previous 'x coordinate'
-        while is_data_available(f, 0.01): 
+        while is_data_available(f, 0.002): 
             try:
                 ws = f.readline().split()
                 sample = [ int(w) for w in ws[:5] ]

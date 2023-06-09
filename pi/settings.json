@@ -73,7 +73,7 @@
     ],
     "earth_leakage_current_display_index": 7,
     "earth_leakage_current_display_status": false,
-    "adc_offset_trim_c0": -30,
+    "adc_offset_trim_c0": 5,
     "adc_offset_trim_c1": -36,
     "adc_offset_trim_c2": -30,
     "adc_offset_trim_c3": 0,

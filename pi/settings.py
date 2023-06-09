@@ -27,7 +27,7 @@ class Settings():
         self.frame_samples              = self.pre_trigger_samples + self.post_trigger_samples - 1
         # we set a hold-off threshold (minimum number of samples to next trigger) to be slightly less
         # (2ms) than one full screenful of data, and minimum time of 10ms.
-        self.holdoff_samples            = max((0.010 * self.sample_rate), self.frame_samples - int(0.002 * self.sample_rate))
+        self.holdoff_samples            = max(int(0.010 * self.sample_rate), self.frame_samples - int(0.002 * self.sample_rate))
         self.time_shift                 = self.time_axis_pre_trigger_divisions * self.time_axis_per_division
         self.x_pixels                   = self.time_axis_divisions * self.horizontal_pixels_per_division
         self.y_pixels                   = self.vertical_axis_divisions * self.vertical_pixels_per_division

@@ -26,8 +26,7 @@ def main():
         tn = int(time.time()*1000.0/st.interval)
         if tn != tp:
             tp = tn
-            t, c0, c1, c2, c3 = rain_bucket[i % 78125].split()
-            print(f'{t :04s} {c0 :04s} {c1 :04s} {c2 :04s} {c3 :04s}')
+            print(rain_bucket[i % 78125])
             i = i + 1
 
 if __name__ == '__main__':

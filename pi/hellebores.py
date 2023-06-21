@@ -533,7 +533,7 @@ def plot(lines, screen, background_surface):
                           st.earth_leakage_current_display_status ]
     try:
         plot_fn(screen, linedata, display_status, colours)
-    except IndexError, ValueError:
+    except (IndexError, ValueError):
         # the pygame.draw.lines will throw an exception if there are not at
         # least two points in each line - (sounds reasonable)
         sys.stderr.write(f'exception in hellebores.py: plot_fn(). linedata is: {linedata}.\n')

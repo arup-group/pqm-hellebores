@@ -502,21 +502,40 @@ def draw_background(st):
     return background_surface
 
 
-def redraw_lines(lines, screen, background_surface):
-    # can handle up to six lines...
+# The plot function that will be used depends on st.plot_mode.
+# plot_fn is set to point to the appropriate function.
+def _plot_dots(screen, linedata, display_status, colours):
+    pa = pygame.PixelArray(screen)
+    for i in range(len(linedata)):
+        if display_status[i] == True:
+            for pixel in linedata[i]:
+                pa[pixel[0], pixel[1]] = colours[i]
+                pa[pixel[0]+1, pixel[1]] = colours[i]
+                pa[pixel[0], pixel[1]+1] = colours[i]
+                pa[pixel[0]+1, pixel[1]+1] = colours[i]
+    pa.close()
+
+def _plot_lines(screen, linedata, display_status, colours):
+    for i in range(len(linedata)):
+        if display_status[i] == True:
+            pygame.draw.lines(screen, colours[i], False, linedata[i], 2)
+
+# initial set up is lines
+plot_fn = _plot_lines
+
+def plot(lines, screen, background_surface):
+    # can handle up to six plots...
     colours = [ GREEN, YELLOW, MAGENTA, CYAN, RED, BLUE ]
     screen.blit(background_surface, (0,0))
     linedata = lines.get_lines()
     display_status = [ st.voltage_display_status, st.current_display_status, st.power_display_status, \
                           st.earth_leakage_current_display_status ]
     try:
-        for i in range(len(linedata)):
-            if display_status[i] == True:
-                pygame.draw.lines(screen, colours[i], False, linedata[i], 2)
+        plot_fn(screen, linedata, display_status, colours)
     except ValueError:
         # the pygame.draw.lines will throw an exception if there are not at
         # least two points in each line - (sounds reasonable)
-        sys.stderr.write(f'Exception in hellebores.py: redraw_lines(). Linedata is: {linedata}.\n')
+        sys.stderr.write(f'exception in hellebores.py: plot_fn(). linedata is: {linedata}.\n')
 
 
 class WFS_Counter:
@@ -693,13 +712,19 @@ def main():
         # check if we should refresh the main display
         # note that when we are capturing we only refresh when we have something new 
         if (capturing and got_new_frame) or not capturing:
-            redraw_lines(lines, screen, background_surface) 
+            plot(lines, screen, background_surface) 
             ui_groups['datetime'].draw()
         # here we process mouse/touch/keyboard events.
         events = pygame.event.get()
+        global plot_fn
         for e in events:
             if (e.type == pygame.QUIT) or (e.type == pygame.KEYDOWN and e.key == pygame.K_q):
                 running = False
+            elif e.type == pygame.KEYDOWN and e.key == pygame.K_d:
+                plot_fn = _plot_dots
+            elif e.type == pygame.KEYDOWN and e.key == pygame.K_l:
+                plot_fn = _plot_lines
+
         # ui_current_updater.update() is an expensive function, so we use the simplest possible
         # thorpy theme for performance
         ui_current_updater.update(events=events)

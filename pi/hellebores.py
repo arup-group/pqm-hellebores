@@ -509,6 +509,7 @@ def _plot_dots(screen, linedata, display_status, colours):
     for i in range(len(linedata)):
         if display_status[i] == True:
             for pixel in linedata[i]:
+                # we actually make a quad of four pixels, so we can see it
                 pa[pixel[0], pixel[1]] = colours[i]
                 pa[pixel[0]+1, pixel[1]] = colours[i]
                 pa[pixel[0], pixel[1]+1] = colours[i]
@@ -532,7 +533,7 @@ def plot(lines, screen, background_surface):
                           st.earth_leakage_current_display_status ]
     try:
         plot_fn(screen, linedata, display_status, colours)
-    except ValueError:
+    except IndexError, ValueError:
         # the pygame.draw.lines will throw an exception if there are not at
         # least two points in each line - (sounds reasonable)
         sys.stderr.write(f'exception in hellebores.py: plot_fn(). linedata is: {linedata}.\n')

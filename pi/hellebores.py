@@ -40,9 +40,9 @@ CONTROLS_BOX_POSITION = (800,0)      # top right corner
 SETTINGS_BOX_SIZE = (500,400)        # 'dialog' boxes
 SETTINGS_BOX_POSITION = (690,100)    # top right corner
 BUTTON_SIZE = (90,50) 
-ARROW_BUTTON_SIZE = (90,50)
+BUTTON_WIDE_SIZE = (180,50) 
 TEXT_SIZE = (90,16)
-TEXT2_SIZE = (120,16)
+TEXT_WIDE_SIZE = (120,16)
 FONT = 'dejavusansmono'
 FONT_SIZE = 14
 LINES_BUFFER_SIZE = 100 
@@ -109,29 +109,29 @@ def create_datetime():
     return [ text_datetime ]
 
 
-def configure_switch_button(value, callback_function):
-    button = thorpy.SwitchButton(value, size=BUTTON_SIZE, \
-                 drag_size=(BUTTON_SIZE[0]//3, BUTTON_SIZE[1]//2))
+def configure_switch_button(size, value, callback_function):
+    button = thorpy.SwitchButton(value, size, \
+                 drag_size=(size[0]//3, size[1]//2))
     button.set_bck_color(VERY_LIGHT_GREY, 'normal')
     button.set_bck_color(VERY_LIGHT_GREY, 'hover')
     button.set_font_color(WHITE)
     button.at_unclick = callback_function
     return button
 
-def configure_arrow_button(direction, callback_function):
-    button = thorpy.ArrowButton(direction, BUTTON_SIZE) 
+def configure_arrow_button(size, direction, callback_function):
+    button = thorpy.ArrowButton(direction, size) 
     button.set_bck_color(VERY_LIGHT_GREY, 'normal')
     button.set_bck_color(VERY_LIGHT_GREY, 'hover')
     button.set_font_color(WHITE)
     button.at_unclick = callback_function
     return button
  
-def configure_button(text, callback_function):
+def configure_button(size, text, callback_function):
     button = thorpy.Button(text) 
     button.set_bck_color(VERY_LIGHT_GREY, 'normal')
     button.set_bck_color(VERY_LIGHT_GREY, 'hover')
     button.set_font_color(WHITE)
-    button.set_size(BUTTON_SIZE)
+    button.set_size(size)
     button.at_unclick = callback_function
     return button
     
@@ -145,7 +145,7 @@ def create_main_controls(texts):
                      ('Vertical', vertical_reaction), \
                      ('Trigger', trigger_reaction), \
                      ('Options', options_reaction) ]
-    buttons = [ configure_button(bt, bf) for bt, bf in button_setup ]
+    buttons = [ configure_button(BUTTON_SIZE, bt, bf) for bt, bf in button_setup ]
  
     main = thorpy.Box([ *texts.get()[0:2], *buttons, *texts.get()[2:] ])
     main.set_bck_color(LIGHT_GREY)
@@ -153,6 +153,50 @@ def create_main_controls(texts):
         e.hand_cursor = False    
     return main
 
+
+def create_mode(st):
+    #####
+    # Mode controls
+    #####
+    button_done = configure_button(BUTTON_SIZE, 'Done', back_to_main_reaction)
+    button_waveform = configure_button(BUTTON_WIDE_SIZE, 'Waveform', waveform_reaction)
+    button_meter = configure_button(BUTTON_WIDE_SIZE, 'Meter', meter_reaction)
+    button_voltage_harmonics = configure_button(BUTTON_WIDE_SIZE, 'Voltage harmonics', voltage_harmonics_reaction)
+    button_current_harmonics = configure_button(BUTTON_WIDE_SIZE, 'Current harmonics', current_harmonics_reaction)
+
+    mode = thorpy.TitleBox(text='Mode', children=[button_done, \
+             thorpy.Group(elements=[button_waveform, button_meter, button_voltage_harmonics, button_current_harmonics], mode='v')])
+    for e in mode.get_all_descendants():
+        e.hand_cursor = False    
+    return mode
+
+
+def create_horizontal(st):
+    #####
+    # Horizontal controls
+    #####
+    def update_time_range(times, offset):
+        times.change_range(offset)
+        time_display.set_text(f'{times.get_value()} ms/div', adapt_parent=False)
+        st.time_display_index = times.get_index()
+        st.send_to_all()
+
+    button_done = configure_button(BUTTON_SIZE, 'Done', back_to_main_reaction)
+
+    times               = Range_controller(st.time_display_ranges, st.time_display_index)
+    time_display        = thorpy.Text(f'{times.get_value()} ms/div') 
+    time_display.set_size(TEXT_WIDE_SIZE)
+    time_down           = configure_arrow_button(BUTTON_SIZE, 'left', \
+                              lambda: update_time_range(times, -1))
+    time_up             = configure_arrow_button(BUTTON_SIZE, 'right', \
+                              lambda: update_time_range(times, 1))
+
+    horizontal = thorpy.TitleBox(text='Horizontal', children=[button_done, \
+             thorpy.Group(elements=[time_display, time_down, time_up], mode='h')])
+    for e in horizontal.get_all_descendants():
+        e.hand_cursor = False    
+    return horizontal
+ 
 
 def create_vertical(st):
     #####
@@ -195,47 +239,47 @@ def create_vertical(st):
             print('hellebores.py: flip_display_switch() channel not recognised.', file=sys.stderr)
         st.send_to_all()
 
-    button_done = configure_button('Done', back_to_main_reaction)
+    button_done = configure_button(BUTTON_SIZE, 'Done', back_to_main_reaction)
 
     voltages                  = Range_controller(st.voltage_display_ranges, st.voltage_display_index)
-    voltage_onoff             = configure_switch_button(st.voltage_display_status, \
+    voltage_onoff             = configure_switch_button(BUTTON_SIZE, st.voltage_display_status, \
                                     lambda: flip_display_switch('voltage', voltage_onoff.value))
     voltage_display           = thorpy.Text(f'{voltages.get_value()} V/div') 
-    voltage_display.set_size(TEXT2_SIZE)
-    voltage_down              = configure_arrow_button('up', \
+    voltage_display.set_size(TEXT_WIDE_SIZE)
+    voltage_down              = configure_arrow_button(BUTTON_SIZE, 'up', \
                                     lambda: update_voltage_range(voltages, -1))
-    voltage_up                = configure_arrow_button('down', \
+    voltage_up                = configure_arrow_button(BUTTON_SIZE, 'down', \
                                     lambda: update_voltage_range(voltages, 1))
 
     currents                  = Range_controller(st.current_display_ranges, st.current_display_index)
-    current_onoff             = configure_switch_button(st.current_display_status, \
+    current_onoff             = configure_switch_button(BUTTON_SIZE, st.current_display_status, \
                                     lambda: flip_display_switch('current', current_onoff.value))
     current_display           = thorpy.Text(f'{currents.get_value()} A/div')
-    current_display.set_size(TEXT2_SIZE)
-    current_down              = configure_arrow_button('up', \
+    current_display.set_size(TEXT_WIDE_SIZE)
+    current_down              = configure_arrow_button(BUTTON_SIZE, 'up', \
                                     lambda: update_current_range(currents, -1))
-    current_up                = configure_arrow_button('down', \
+    current_up                = configure_arrow_button(BUTTON_SIZE, 'down', \
                                     lambda: update_current_range(currents, 1))
     
     powers                    = Range_controller(st.power_display_ranges, st.power_display_index)
-    power_onoff               = configure_switch_button(st.power_display_status, \
+    power_onoff               = configure_switch_button(BUTTON_SIZE, st.power_display_status, \
                                     lambda: flip_display_switch('power', power_onoff.value))
     power_display             = thorpy.Text(f'{powers.get_value()} W/div')
-    power_display.set_size(TEXT2_SIZE)
-    power_down                = configure_arrow_button('up', \
+    power_display.set_size(TEXT_WIDE_SIZE)
+    power_down                = configure_arrow_button(BUTTON_SIZE, 'up', \
                                     lambda: update_power_range(powers, -1))
-    power_up                  = configure_arrow_button('down', \
+    power_up                  = configure_arrow_button(BUTTON_SIZE, 'down', \
                                     lambda: update_power_range(powers, 1))
   
     leakage_currents          = Range_controller(st.earth_leakage_current_display_ranges, \
                                                    st.earth_leakage_current_display_index)
-    leakage_current_onoff     = configure_switch_button(st.earth_leakage_current_display_status, \
+    leakage_current_onoff     = configure_switch_button(BUTTON_SIZE, st.earth_leakage_current_display_status, \
                                     lambda: flip_display_switch('leakage', leakage_current_onoff.value))
     leakage_current_display   = thorpy.Text(f'{leakage_currents.get_value()*1000.0} mA/div')
-    leakage_current_display.set_size(TEXT2_SIZE)
-    leakage_current_down      = configure_arrow_button('up', \
+    leakage_current_display.set_size(TEXT_WIDE_SIZE)
+    leakage_current_down      = configure_arrow_button(BUTTON_SIZE, 'up', \
                                     lambda: update_leakage_current_range(leakage_currents, -1))
-    leakage_current_up        = configure_arrow_button('down', \
+    leakage_current_up        = configure_arrow_button(BUTTON_SIZE, 'down', \
                                     lambda: update_leakage_current_range(leakage_currents, 1))
  
     vertical = thorpy.TitleBox(text='Vertical', children=[button_done, \
@@ -252,32 +296,7 @@ def create_vertical(st):
     return vertical
 
 
-def create_horizontal(st):
-    #####
-    # Horizontal controls
-    #####
-    def update_time_range(times, offset):
-        times.change_range(offset)
-        time_display.set_text(f'{times.get_value()} ms/div', adapt_parent=False)
-        st.time_display_index = times.get_index()
-        st.send_to_all()
 
-    button_done = configure_button('Done', back_to_main_reaction)
-
-    times               = Range_controller(st.time_display_ranges, st.time_display_index)
-    time_display        = thorpy.Text(f'{times.get_value()} ms/div') 
-    time_display.set_size(TEXT2_SIZE)
-    time_down           = configure_arrow_button('left', \
-                              lambda: update_time_range(times, -1))
-    time_up             = configure_arrow_button('right', \
-                              lambda: update_time_range(times, 1))
-
-    horizontal = thorpy.TitleBox(text='Horizontal', children=[button_done, \
-             thorpy.Group(elements=[time_display, time_down, time_up], mode='h')])
-    for e in horizontal.get_all_descendants():
-        e.hand_cursor = False    
-    return horizontal
- 
 
 def create_trigger(st):
     #####
@@ -329,15 +348,15 @@ def create_trigger(st):
     # fill with temporary text so that the correct size is allocated for the enclosing box
     text_trigger_status = thorpy.Text('Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.')
     text_trigger_status.set_max_text_width(280)
-    button_done = configure_button('Done', back_to_main_reaction)
-    button_freerun = configure_button('Free-run', lambda: update_trigger_mode('freerun', text_trigger_status))
-    button_sync = configure_button('Sync', lambda: update_trigger_mode('sync', text_trigger_status))
-    button_inrush = configure_button('Inrush', lambda: update_trigger_mode('inrush', text_trigger_status))
-    button_left = configure_button('Left', lambda: update_trigger_position(1, text_trigger_status))
-    button_centre = configure_button('Centre', lambda: update_trigger_position(st.time_axis_divisions // 2, text_trigger_status))
-    button_right = configure_button('Right', lambda: update_trigger_position(st.time_axis_divisions - 1, text_trigger_status))
-    button_rising = configure_button('Rising', lambda: update_trigger_slope('rising', text_trigger_status))
-    button_falling = configure_button('Falling', lambda: update_trigger_slope('falling', text_trigger_status))
+    button_done = configure_button(BUTTON_SIZE, 'Done', back_to_main_reaction)
+    button_freerun = configure_button(BUTTON_SIZE, 'Free-run', lambda: update_trigger_mode('freerun', text_trigger_status))
+    button_sync = configure_button(BUTTON_SIZE, 'Sync', lambda: update_trigger_mode('sync', text_trigger_status))
+    button_inrush = configure_button(BUTTON_SIZE, 'Inrush', lambda: update_trigger_mode('inrush', text_trigger_status))
+    button_left = configure_button(BUTTON_SIZE, 'Left', lambda: update_trigger_position(1, text_trigger_status))
+    button_centre = configure_button(BUTTON_SIZE, 'Centre', lambda: update_trigger_position(st.time_axis_divisions // 2, text_trigger_status))
+    button_right = configure_button(BUTTON_SIZE, 'Right', lambda: update_trigger_position(st.time_axis_divisions - 1, text_trigger_status))
+    button_rising = configure_button(BUTTON_SIZE, 'Rising', lambda: update_trigger_slope('rising', text_trigger_status))
+    button_falling = configure_button(BUTTON_SIZE, 'Falling', lambda: update_trigger_slope('falling', text_trigger_status))
     trigger = thorpy.TitleBox(text='Trigger', children=[button_done, \
         thorpy.Group(elements=[button_freerun, button_sync, button_inrush], mode='h'), \
         thorpy.Group(elements=[button_left, button_centre, button_right], mode='h'), \
@@ -372,6 +391,10 @@ def create_ui_groups(st, texts):
     ui_main.set_topright(*CONTROLS_BOX_POSITION)
     ui_groups['main'] = thorpy.Group(elements=[ui_main], mode=None)
 
+    ui_mode = create_mode(st)
+    ui_mode.set_topright(*SETTINGS_BOX_POSITION)
+    ui_groups['mode'] = thorpy.Group(elements=[ui_main, ui_mode], mode=None)
+
     ui_vertical = create_vertical(st)
     ui_vertical.set_topright(*SETTINGS_BOX_POSITION)
     ui_groups['vertical'] = thorpy.Group(elements=[ui_main, ui_vertical], mode=None)
@@ -393,6 +416,19 @@ def start_stop_reaction(texts):
     texts.refresh()    
 
 def mode_reaction():
+    global ui_groups, ui_current_updater
+    ui_current_updater = ui_groups['mode'].get_updater() 
+
+def waveform_reaction():
+    pass
+
+def meter_reaction():
+    pass
+
+def voltage_harmonics_reaction():
+    pass
+
+def current_harmonics_reaction():
     pass
 
 def horizontal_reaction():
@@ -502,18 +538,14 @@ def draw_background(st):
     return background_surface
 
 
-# The plot function that will be used depends on st.plot_mode.
-# plot_fn is set to point to the appropriate function.
+# The plot function that will be used is configurable
+# plot_fn is set to point to either _plot_dots() or _plot_lines()
 def _plot_dots(screen, linedata, display_status, colours):
     pa = pygame.PixelArray(screen)
     for i in range(len(linedata)):
         if display_status[i] == True:
             for pixel in linedata[i]:
-                # we actually make a quad of four pixels, so we can see it
                 pa[pixel[0], pixel[1]] = colours[i]
-                pa[pixel[0]+1, pixel[1]] = colours[i]
-                pa[pixel[0], pixel[1]+1] = colours[i]
-                pa[pixel[0]+1, pixel[1]+1] = colours[i]
     pa.close()
 
 def _plot_lines(screen, linedata, display_status, colours):
@@ -593,6 +625,7 @@ class Lines:
     # future extension is to use this buffer for electrical event history
     # (eg triggered by power fluctuation etc)
     lines_history = [[] for i in range(LINES_BUFFER_SIZE+1)]
+    xp = -1                 # tracks previous 'x coordinate'
 
     def end_frame(self, capturing, wfs):
         if capturing:
@@ -613,9 +646,10 @@ class Lines:
         # (b) negative x coordinate indicates last sample of current frame
         # (c) the x coordinate 'goes backwards' indicating a new frame has started
         # (d) the line is empty, can't be split() or any other kind of read error
+        # (e) more than 1000 samples have been read (this keeps the UI responsive)
         # returns 'True' if we have completed a new frame
-        xp = -1                 # tracks previous 'x coordinate'
-        while is_data_available(f, 0.002): 
+        sample_counter = 0
+        while is_data_available(f, 0.05) and sample_counter < 1000: 
             try:
                 ws = f.readline().split()
                 sample = [ int(w) for w in ws[:5] ]
@@ -623,17 +657,20 @@ class Lines:
                     # add current sample then end the frame
                     self.add_sample(sample)
                     self.end_frame(capturing, wfs)
+                    self.xp = -1
                     return True
-                elif sample[0] < xp:
+                elif sample[0] < self.xp:
                     # x coordinate has reset to indicate start of new frame...
                     # end the frame before adding current sample to a new one
                     self.end_frame(capturing, wfs)    
                     self.add_sample(sample)
+                    self.xp = -1
                     return True
                 else:
                     # an ordinary, non-special, sample
                     self.add_sample(sample)
-                xp = sample[0]
+                self.xp = sample[0]
+                sample_counter = sample_counter + 1
             except:
                 break   # break if we have any type of error with the input data
         return False
@@ -712,9 +749,10 @@ def main():
         got_new_frame = lines.read_lines(sys.stdin, capturing, wfs)
         # check if we should refresh the main display
         # note that when we are capturing we only refresh when we have something new 
-        if (capturing and got_new_frame) or not capturing:
-            plot(lines, screen, background_surface) 
-            ui_groups['datetime'].draw()
+        # *** trialing unconditional display refresh ***
+        # if (capturing and got_new_frame) or not capturing:
+        plot(lines, screen, background_surface) 
+        ui_groups['datetime'].draw()
         # here we process mouse/touch/keyboard events.
         events = pygame.event.get()
         global plot_fn

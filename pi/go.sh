@@ -1,6 +1,6 @@
 #!/bin/bash
 
-if [ -f /dev/ttyACM0 ]; then 
+if [ -e /dev/ttyACM0 ]; then 
     echo "Running with data sourced from Pico..."
     ./reader.py | ./scaler.py | ./trigger.py | ./mapper.py | ./hellebores.py
 else

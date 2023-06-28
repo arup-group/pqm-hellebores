@@ -14,7 +14,7 @@ def main():
     st = settings.Settings()
 
     # read in the whole of the sample file
-    with open('laptop.out') as f:
+    with open('laptop1.out') as f:
         rain_bucket = f.read().split('\n')
 
 

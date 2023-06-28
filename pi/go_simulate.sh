@@ -1,4 +1,4 @@
-./rain_bucket.py | ./trigger.py | ./mapper.py | ./hellebores.py
+./rain_bucket.py | ./scaler.py | ./trigger.py | ./mapper.py | ./hellebores.py
 
 
 

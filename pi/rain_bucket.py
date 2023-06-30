@@ -21,12 +21,13 @@ def main():
     # we use system clock to figure out when to print out the next sample
     tp = int(time.time()*1000.0/st.interval)
     i=0
+    imax = len(rain_bucket) - 1
     while True:
         # check the clock and see if it has changed by one sample period
         tn = int(time.time()*1000.0/st.interval)
         if tn != tp:
             tp = tn
-            print(rain_bucket[i % 78125])
+            print(rain_bucket[i % imax])
             i = i + 1
 
 if __name__ == '__main__':

@@ -6,10 +6,45 @@ import signal
 import json
 import psutil
 import time
+import glob
+
+SETTINGS_FILE = 'settings.json'        # NB settings file is later cached in /tmp
+IDENTITIES_FILE = 'identities.json'
+CALIBRATIONS_FILE = 'calibrations.json'
 
 
 class Settings():
-    sfile = 'settings.json'
+
+    def get_mac_address(self):
+        try:
+            with open(glob.glob('/sys/class/net/w*/address')[0], 'r') as f:
+                mac = f.readline().strip()
+        except:
+            print('settings.py: using default MAC address', file=sys.stderr)
+            mac = '00:00:00:00:00:00'
+        return mac
+
+    def get_identity(self):
+        try:
+            with open(IDENTITIES_FILE, 'r') as f:
+                js = json.loads(f.read())
+                identity = js[self.mac]
+        except:
+            print('settings.py: using default identity', file=sys.stderr)
+            identity = 'PQM-9999'
+        return identity
+
+    def get_calibration(self):
+        try:
+            with open(CALIBRATIONS_FILE, 'r') as f:
+                js = json.loads(f.read())
+                cal = js[self.identity]
+        except:
+            print('settings.py: using default calibration', file=sys.stderr)
+            cal = { 'offsets': [0.0, 0.0, 0.0, 0.0], \
+                      'gains': [1.0, 1.0, 1.0, 1.0] }          
+        return cal
+ 
 
     def set_derived_settings(self):
         self.interval                   = 1000.0 / self.sample_rate
@@ -34,7 +69,7 @@ class Settings():
         self.half_y_pixels              = self.y_pixels // 2
  
 
-    def set_settings(self, js):
+    def set_settings(self, js, cal):
         self.frequency                                 = js['frequency']
         self.sample_rate                               = js['sample_rate']
         self.time_axis_divisions                       = js['time_axis_divisions']
@@ -56,14 +91,14 @@ class Settings():
         self.earth_leakage_current_display_ranges      = js['earth_leakage_current_display_ranges']
         self.earth_leakage_current_display_index       = js['earth_leakage_current_display_index']
         self.earth_leakage_current_display_status      = js['earth_leakage_current_display_status']
-        self.adc_offset_trim_c0                        = js['adc_offset_trim_c0']
-        self.adc_offset_trim_c1                        = js['adc_offset_trim_c1']
-        self.adc_offset_trim_c2                        = js['adc_offset_trim_c2']
-        self.adc_offset_trim_c3                        = js['adc_offset_trim_c3']
-        self.adc_amplifier_gain_c0                     = js['adc_amplifier_gain_c0']
-        self.adc_amplifier_gain_c1                     = js['adc_amplifier_gain_c1']
-        self.adc_amplifier_gain_c2                     = js['adc_amplifier_gain_c2']
-        self.adc_amplifier_gain_c3                     = js['adc_amplifier_gain_c3']
+        self.adc_offset_trim_c0                        = cal['offsets'][0]
+        self.adc_offset_trim_c1                        = cal['offsets'][1]
+        self.adc_offset_trim_c2                        = cal['offsets'][2]
+        self.adc_offset_trim_c3                        = cal['offsets'][3]
+        self.adc_gain_trim_c0                          = cal['gains'][0]
+        self.adc_gain_trim_c1                          = cal['gains'][1]
+        self.adc_gain_trim_c2                          = cal['gains'][2]
+        self.adc_gain_trim_c3                          = cal['gains'][3]
         self.scale_c0                                  = js['scale_c0']
         self.scale_c1                                  = js['scale_c1']
         self.scale_c2                                  = js['scale_c2']
@@ -100,14 +135,6 @@ class Settings():
         js['earth_leakage_current_display_ranges']     = self.earth_leakage_current_display_ranges
         js['earth_leakage_current_display_index']      = self.earth_leakage_current_display_index
         js['earth_leakage_current_display_status']     = self.earth_leakage_current_display_status
-        js['adc_offset_trim_c0']                       = self.adc_offset_trim_c0
-        js['adc_offset_trim_c1']                       = self.adc_offset_trim_c1
-        js['adc_offset_trim_c2']                       = self.adc_offset_trim_c2
-        js['adc_offset_trim_c3']                       = self.adc_offset_trim_c3
-        js['adc_amplifier_gain_c0']                    = self.adc_amplifier_gain_c0
-        js['adc_amplifier_gain_c1']                    = self.adc_amplifier_gain_c1
-        js['adc_amplifier_gain_c2']                    = self.adc_amplifier_gain_c2
-        js['adc_amplifier_gain_c3']                    = self.adc_amplifier_gain_c3
         js['scale_c0']                                 = self.scale_c0
         js['scale_c1']                                 = self.scale_c1
         js['scale_c2']                                 = self.scale_c2
@@ -123,9 +150,8 @@ class Settings():
  
     def load_settings(self):
         try:
-            f = open(self.sfile, 'r')
-            js = json.loads(f.read())
-            f.close()
+            with open(self.sfile, 'r') as f:
+                js = json.loads(f.read())
         except:
             print("settings.py, get_settings(): couldn't read settings.json, regenerating...", file=sys.stderr)
             js = json.loads(default_settings)
@@ -135,15 +161,14 @@ class Settings():
 
     def save_settings(self):
         try:
-            f = open(self.sfile, 'w')
-            f.write(json.dumps(self.make_json(), indent=4))
-            f.close()
+            with open(self.sfile, 'w') as f:
+                f.write(json.dumps(self.make_json(), indent=4))
         except:
             print("settings.py, save_settings(): couldn't write settings.json.", file=sys.stderr)
 
 
     def signal_handler(self, signum, frame):
-        self.set_settings(self.load_settings())
+        self.set_settings(self.load_settings(), self.cal)
         self.callback_fn()
 
     # settings objects are created in each running program.
@@ -174,8 +199,14 @@ class Settings():
 
 
     def __init__(self, callback_fn = lambda: None, other_programs=[]):
+        # establish MAC address, identity and calibration factors
+        self.mac = self.get_mac_address()
+        self.identity = self.get_identity()
+        self.cal = self.get_calibration()
+
         # load initial settings
-        self.set_settings(self.load_settings())
+        self.sfile = SETTINGS_FILE
+        self.set_settings(self.load_settings(), self.cal)
 
         # set a callback function if provided. This will be called
         # every time a signal is received just after settings have been updated
@@ -272,14 +303,6 @@ default_settings = '''
     ],
     "earth_leakage_current_display_index": 4,
     "earth_leakage_current_display_status": true,
-    "adc_offset_trim_c0": -30,
-    "adc_offset_trim_c1": -36,
-    "adc_offset_trim_c2": -30,
-    "adc_offset_trim_c3": 0,
-    "adc_amplifier_gain_c0": 32,
-    "adc_amplifier_gain_c1": 2,
-    "adc_amplifier_gain_c2": 2,
-    "adc_amplifier_gain_c3": 1,
     "scale_c0": -4.08e-07,
     "scale_c1": 2.44e-05,
     "scale_c2": 0.001017,

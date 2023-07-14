@@ -349,7 +349,7 @@ def create_trigger(st):
     text_trigger_status = thorpy.Text('Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.')
     text_trigger_status.set_max_text_width(280)
     button_done = configure_button(BUTTON_SIZE, 'Done', back_to_main_reaction)
-    button_freerun = configure_button(BUTTON_SIZE, 'Free-run', lambda: update_trigger_mode('freerun', text_trigger_status))
+    button_freerun = configure_button(BUTTON_SIZE, 'Free-run', lambda: update_draw_mode('freerun', text_trigger_status))
     button_sync = configure_button(BUTTON_SIZE, 'Sync', lambda: update_trigger_mode('sync', text_trigger_status))
     button_inrush = configure_button(BUTTON_SIZE, 'Inrush', lambda: update_trigger_mode('inrush', text_trigger_status))
     button_left = configure_button(BUTTON_SIZE, 'Left', lambda: update_trigger_position(1, text_trigger_status))
@@ -367,6 +367,56 @@ def create_trigger(st):
    # put the text status in after forming the box, so that the box dimensions are not affected by the text.
     update_trigger_status(text_trigger_status)
     return trigger
+
+
+
+def create_options(st):
+    def update_plot_mode(mode):
+        global plot_fn
+        if mode == 'dotsmode':
+            plot_fn = _plot_dots
+        elif mode == 'linesmode':
+            plot_fn = _plot_lines
+        else:
+            print('hellebores.py: update_plot_mode(), invalid plot function requested.', sys.stderr)
+    
+    def about_box():
+        alert = thorpy.Alert(title="hellebores.py",
+                             text="Power quality meter, v0.1",
+                             ok_text="Ok, I've read")
+        alert.set_draggable()
+        alert.cannot_drag_outside = True
+        for e in alert.get_all_descendants():
+           if isinstance(e, thorpy.elements.Button):
+               e.set_bck_color(VERY_LIGHT_GREY, 'normal')
+               e.set_bck_color(VERY_LIGHT_GREY, 'hover')
+               e.set_font_color(WHITE)
+           e.hand_cursor = False
+        alert.launch_nonblocking()
+
+    def software_update():
+        # do a git pull and then re-launch here
+        pass
+
+    def exit_application():
+        global running
+        running = False
+
+    button_done = configure_button(BUTTON_SIZE, 'Done', back_to_main_reaction)
+    button_dots_mode = configure_button(BUTTON_SIZE, 'Dots\nmode', lambda: update_plot_mode('dotsmode'))
+    button_lines_mode = configure_button(BUTTON_SIZE, 'Lines\nmode', lambda: update_plot_mode('linesmode'))
+    button_about = configure_button(BUTTON_SIZE, 'About...', lambda: about_box())
+    button_software_update = configure_button(BUTTON_SIZE, 'Software\nupdate', software_update())
+    button_exit = configure_button(BUTTON_SIZE, 'QUIT', lambda: exit_application())
+ 
+    options = thorpy.TitleBox(text='Options', children=[button_done, \
+        thorpy.Group(elements=[button_dots_mode, button_lines_mode], mode='h'), \
+        thorpy.Group(elements=[button_about, button_software_update, button_exit], mode='h')])
+    for e in options.get_all_descendants():
+        e.hand_cursor = False    
+    return options
+
+
 
 # More UI is needed for the following:
 #
@@ -407,6 +457,10 @@ def create_ui_groups(st, texts):
     ui_trigger.set_topright(*SETTINGS_BOX_POSITION)
     ui_groups['trigger'] = thorpy.Group(elements=[ui_main, ui_trigger], mode=None)
 
+    ui_options = create_options(st)
+    ui_options.set_topright(*SETTINGS_BOX_POSITION)
+    ui_groups['options'] = thorpy.Group(elements=[ui_main, ui_options], mode=None)
+
     return ui_groups
 
 
@@ -443,19 +497,24 @@ def trigger_reaction():
     global ui_groups, ui_current_updater
     ui_current_updater = ui_groups['trigger'].get_updater()
 
+#def options_reaction():
+#    alert = thorpy.Alert(title="hellebores.py",
+#                         text="Power quality meter, v0.1",
+#                         ok_text="Ok, I've read")
+#    alert.set_draggable()
+#    alert.cannot_drag_outside = True
+#    for e in alert.get_all_descendants():
+#       if isinstance(e, thorpy.elements.Button):
+#           e.set_bck_color(VERY_LIGHT_GREY, 'normal')
+#           e.set_bck_color(VERY_LIGHT_GREY, 'hover')
+#           e.set_font_color(WHITE)
+#       e.hand_cursor = False
+#    alert.launch_nonblocking()
+ 
 def options_reaction():
-    alert = thorpy.Alert(title="hellebores.py",
-                         text="Power quality meter, v0.1",
-                         ok_text="Ok, I've read")
-    alert.set_draggable()
-    alert.cannot_drag_outside = True
-    for e in alert.get_all_descendants():
-       if isinstance(e, thorpy.elements.Button):
-           e.set_bck_color(VERY_LIGHT_GREY, 'normal')
-           e.set_bck_color(VERY_LIGHT_GREY, 'hover')
-           e.set_font_color(WHITE)
-       e.hand_cursor = False
-    alert.launch_nonblocking()
+    global ui_groups, ui_current_updater
+    ui_current_updater = ui_groups['options'].get_updater()
+
 
 def back_to_main_reaction():
     global ui_groups, ui_current_updater
@@ -689,7 +748,7 @@ class Lines:
 
 
 def main():
-    global st, capturing, ui_groups, ui_current_updater, background_surface
+    global st, capturing, running, ui_groups, ui_current_updater, background_surface
 
     # initialise pygame
     pygame.init()

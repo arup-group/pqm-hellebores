@@ -349,7 +349,7 @@ def create_trigger(st):
     text_trigger_status = thorpy.Text('Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.')
     text_trigger_status.set_max_text_width(280)
     button_done = configure_button(BUTTON_SIZE, 'Done', back_to_main_reaction)
-    button_freerun = configure_button(BUTTON_SIZE, 'Free-run', lambda: update_draw_mode('freerun', text_trigger_status))
+    button_freerun = configure_button(BUTTON_SIZE, 'Free-run', lambda: update_trigger_mode('freerun', text_trigger_status))
     button_sync = configure_button(BUTTON_SIZE, 'Sync', lambda: update_trigger_mode('sync', text_trigger_status))
     button_inrush = configure_button(BUTTON_SIZE, 'Inrush', lambda: update_trigger_mode('inrush', text_trigger_status))
     button_left = configure_button(BUTTON_SIZE, 'Left', lambda: update_trigger_position(1, text_trigger_status))

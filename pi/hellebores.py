@@ -135,11 +135,11 @@ def configure_button(size, text, callback_function):
     button.at_unclick = callback_function
     return button
     
-def create_main_controls(texts):
+def create_waveform_controls(st, texts):
     #####
-    # Main controls, on right of screen
+    # Waveform controls, on right of screen
     #####
-    button_setup = [ ('Run/Stop', lambda: start_stop_reaction(texts)),\
+    button_setup = [ ('Run/Stop', lambda: start_stop_reaction(texts, st)),\
                      ('Mode', mode_reaction), \
                      ('Horizontal', horizontal_reaction), \
                      ('Vertical', vertical_reaction), \
@@ -147,18 +147,18 @@ def create_main_controls(texts):
                      ('Options', options_reaction) ]
     buttons = [ configure_button(BUTTON_SIZE, bt, bf) for bt, bf in button_setup ]
  
-    main = thorpy.Box([ *texts.get()[0:2], *buttons, *texts.get()[2:] ])
-    main.set_bck_color(LIGHT_GREY)
-    for e in main.get_all_descendants():
+    waveform = thorpy.Box([ *texts.get()[0:2], *buttons, *texts.get()[2:] ])
+    waveform.set_bck_color(LIGHT_GREY)
+    for e in waveform.get_all_descendants():
         e.hand_cursor = False    
-    return main
+    return waveform
 
 
 def create_mode(st):
     #####
     # Mode controls
     #####
-    button_done = configure_button(BUTTON_SIZE, 'Done', back_to_main_reaction)
+    button_done = configure_button(BUTTON_SIZE, 'Done', back_reaction)
     button_waveform = configure_button(BUTTON_WIDE_SIZE, 'Waveform', waveform_reaction)
     button_meter = configure_button(BUTTON_WIDE_SIZE, 'Meter', meter_reaction)
     button_voltage_harmonics = configure_button(BUTTON_WIDE_SIZE, 'Voltage harmonics', voltage_harmonics_reaction)
@@ -181,7 +181,7 @@ def create_horizontal(st):
         st.time_display_index = times.get_index()
         st.send_to_all()
 
-    button_done = configure_button(BUTTON_SIZE, 'Done', back_to_main_reaction)
+    button_done = configure_button(BUTTON_SIZE, 'Done', back_reaction)
 
     times               = Range_controller(st.time_display_ranges, st.time_display_index)
     time_display        = thorpy.Text(f'{times.get_value()} ms/div') 
@@ -239,7 +239,7 @@ def create_vertical(st):
             print('hellebores.py: flip_display_switch() channel not recognised.', file=sys.stderr)
         st.send_to_all()
 
-    button_done = configure_button(BUTTON_SIZE, 'Done', back_to_main_reaction)
+    button_done = configure_button(BUTTON_SIZE, 'Done', back_reaction)
 
     voltages                  = Range_controller(st.voltage_display_ranges, st.voltage_display_index)
     voltage_onoff             = configure_switch_button(BUTTON_SIZE, st.voltage_display_status, \
@@ -348,7 +348,7 @@ def create_trigger(st):
     # fill with temporary text so that the correct size is allocated for the enclosing box
     text_trigger_status = thorpy.Text('Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.')
     text_trigger_status.set_max_text_width(280)
-    button_done = configure_button(BUTTON_SIZE, 'Done', back_to_main_reaction)
+    button_done = configure_button(BUTTON_SIZE, 'Done', back_reaction)
     button_freerun = configure_button(BUTTON_SIZE, 'Free-run', lambda: update_trigger_mode('freerun', text_trigger_status))
     button_sync = configure_button(BUTTON_SIZE, 'Sync', lambda: update_trigger_mode('sync', text_trigger_status))
     button_inrush = configure_button(BUTTON_SIZE, 'Inrush', lambda: update_trigger_mode('inrush', text_trigger_status))
@@ -402,7 +402,7 @@ def create_options(st):
         global running
         running = False
 
-    button_done = configure_button(BUTTON_SIZE, 'Done', back_to_main_reaction)
+    button_done = configure_button(BUTTON_SIZE, 'Done', back_reaction)
     button_dots_mode = configure_button(BUTTON_SIZE, 'Dots\nmode', lambda: update_plot_mode('dotsmode'))
     button_lines_mode = configure_button(BUTTON_SIZE, 'Lines\nmode', lambda: update_plot_mode('linesmode'))
     button_about = configure_button(BUTTON_SIZE, 'About...', lambda: about_box())
@@ -428,50 +428,62 @@ def create_options(st):
 # About (including software version, kernel version, uuid of Pi and Pico)
 # Exit to desktop
 
-def create_ui_groups(st, texts):
- 
+# The instance of this class will hold all the user interface states or 'groups' that can be displayed
+# together with the currently active selection
+class UI_groups:
     ui_groups = {}
+    current_updater = None
 
-    ui_datetime = create_datetime()[0]
-    ui_datetime.set_topleft(0,0)
-    ui_groups['datetime'] = ui_datetime
+    def __init__(self, st, texts):
+        ui_datetime = create_datetime()[0]
+        ui_datetime.set_topleft(0,0)
+        self.ui_groups['datetime'] = ui_datetime
  
-    ui_main = create_main_controls(texts)
-    ui_main.set_size(CONTROLS_BOX_SIZE)
-    ui_main.set_topright(*CONTROLS_BOX_POSITION)
-    ui_groups['main'] = thorpy.Group(elements=[ui_main], mode=None)
+        ui_waveform = create_waveform_controls(st, texts)
+        ui_waveform.set_size(CONTROLS_BOX_SIZE)
+        ui_waveform.set_topright(*CONTROLS_BOX_POSITION)
+        self.ui_groups['waveform'] = thorpy.Group(elements=[ui_waveform, ui_datetime], mode=None)
 
-    ui_mode = create_mode(st)
-    ui_mode.set_topright(*SETTINGS_BOX_POSITION)
-    ui_groups['mode'] = thorpy.Group(elements=[ui_main, ui_mode], mode=None)
+        ui_mode = create_mode(st)
+        ui_mode.set_topright(*SETTINGS_BOX_POSITION)
+        self.ui_groups['mode'] = thorpy.Group(elements=[ui_waveform, ui_mode, ui_datetime], mode=None)
 
-    ui_vertical = create_vertical(st)
-    ui_vertical.set_topright(*SETTINGS_BOX_POSITION)
-    ui_groups['vertical'] = thorpy.Group(elements=[ui_main, ui_vertical], mode=None)
+        ui_vertical = create_vertical(st)
+        ui_vertical.set_topright(*SETTINGS_BOX_POSITION)
+        self.ui_groups['vertical'] = thorpy.Group(elements=[ui_waveform, ui_vertical, ui_datetime], mode=None)
 
-    ui_horizontal = create_horizontal(st)
-    ui_horizontal.set_topright(*SETTINGS_BOX_POSITION)
-    ui_groups['horizontal'] = thorpy.Group(elements=[ui_main, ui_horizontal], mode=None)
+        ui_horizontal = create_horizontal(st)
+        ui_horizontal.set_topright(*SETTINGS_BOX_POSITION)
+        self.ui_groups['horizontal'] = thorpy.Group(elements=[ui_waveform, ui_horizontal, ui_datetime], mode=None)
 
-    ui_trigger = create_trigger(st)
-    ui_trigger.set_topright(*SETTINGS_BOX_POSITION)
-    ui_groups['trigger'] = thorpy.Group(elements=[ui_main, ui_trigger], mode=None)
+        ui_trigger = create_trigger(st)
+        ui_trigger.set_topright(*SETTINGS_BOX_POSITION)
+        self.ui_groups['trigger'] = thorpy.Group(elements=[ui_waveform, ui_trigger, ui_datetime], mode=None)
 
-    ui_options = create_options(st)
-    ui_options.set_topright(*SETTINGS_BOX_POSITION)
-    ui_groups['options'] = thorpy.Group(elements=[ui_main, ui_options], mode=None)
+        ui_options = create_options(st)
+        ui_options.set_topright(*SETTINGS_BOX_POSITION)
+        self.ui_groups['options'] = thorpy.Group(elements=[ui_waveform, ui_options, ui_datetime], mode=None)
 
-    return ui_groups
+        self.current_updater = self.ui_groups['waveform'].get_updater()
+
+    def set_updater(self, group):
+        self.current_updater = self.ui_groups[group].get_updater()
+
+    def get_updater(self):
+        return self.current_updater 
+
+    def get_group(self, group):
+        return self.ui_groups[group]
 
 
-def start_stop_reaction(texts):
+def start_stop_reaction(texts, st):
     global capturing
     capturing = not capturing
-    texts.refresh()    
+    texts.refresh(st)    
 
 def mode_reaction():
-    global ui_groups, ui_current_updater
-    ui_current_updater = ui_groups['mode'].get_updater() 
+    global ui
+    ui.set_updater('mode')
 
 def waveform_reaction():
     pass
@@ -486,46 +498,31 @@ def current_harmonics_reaction():
     pass
 
 def horizontal_reaction():
-    global ui_groups, ui_current_updater
-    ui_current_updater = ui_groups['horizontal'].get_updater() 
+    global ui
+    ui.set_updater('horizontal')
 
 def vertical_reaction():
-    global ui_groups, ui_current_updater
-    ui_current_updater = ui_groups['vertical'].get_updater() 
+    global ui
+    ui.set_updater('vertical')
 
 def trigger_reaction():
-    global ui_groups, ui_current_updater
-    ui_current_updater = ui_groups['trigger'].get_updater()
+    global ui
+    ui.set_updater('trigger')
 
-#def options_reaction():
-#    alert = thorpy.Alert(title="hellebores.py",
-#                         text="Power quality meter, v0.1",
-#                         ok_text="Ok, I've read")
-#    alert.set_draggable()
-#    alert.cannot_drag_outside = True
-#    for e in alert.get_all_descendants():
-#       if isinstance(e, thorpy.elements.Button):
-#           e.set_bck_color(VERY_LIGHT_GREY, 'normal')
-#           e.set_bck_color(VERY_LIGHT_GREY, 'hover')
-#           e.set_font_color(WHITE)
-#       e.hand_cursor = False
-#    alert.launch_nonblocking()
- 
 def options_reaction():
-    global ui_groups, ui_current_updater
-    ui_current_updater = ui_groups['options'].get_updater()
+    global ui
+    ui.set_updater('options')
 
-
-def back_to_main_reaction():
-    global ui_groups, ui_current_updater
-    ui_current_updater = ui_groups['main'].get_updater() 
+def back_reaction():
+    global ui
+    ui.set_updater('waveform')
 
 
 class Texts:
     # array of thorpy text objects
     texts = []
 
-    def set_colours(self):
+    def set_colours(self, st):
         colours = [BLACK, WHITE, WHITE, GREEN, YELLOW, MAGENTA, CYAN]
         # grey out lines that are currently switched off
         colour_filter = [ True, True, True, st.voltage_display_status, \
@@ -543,7 +540,7 @@ class Texts:
             t = thorpy.Text('')
             t.set_size(TEXT_SIZE)
             self.texts.append(t)
-        self.refresh()
+        self.refresh(st)
  
     def get(self):
         return self.texts
@@ -551,7 +548,7 @@ class Texts:
     def set(self, item, value):
         self.texts[item].set_text(value)
 
-    def refresh(self):
+    def refresh(self, st):
         global capturing
         if capturing:
             self.texts[T_RUNSTOP].set_bck_color(GREEN)
@@ -559,7 +556,7 @@ class Texts:
         else:
             self.texts[T_RUNSTOP].set_bck_color(RED)
             self.texts[T_RUNSTOP].set_text('Stopped', adapt_parent=False)
-        self.set_colours()
+        self.set_colours(st)
         self.texts[T_WFS].set_text(f'{self.wfs.get()} wfm/s', adapt_parent=False)
         self.texts[T_TIMEDIV].set_text(f'{st.time_display_ranges[st.time_display_index]} ms/', adapt_parent=False)
         self.texts[T_VOLTSDIV].set_text(f'{st.voltage_display_ranges[st.voltage_display_index]} V/', adapt_parent=False)
@@ -569,13 +566,13 @@ class Texts:
 
 
 def draw_background(st):
-    global background_surface
+    global waveform_background
     xmax = SCOPE_BOX_SIZE[0] - 1
     ymax = SCOPE_BOX_SIZE[1] - 1
 
     # empty background
-    background_surface = pygame.Surface(SCOPE_BOX_SIZE)
-    background_surface.fill(GREY)
+    waveform_background = pygame.Surface(SCOPE_BOX_SIZE)
+    waveform_background.fill(GREY)
 
     # draw the graticule lines
     for dx in range(1, st.time_axis_divisions):
@@ -585,7 +582,7 @@ def draw_background(st):
             lc = WHITE
         else:
             lc = LIGHT_GREY
-        pygame.draw.line(background_surface, lc, (x, 0), (x, ymax), 1)
+        pygame.draw.line(waveform_background, lc, (x, 0), (x, ymax), 1)
     for dy in range(1, st.vertical_axis_divisions):
         y = st.vertical_pixels_per_division * dy
         # mark the central position (v, i = 0) with an emphasized line
@@ -593,8 +590,8 @@ def draw_background(st):
             lc = WHITE
         else:
             lc = LIGHT_GREY
-        pygame.draw.line(background_surface, lc, (0, y), (xmax, y), 1)
-    return background_surface
+        pygame.draw.line(waveform_background, lc, (0, y), (xmax, y), 1)
+    return waveform_background
 
 
 # The plot function that will be used is configurable
@@ -615,10 +612,10 @@ def _plot_lines(screen, linedata, display_status, colours):
 # initial set up is lines
 plot_fn = _plot_lines
 
-def plot(lines, screen, background_surface):
+def plot(st, lines, screen, waveform_background):
     # can handle up to six plots...
     colours = [ GREEN, YELLOW, MAGENTA, CYAN, RED, BLUE ]
-    screen.blit(background_surface, (0,0))
+    screen.blit(waveform_background, (0,0))
     linedata = lines.get_lines()
     display_status = [ st.voltage_display_status, st.current_display_status, st.power_display_status, \
                           st.earth_leakage_current_display_status ]
@@ -748,7 +745,7 @@ class Lines:
 
 
 def main():
-    global st, capturing, running, ui_groups, ui_current_updater, background_surface
+    global capturing, running, ui, waveform_background
 
     # initialise pygame
     pygame.init()
@@ -770,6 +767,8 @@ def main():
     thorpy.init(screen, thorpy.theme_simple)
 
     # get settings from settings.json
+    # the list of 'other programs' is used to send signals when we change
+    # settings in this program, they each then re-read the settings file.
     st = settings.Settings(other_programs=['rain.py', 'reader.py', 'scaler.py', 'trigger.py', 'mapper.py'])
 
     # initialise flags
@@ -777,13 +776,13 @@ def main():
     running   = True        # program runs until this flag is cleared
 
     # create objects that hold the state of the UI
-    background_surface = draw_background(st)
+    waveform_background = draw_background(st)
     wfs       = WFS_Counter()
     texts     = Texts(st, wfs)
-    ui_groups = create_ui_groups(st, texts)
+    ui        = UI_groups(st, texts)
 
-    # start with the main group enabled
-    ui_current_updater = ui_groups['main'].get_updater()
+    # start with the waveform group enabled
+    ui.set_updater('waveform')
 
     # set up lines object
     lines = Lines()
@@ -791,14 +790,15 @@ def main():
 
     # main loop
     while running:
-        # hack to make the cursor invisible while still responding
+        # hack to make the cursor invisible while still responding to touch signals
+        # would like to do this only once, rather than every trip round the loop
         if hide_mouse_pointer:
             pygame.mouse.set_cursor((8,8),(0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0))
-        # we update all of the texts every second, not just the datetime
+        # we update status texts and datetime every second
         if wfs.time_to_update():
             if capturing:
-                ui_groups['datetime'].set_text(time.ctime())
-            texts.refresh()
+                ui.get_group('datetime').set_text(time.ctime())
+            texts.refresh(st)
         # ALWAYS read new data, even if we are not capturing it, to keep the incoming data
         # pipeline flowing. If the read rate doesn't keep up with the pipe, then we will see 
         # artifacts on screen. Check the BUFFER led on PCB if performance problems are
@@ -806,12 +806,8 @@ def main():
         # The read_lines() function also implicitly manages display refresh speed when not
         # capturing, by waiting for a definite time for new data.
         got_new_frame = lines.read_lines(sys.stdin, capturing, wfs)
-        # check if we should refresh the main display
-        # note that when we are capturing we only refresh when we have something new 
-        # *** trialing unconditional display refresh ***
-        # if (capturing and got_new_frame) or not capturing:
-        plot(lines, screen, background_surface) 
-        ui_groups['datetime'].draw()
+        
+        plot(st, lines, screen, waveform_background) 
         # here we process mouse/touch/keyboard events.
         events = pygame.event.get()
         global plot_fn
@@ -825,7 +821,7 @@ def main():
 
         # ui_current_updater.update() is an expensive function, so we use the simplest possible
         # thorpy theme for performance
-        ui_current_updater.update(events=events)
+        ui.get_updater().update(events=events)
         # push all of our updated work into the active display framebuffer
         pygame.display.flip()
     pygame.quit()

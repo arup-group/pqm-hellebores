@@ -146,13 +146,33 @@ def create_waveform_controls(st, texts):
                      ('Trigger', trigger_reaction), \
                      ('Options', options_reaction) ]
     buttons = [ configure_button(BUTTON_SIZE, bt, bf) for bt, bf in button_setup ]
- 
     waveform = thorpy.Box([ *texts.get()[0:2], *buttons, *texts.get()[2:] ])
     waveform.set_bck_color(LIGHT_GREY)
     for e in waveform.get_all_descendants():
         e.hand_cursor = False    
     return waveform
 
+def create_meter_controls(st, texts):
+    #####
+    # Meter controls, on right of screen
+    #####
+    button_setup = [ ('Run/Stop', lambda: start_stop_reaction(texts, st)),\
+                     ('Mode', mode_reaction), \
+                     ('Options', options_reaction) ]
+    buttons = [ configure_button(BUTTON_SIZE, bt, bf) for bt, bf in button_setup ]
+ 
+    meter = thorpy.Box([ *texts.get()[0:2], *buttons, *texts.get()[2:] ])
+    meter.set_bck_color(LIGHT_GREY)
+    for e in meter.get_all_descendants():
+        e.hand_cursor = False    
+    return meter
+
+
+def create_voltage_harmonic_controls(st, texts):
+    pass
+
+def create_current_harmonic_controls(st, texts):
+    pass
 
 def create_mode(st):
     #####
@@ -431,49 +451,94 @@ def create_options(st):
 # The instance of this class will hold all the user interface states or 'groups' that can be displayed
 # together with the currently active selection
 class UI_groups:
-    ui_groups = {}
-    current_updater = None
+    elements = {}
+    updater = None
+    mode = 'waveform'
 
     def __init__(self, st, texts):
         ui_datetime = create_datetime()[0]
         ui_datetime.set_topleft(0,0)
-        self.ui_groups['datetime'] = ui_datetime
- 
+        self.elements['datetime'] = ui_datetime
+
+        # waveform (oscilloscope) mode
         ui_waveform = create_waveform_controls(st, texts)
         ui_waveform.set_size(CONTROLS_BOX_SIZE)
         ui_waveform.set_topright(*CONTROLS_BOX_POSITION)
-        self.ui_groups['waveform'] = thorpy.Group(elements=[ui_waveform, ui_datetime], mode=None)
+        self.elements['waveform'] = ui_waveform
+
+        # multi-meter mode
+        #ui_meter = create_meter_controls(st, texts)
+        #ui_meter.set_size(CONTROLS_BOX_SIZE)
+        #ui_meter.set_topright(*CONTROLS_BOX_POSITION)
+        #self.elements['meter'] = ui_meter
+
+        # voltage harmonic mode
+        #ui_voltage_harmonic = create_voltage_harmonic_controls(st, texts)
+        #ui_voltage_harmonic.set_size(CONTROLS_BOX_SIZE)
+        #ui_voltage_harmonic.set_topright(*CONTROLS_BOX_POSITION)
+        #self.elements['voltage_harmonic'] = ui_voltage_harmonic
+
+        # current harmonic mode
+        #ui_current_harmonic = create_current_harmonic_controls(st, texts)
+        #ui_current_harmonic.set_size(CONTROLS_BOX_SIZE)
+        #ui_current_harmonic.set_topright(*CONTROLS_BOX_POSITION)
+        #self.elements['current_harmonic'] = ui_current_harmonic
 
         ui_mode = create_mode(st)
         ui_mode.set_topright(*SETTINGS_BOX_POSITION)
-        self.ui_groups['mode'] = thorpy.Group(elements=[ui_waveform, ui_mode, ui_datetime], mode=None)
+        self.elements['mode'] = ui_mode
 
         ui_vertical = create_vertical(st)
         ui_vertical.set_topright(*SETTINGS_BOX_POSITION)
-        self.ui_groups['vertical'] = thorpy.Group(elements=[ui_waveform, ui_vertical, ui_datetime], mode=None)
+        self.elements['vertical'] = ui_vertical
 
         ui_horizontal = create_horizontal(st)
         ui_horizontal.set_topright(*SETTINGS_BOX_POSITION)
-        self.ui_groups['horizontal'] = thorpy.Group(elements=[ui_waveform, ui_horizontal, ui_datetime], mode=None)
+        self.elements['horizontal'] = ui_horizontal
 
         ui_trigger = create_trigger(st)
         ui_trigger.set_topright(*SETTINGS_BOX_POSITION)
-        self.ui_groups['trigger'] = thorpy.Group(elements=[ui_waveform, ui_trigger, ui_datetime], mode=None)
+        self.elements['trigger'] = ui_trigger
 
         ui_options = create_options(st)
         ui_options.set_topright(*SETTINGS_BOX_POSITION)
-        self.ui_groups['options'] = thorpy.Group(elements=[ui_waveform, ui_options, ui_datetime], mode=None)
+        self.elements['options'] = ui_options
 
-        self.current_updater = self.ui_groups['waveform'].get_updater()
+        self.set_updater('waveform')
 
     def set_updater(self, group):
-        self.current_updater = self.ui_groups[group].get_updater()
+        # for 'waveform', 'meter', 'voltage_harmonic', 'current_harmonic', we retain the group in a 'mode' variable
+        # for recall after menu selections.
+        if group == 'waveform':
+            self.mode = 'waveform'
+            self.updater = thorpy.Group(elements=[self.elements['waveform'], self.elements['datetime']], mode=None).get_updater()
+        elif group == 'meter':
+            self.mode = 'meter'
+            self.updater = thorpy.Group(elements=[self.elements['meter'], self.elements['datetime']], mode=None).get_updater()
+        elif group == 'voltage_harmonic':
+            self.mode = 'voltage_harmonic'
+            self.updater = thorpy.Group(elements=[self.elements['voltage_harmonic'], self.elements['datetime']], mode=None).get_updater()
+        elif group == 'current_harmonic':
+            self.mode = 'current_harmonic'
+            self.updater = thorpy.Group(elements=[self.elements['current_harmonic'], self.elements['datetime']], mode=None).get_updater()
+        elif group == 'mode':
+            self.updater = thorpy.Group(elements=[self.elements[self.mode], self.elements['mode'], self.elements['datetime']], mode=None).get_updater()
+        elif group == 'horizontal':
+            self.updater = thorpy.Group(elements=[self.elements[self.mode], self.elements['horizontal'], self.elements['datetime']], mode=None).get_updater()
+        elif group == 'vertical':
+            self.updater = thorpy.Group(elements=[self.elements[self.mode], self.elements['vertical'], self.elements['datetime']], mode=None).get_updater()
+        elif group == 'trigger':
+            self.updater = thorpy.Group(elements=[self.elements[self.mode], self.elements['trigger'], self.elements['datetime']], mode=None).get_updater()
+        elif group == 'options':
+            self.updater = thorpy.Group(elements=[self.elements[self.mode], self.elements['options'], self.elements['datetime']], mode=None).get_updater()
+        else:
+             print('UI_groups.set_updater(): group selection not recognised.\n', file=sys.stderr)
 
     def get_updater(self):
-        return self.current_updater 
+        return self.updater 
 
-    def get_group(self, group):
-        return self.ui_groups[group]
+    def get_element(self, element):
+        return self.elements[element]
 
 
 def start_stop_reaction(texts, st):
@@ -523,8 +588,10 @@ class Texts:
     texts = []
 
     def set_colours(self, st):
+        # text colours
         colours = [BLACK, WHITE, WHITE, GREEN, YELLOW, MAGENTA, CYAN]
-        # grey out lines that are currently switched off
+        # the boolean filter allows us to temporarily grey out lines
+        # that are currently inactive/switched off
         colour_filter = [ True, True, True, st.voltage_display_status, \
                              st.current_display_status, st.power_display_status, \
                              st.earth_leakage_current_display_status ]
@@ -535,7 +602,7 @@ class Texts:
                 self.texts[i].set_font_color(DARK_GREY)
 
     def __init__(self, st, wfs):
-        self.wfs = wfs              # make a note of the wfs object
+        self.wfs = wfs              # make a local note of the wfs object
         for s in range(7):
             t = thorpy.Text('')
             t.set_size(TEXT_SIZE)
@@ -550,13 +617,13 @@ class Texts:
 
     def refresh(self, st):
         global capturing
+        self.set_colours(st)
         if capturing:
             self.texts[T_RUNSTOP].set_bck_color(GREEN)
             self.texts[T_RUNSTOP].set_text('Running', adapt_parent=False)
         else:
             self.texts[T_RUNSTOP].set_bck_color(RED)
             self.texts[T_RUNSTOP].set_text('Stopped', adapt_parent=False)
-        self.set_colours(st)
         self.texts[T_WFS].set_text(f'{self.wfs.get()} wfm/s', adapt_parent=False)
         self.texts[T_TIMEDIV].set_text(f'{st.time_display_ranges[st.time_display_index]} ms/', adapt_parent=False)
         self.texts[T_VOLTSDIV].set_text(f'{st.voltage_display_ranges[st.voltage_display_index]} V/', adapt_parent=False)
@@ -797,7 +864,7 @@ def main():
         # we update status texts and datetime every second
         if wfs.time_to_update():
             if capturing:
-                ui.get_group('datetime').set_text(time.ctime())
+                ui.get_element('datetime').set_text(time.ctime())
             texts.refresh(st)
         # ALWAYS read new data, even if we are not capturing it, to keep the incoming data
         # pipeline flowing. If the read rate doesn't keep up with the pipe, then we will see 

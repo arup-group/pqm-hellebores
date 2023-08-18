@@ -17,6 +17,8 @@ class Settings():
 
     def get_mac_address(self):
         try:
+            # note, we search for the mac address of the first wireless network
+            # interface (which begins with 'w').
             with open(glob.glob('/sys/class/net/w*/address')[0], 'r') as f:
                 mac = f.readline().strip()
         except:
@@ -24,21 +26,21 @@ class Settings():
             mac = '00:00:00:00:00:00'
         return mac
 
-    def get_identity(self):
+    def get_identity(self, mac):
         try:
             with open(IDENTITIES_FILE, 'r') as f:
                 js = json.loads(f.read())
-                identity = js[self.mac]
+                identity = js[mac]
         except:
             print('settings.py: using default identity', file=sys.stderr)
             identity = 'PQM-9999'
         return identity
 
-    def get_calibration(self):
+    def get_calibration(self, identity):
         try:
             with open(CALIBRATIONS_FILE, 'r') as f:
                 js = json.loads(f.read())
-                cal = js[self.identity]
+                cal = js[identity]
         except:
             print('settings.py: using default calibration', file=sys.stderr)
             cal = { 'offsets': [0.0, 0.0, 0.0, 0.0], \
@@ -182,18 +184,17 @@ class Settings():
  
 
     def get_program_pids(self, other_programs):
-        # we use the psutils module to find the other programs
+        # we use a function in the psutil module to find the PIDs of the other programs
         pids = {}
         for p in psutil.process_iter():
             try:
-                # we check for python to avoid sending signals to the shell
-                # and we also check to avoid sending signals to ourself
                 pcmd = ' '.join(p.cmdline())
                 for program in other_programs:
                     if program in pcmd:
                         pids[p.pid] = pcmd
             except:
-                # p.cmdline() generates permission errors on some system processes
+                # p.cmdline() generates permission errors on some system processes, so
+                # we ignore them and continue
                 pass 
         return pids.keys()
 
@@ -201,8 +202,8 @@ class Settings():
     def __init__(self, callback_fn = lambda: None, other_programs=[]):
         # establish MAC address, identity and calibration factors
         self.mac = self.get_mac_address()
-        self.identity = self.get_identity()
-        self.cal = self.get_calibration()
+        self.identity = self.get_identity(self.mac)
+        self.cal = self.get_calibration(self.identity)
 
         # load initial settings
         self.sfile = SETTINGS_FILE

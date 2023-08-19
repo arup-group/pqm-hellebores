@@ -16,17 +16,25 @@ Use Thonny on your desktop or laptop computer to install MicroPython and verify 
 
 ## Installation
 **Pico**  
-Using Thonny, open ./pico/main.py and save it to the root folder of the microcontroller.
+Using Thonny, open `./pico/main.py` and save it to the root folder of the microcontroller.
 
 **Pi**  
 Start a terminal session via SSH or use a local keyboard.  
+
 Clone the repository:  
-    git clone https://github.com/arup-group/pqm-hellebores.git
+
+`git clone https://github.com/arup-group/pqm-hellebores.git`
+
 Change to the working directory:  
-    cd pqm-hellebores/pi
+
+`cd pqm-hellebores/pi`
+
 Install the dependencies  
-    python3 -m pip install -r requirements.txt
+
+`python3 -m pip install -r requirements.txt`
+
 Set up the desktop shortcuts  
+
 [tbc]
 
 ## Running

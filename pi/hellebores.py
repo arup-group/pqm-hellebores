@@ -136,9 +136,7 @@ def configure_button(size, text, callback_function):
     return button
     
 def create_waveform_controls(st, texts):
-    #####
-    # Waveform controls, on right of screen
-    #####
+    """Waveform controls, on right of screen"""
     button_setup = [ ('Run/Stop', lambda: start_stop_reaction(texts, st)),\
                      ('Mode', mode_reaction), \
                      ('Horizontal', horizontal_reaction), \
@@ -153,9 +151,7 @@ def create_waveform_controls(st, texts):
     return waveform
 
 def create_meter_controls(st, texts):
-    #####
-    # Meter controls, on right of screen
-    #####
+    """Meter controls, on right of screen"""
     button_setup = [ ('Run/Stop', lambda: start_stop_reaction(texts, st)),\
                      ('Mode', mode_reaction), \
                      ('Options', options_reaction) ]
@@ -175,9 +171,7 @@ def create_current_harmonic_controls(st, texts):
     pass
 
 def create_mode(st):
-    #####
-    # Mode controls
-    #####
+    """Mode controls dialog"""
     button_done = configure_button(BUTTON_SIZE, 'Done', back_reaction)
     button_waveform = configure_button(BUTTON_WIDE_SIZE, 'Waveform', waveform_reaction)
     button_meter = configure_button(BUTTON_WIDE_SIZE, 'Meter', meter_reaction)
@@ -190,11 +184,8 @@ def create_mode(st):
         e.hand_cursor = False    
     return mode
 
-
 def create_horizontal(st):
-    #####
-    # Horizontal controls
-    #####
+    """Horizontal controls dialog"""
     def update_time_range(times, offset):
         times.change_range(offset)
         time_display.set_text(f'{times.get_value()} ms/div', adapt_parent=False)
@@ -219,9 +210,7 @@ def create_horizontal(st):
  
 
 def create_vertical(st):
-    #####
-    # Vertical controls
-    #####
+    """Vertical controls dialog"""
     def update_voltage_range(voltages, offset):
         voltages.change_range(offset)
         voltage_display.set_text(f'{voltages.get_value()} V/div', adapt_parent=False)
@@ -319,6 +308,7 @@ def create_vertical(st):
 
 
 def create_trigger(st):
+    """Trigger controls dialog"""
     #####
     # Trigger controls
     #####
@@ -391,6 +381,7 @@ def create_trigger(st):
 
 
 def create_options(st):
+    """Option controls dialog"""
     def update_plot_mode(mode):
         global plot_fn
         if mode == 'dotsmode':

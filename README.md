@@ -22,23 +22,19 @@ Using Thonny, open `./pico/main.py` and save it to the root folder of the microc
 Start a terminal session via SSH or use a local keyboard.  
 
 Clone the repository:  
-
 `git clone https://github.com/arup-group/pqm-hellebores.git`
 
 Change to the working directory:  
-
 `cd pqm-hellebores/pi`
 
 Install the dependencies  
-
 `python3 -m pip install -r requirements.txt`
 
 Set up the desktop shortcuts  
-
 [tbc]
 
 ## Running
-To use the interactive user interface, run "hellebores" from the Raspberry Pi desktop menu, or execute go.sh from the terminal.
+To use the interactive user interface, run "hellebores" from the Raspberry Pi desktop menu, or execute `./go.sh` from the terminal.
 
 ## Development
 For development work, the Pi code will run in WSL, Ubuntu, Mac or similar environments that have a modern python and can support the dependencies. hellebores.py requires SDL and can run under X-Windows or in native Mac and MS-Windows if the SDL libraries are installed and are reachable from the python run environment. The run script will detect whether a serial interface to Pico is available and if not will use simulated (pre-recorded) data for the purpose of testing.

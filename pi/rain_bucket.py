@@ -14,9 +14,12 @@ def main():
     st = settings.Settings()
 
     # read in the whole of the sample file
-    with open('laptop1.out') as f:
-        rain_bucket = f.read().split('\n')
-
+    try:
+        with open(sys.argv[1]) as f:
+            rain_bucket = f.read().split('\n')
+    except:
+        print('rain_bucket.py: error opening or reading sample data file', file=sys.stderr)
+        sys.exit(1)
 
     # we use system clock to figure out when to print out the next sample
     tp = int(time.time()*1000.0/st.interval)

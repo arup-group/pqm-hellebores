@@ -11,14 +11,14 @@ def main():
     try:
         ser = serial.Serial('/dev/ttyACM0')
     except:
-        print("Couldn't open serial port.", file=sys.stderr)
+        print("raw_reader.py: Couldn't open serial port.", file=sys.stderr)
         sys.exit(1)
 
     while 1:    
         try:
             print(ser.readline())
         except ValueError:
-            print('reader.py, main(): Failed to read "' + line + '".', file=sys.stderr)
+            print(f'raw_reader.py, main(): Failed to read {line}.', file=sys.stderr)
     ser.close()
 
 

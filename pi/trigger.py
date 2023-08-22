@@ -42,16 +42,19 @@ class Buffer:
         try:
             self.buf[self.sp % BUFFER_SIZE] = [ float(w) for w in line.split() ]
         except:
-            print(f"trigger.py, store_line(): Couldn't interpret '{line}'.", file=sys.stderr)
+            print(
+                f"trigger.py, store_line(): Couldn't interpret '{line}'.",
+                file=sys.stderr)
         self.sp = self.sp + 1 
 
 
     # call this to check if recent samples from tp pointer onwards cause a trigger
     def trigger_test(self):
         while self.tp < self.sp:
-            self.triggered, self.interpolation_fraction = \
-                   self.trigger_test_fn(self.buf[(self.tp - 1) % BUFFER_SIZE][self.trigger_test_ch], \
-                                            self.buf[self.tp % BUFFER_SIZE][self.trigger_test_ch])
+            self.triggered, self.interpolation_fraction = (
+                self.trigger_test_fn(
+                    self.buf[(self.tp - 1) % BUFFER_SIZE][self.trigger_test_ch], 
+                    self.buf[self.tp % BUFFER_SIZE][self.trigger_test_ch]))
             if self.triggered:
                 self.fp = self.tp + st.post_trigger_samples
                 self.rp = self.tp - st.pre_trigger_samples
@@ -70,14 +73,15 @@ class Buffer:
     def generate_output(self):
         # output the correct array slice with a time shift
         shift = 1.0 - self.rp - st.pre_trigger_samples - self.interpolation_fraction
-        end_mark = ''
+        em = ''
         for s in range(self.rp, self.fp):
             sample = self.buf[s % BUFFER_SIZE]
             # modify the time stamps
             timestamp = st.interval * (s + shift)
             if s == self.fp - 1:
-                end_mark = '*END*'
-            print('{:12.4f} {:10.3f} {:10.5f} {:10.3f} {:12.7f} {}'.format(timestamp, *sample[1:], end_mark))
+                em = '*END*'
+            print(f'{timestamp:12.4f} {sample[1]:10.3f} '
+                  f'{sample[2]:10.5f} {sample[3]:10.3f} {sample[4]:12.7f} {em}')
         sys.stdout.flush()
  
 
@@ -106,13 +110,17 @@ def receive_new_settings(buf):
 
     def trigger_fn_generator(slope, threshold):
         # the lambda expressions in this function create closures (customised functions)
-        # that are sent into the buffer for trigger detection
+        # that are passed into the buffer object for trigger detection
         if slope == 'rising':
-            return lambda s1, s2: (True, i_frac(s1,s2,threshold)) if s1 <= threshold \
-                       and s2 >= threshold else (False, 0.0)
+            return (lambda s1, s2:
+                       (True, i_frac(s1,s2,threshold))
+                           if s1 <= threshold and s2 >= threshold
+                       else (False, 0.0))
         elif slope == 'falling':
-            return lambda s1, s2: (True, i_frac(s1,s2,threshold)) if s1 >= threshold \
-                       and s2 <= threshold else (False, 0.0)
+            return (lambda s1, s2:
+                       (True, i_frac(s1,s2,threshold))
+                           if s1 >= threshold and s2 <= threshold
+                       else (False, 0.0))
         else:
             return None
  
@@ -124,7 +132,9 @@ def receive_new_settings(buf):
     elif st.trigger_mode == 'inrush':
         buf.reset(trigger_fn_generator(st.trigger_slope, st.trigger_level), 3)
     else:
-        print("trigger.py, reset(): trigger_mode not recognised, defaulting to sync.", file=sys.stderr)
+        print(
+            "trigger.py, reset(): Trigger_mode not recognised, defaulting to sync.",
+            file=sys.stderr)
         process_fn = via_trigger
         buf.reset(trigger_fn_generator(st.trigger_slope, 0.0), 1) 
 
@@ -149,7 +159,9 @@ def main():
             process_fn(line.rstrip(), buf)
 
     except ValueError:
-        print(f"trigger.py, main(): Failed to read contents of line '{line}'.", file=sys.stderr)
+        print(
+            f"trigger.py, main(): Failed to read contents of line '{line}'.",
+            file=sys.stderr)
 
 
 

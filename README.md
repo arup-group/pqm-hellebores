@@ -6,10 +6,10 @@ Invest-in-Arup research project to design and make a convenient way to measure a
 See IiA page for more project details [https://invest.arup.com/?layout=projsheet&projid=20139](https://invest.arup.com/?layout=projsheet&projid=20139)
 
 ## System requirements
-The software is designed to run on standard Rasperry Pi and Raspberry Pi Pico microcontroller, communicating with an analog-to-digital converter (ADC) on a custom PCB to take measurements of power parameters: voltage, current (low sensivity), current (high sensitivity) and earth leakage current. Following conversion and scaling to floating point measurement values, the measurement samples are processed to provide a variety of performance measurements, waveform visualisation and logging. A local display and touch screen provide user interface.
+The software is designed to run on Raspberry Pi and Raspberry Pi Pico microcontroller, communicating with an analog-to-digital converter (ADC: MCP3912) on a custom PCB to source measurements of power parameters: voltage, current (low sensivity), current (high sensitivity) and earth leakage current. Following conversion and scaling to floating point measurement values, the measurement samples are further processed to provide a variety of performance measurements, waveform visualisation and logging. A local display and touch screen provide user interface.
 
 **Raspberry Pi**  
-Minimum hardware requirement is Raspberry Pi 3B+. Non-plus models do not have sufficent thermal dissipation. Touch screen display with DSI interface, 800x480 pixels. Raspberry Pi OS (32 bit) with desktop. Prepare the image with connectivity to local/required wifi, SSH access, and change the default password. If you have one, pair a Bluetooth keyboard for local access.
+Minimum hardware requirement is Raspberry Pi 3B+. Non-plus models do not have sufficent thermal dissipation for high CPU loads. Touch screen display with DSI interface, 800x480 pixels. Raspberry Pi OS (32 bit) with desktop. Prepare the image with connectivity to local/required wifi, SSH access, and change the default password. If you have one, pair a Bluetooth keyboard for local access.
 
 **Raspberry Pi Pico**  
 Use Thonny on your desktop or laptop computer to install MicroPython and verify that you have local REPL access to the microcontroller via USB.

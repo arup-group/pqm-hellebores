@@ -155,7 +155,9 @@ class Settings():
             with open(self.sfile, 'r') as f:
                 js = json.loads(f.read())
         except:
-            print("settings.py, get_settings(): couldn't read settings.json, regenerating...", file=sys.stderr)
+            print(
+                "settings.py, get_settings(): couldn't read settings.json, regenerating...",
+                file=sys.stderr)
             js = json.loads(default_settings)
             self.save_settings()
         return js
@@ -166,7 +168,9 @@ class Settings():
             with open(self.sfile, 'w') as f:
                 f.write(json.dumps(self.make_json(), indent=4))
         except:
-            print("settings.py, save_settings(): couldn't write settings.json.", file=sys.stderr)
+            print(
+                "settings.py, save_settings(): couldn't write settings.json.",
+                file=sys.stderr)
 
 
     def signal_handler(self, signum, frame):
@@ -218,7 +222,8 @@ class Settings():
         if os.name == 'posix':
             # for faster update performance, and to reduce SD card wear, we save the settings.json
             # file to RAM disk in /tmp, and we'll use the temporary version from now on
-            if os.system(f'[ -d /tmp/pqm-hellebores ] || mkdir /tmp/pqm-hellebores') == 0:
+            if os.system(
+                f'[ -d /tmp/pqm-hellebores ] || mkdir /tmp/pqm-hellebores') == 0:
                 # (NB 0 means the command succeeded, the directory exists)
                 self.sfile = f'/tmp/pqm-hellebores/{self.sfile}'
                 self.save_settings()
@@ -229,7 +234,10 @@ class Settings():
             self.send_to_all = self._send_to_all
             signal.signal(signal.SIGUSR1, self.signal_handler)
         else: 
-            self.send_to_all = lambda: print(f"settings.py: send_to_all() function hasn't been implemented on {sys.platform}.", file=sys.stderr)
+            self.send_to_all = \
+                lambda: print(
+                    f"settings.py: send_to_all() function hasn't been implemented on {sys.platform}.",
+                    file=sys.stderr)
 
 
 default_settings = '''

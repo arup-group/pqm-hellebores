@@ -4,9 +4,10 @@ import settings
 import subprocess
 
 s = settings.Settings()
-ip = subprocess.run(['hostname', '-I'], capture_output=True, text=True).stdout.rstrip()
+ips = subprocess.run(['hostname', '-I'], capture_output=True, text=True).stdout.rstrip().split()
 
 print(f'Device identity: {s.identity}')
 print(f'MAC address: {s.mac}')
-print(f'IP address: {ip}')
+for ip in ips :
+    print(f'IP address: {ip}')
 

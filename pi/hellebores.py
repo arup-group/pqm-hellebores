@@ -643,84 +643,30 @@ class UI_groups:
         self.set_updater('waveform')
 
     def set_updater(self, group):
-        # for 'waveform', 'meter', 'voltage_harmonic', 'current_harmonic', we retain the group in a 'mode' variable
-        # for recall after menu selections.
-        if group == 'waveform':
-            self.mode = 'waveform'
-            self.updater = thorpy.Group(
-                elements=[
-                    self.elements['waveform'],
-                    self.elements['datetime']
-                    ],
-                mode=None).get_updater()
-        elif group == 'meter':
-            self.mode = 'meter'
-            self.updater = thorpy.Group(
-                elements=[
-                    self.elements['meter'],
-                    self.elements['datetime']
-                    ],
-                mode=None).get_updater()
-        elif group == 'voltage_harmonic':
-            self.mode = 'voltage_harmonic'
-            self.updater = thorpy.Group(
-                elements=[
-                    self.elements['voltage_harmonic'],
-                    self.elements['datetime']
-                    ],
-                mode=None).get_updater()
-        elif group == 'current_harmonic':
-            self.mode = 'current_harmonic'
-            self.updater = thorpy.Group(
-                elements=[
-                    self.elements['current_harmonic'],
-                    self.elements['datetime']
-                    ],
-                mode=None).get_updater()
-        elif group == 'mode':
-            self.updater = thorpy.Group(
-                elements=[
-                    self.elements[self.mode],
-                    self.elements['mode'],
-                    self.elements['datetime']
-                    ],
-                mode=None).get_updater()
-        elif group == 'horizontal':
-            self.updater = thorpy.Group(
-                elements=[
-                    self.elements[self.mode],
-                    self.elements['horizontal'],
-                    self.elements['datetime']
-                    ],
-                mode=None).get_updater()
-        elif group == 'vertical':
-            self.updater = thorpy.Group(
-                elements=[
-                    self.elements[self.mode],
-                    self.elements['vertical'],
-                    self.elements['datetime']
-                    ],
-                mode=None).get_updater()
-        elif group == 'trigger':
-            self.updater = thorpy.Group(
-                elements=[
-                    self.elements[self.mode],
-                    self.elements['trigger'],
-                    self.elements['datetime']
-                    ],
-                mode=None).get_updater()
-        elif group == 'options':
-            self.updater = thorpy.Group(
-                elements=[
-                    self.elements[self.mode],
-                    self.elements['options'],
-                    self.elements['datetime']
-                    ],
-                mode=None).get_updater()
+        # for 'waveform', 'meter', 'voltage_harmonic', 'current_harmonic',
+        # we retain the group in a 'mode' variable for recall after menu selections.
+        if group in ['waveform', 'meter', 'voltage_harmonic', 'current_harmonic']:
+            menu_selected = False
+            self.mode = group
         else:
-             print(
-                 'UI_groups.set_updater(): group selection not recognised.\n',
-                 file=sys.stderr)
+            menu_selected = True
+        try:
+            if menu_selected:
+                elements = [ 
+                    self.elements[self.mode],
+                    self.elements[group],
+                    self.elements['datetime']
+                    ]
+            else:
+                elements = [
+                    self.elements[group],
+                    self.elements['datetime']
+                    ]
+            self.updater = thorpy.Group(elements=elements, mode=None).get_updater()
+        except:
+            print(
+                'UI_groups.set_updater(): group parameter not recognised.\n',
+                file=sys.stderr)
 
     def get_updater(self):
         return self.updater 
@@ -831,9 +777,9 @@ class Texts:
         self.texts[T_WATTSDIV].set_text(
             f'{st.power_display_ranges[st.power_display_index]} W/',
             adapt_parent=False)
-        self.texts[T_LEAKDIV].set_text(
-            f'{st.earth_leakage_current_display_ranges[st.earth_leakage_current_display_index] * 1000} mA/',
-            adapt_parent=False)
+        elv = (st.earth_leakage_current_display_ranges
+               [st.earth_leakage_current_display_index] * 1000)
+        self.texts[T_LEAKDIV].set_text(f'{elv} mA/', adapt_parent=False)
 
 
 def draw_background(st):

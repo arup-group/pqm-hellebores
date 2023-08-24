@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
-# Read incoming binary block from stdin and convert to hexadecimal format
+# Read incoming binary block from stdin and write out in hexadecimal text format
+# Incremental index number then one sample for each channel, per line
 
 import sys
 import serial

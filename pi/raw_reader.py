@@ -18,7 +18,7 @@ def main():
         try:
             print(ser.readline())
         except ValueError:
-            print(f'raw_reader.py, main(): Failed to read {line}.', file=sys.stderr)
+            print('raw_reader.py, main(): Failed to read line.', file=sys.stderr)
     ser.close()
 
 

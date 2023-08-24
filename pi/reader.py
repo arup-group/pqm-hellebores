@@ -27,7 +27,7 @@ def main():
                 print(f'{i//16 :04x} {bs[i:i+4]} {bs[i+4:i+8]} {bs[i+8:i+12]} {bs[i+12:i+16]}')
             sys.stdout.flush()
         except ValueError:
-            print(f'reader.py, main(): Failed to read {line}.', file=sys.stderr)
+            print('reader.py, main(): Failed to read line.', file=sys.stderr)
     ser.close()
 
 

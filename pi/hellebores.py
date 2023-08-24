@@ -645,20 +645,16 @@ class UI_groups:
     def set_updater(self, group):
         # for 'waveform', 'meter', 'voltage_harmonic', 'current_harmonic',
         # we retain the group in a 'mode' variable for recall after menu selections.
-        if group in ['waveform', 'meter', 'voltage_harmonic', 'current_harmonic']:
-            menu_selected = False
-            self.mode = group
-        else:
-            menu_selected = True
         try:
-            if menu_selected:
+            if group in ['waveform', 'meter', 'voltage_harmonic', 'current_harmonic']:
+                self.mode = group
                 elements = [ 
                     self.elements[self.mode],
-                    self.elements[group],
                     self.elements['datetime']
                     ]
             else:
                 elements = [
+                    self.elements[self.mode],
                     self.elements[group],
                     self.elements['datetime']
                     ]

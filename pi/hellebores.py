@@ -97,8 +97,9 @@ class Range_controller:
         elif offset == -1:
             self.range_selector = max(0, self.range_selector-1)
         else:
-            sys.stderr.write(
-                "Range_controller.change_range: can only change range by +1 or -1.") 
+            print(
+                "Range_controller.change_range: can only change range by +1 or -1.", 
+                file=sys.stderr) 
 
 
 def create_datetime():
@@ -203,19 +204,20 @@ def create_horizontal(st):
     """Horizontal controls dialog"""
     def update_time_range(times, offset):
         times.change_range(offset)
-        time_display.set_text(f'{times.get_value()} ms/div', adapt_parent=False)
+        time_display.set_text(f'{times.get_value()} ms/div',
+            adapt_parent=False)
         st.time_display_index = times.get_index()
         st.send_to_all()
 
     button_done = configure_button(BUTTON_SIZE, 'Done', back_reaction)
 
-    times               = Range_controller(st.time_display_ranges, st.time_display_index)
-    time_display        = thorpy.Text(f'{times.get_value()} ms/div') 
+    times = Range_controller(st.time_display_ranges, st.time_display_index)
+    time_display = thorpy.Text(f'{times.get_value()} ms/div') 
     time_display.set_size(TEXT_WIDE_SIZE)
-    time_down           = configure_arrow_button(
+    time_down = configure_arrow_button(
         BUTTON_SIZE, 'left',
         lambda: update_time_range(times, -1))
-    time_up             = configure_arrow_button(
+    time_up = configure_arrow_button(
         BUTTON_SIZE, 'right', 
         lambda: update_time_range(times, 1))
 
@@ -408,7 +410,7 @@ def create_trigger(st):
             st.trigger_level = 0.1
         else:
             print(
-                'hellebores.py: update_trigger_condition(), invalid condition requested.',
+                'hellebores.py: update_trigger_mode(), invalid condition requested.',
                 sys.stderr)
         st.trigger_mode = mode
         draw_background(st)
@@ -492,7 +494,7 @@ def create_trigger(st):
             text_trigger_status]) 
     for e in trigger.get_all_descendants():
         e.hand_cursor = False    
-   # put the text status in after forming the box, so that the box dimensions are not affected by the text.
+    # put the text status in after forming the box, so that the box dimensions are not affected by the text.
     update_trigger_status(text_trigger_status)
     return trigger
 
@@ -584,23 +586,21 @@ def create_options(st):
 # About (including software version, kernel version, uuid of Pi and Pico)
 # Exit to desktop
 
-# The instance of this class will hold all the user interface states or 'groups' that can be displayed
-# together with the currently active selection
+# The instance of this class will hold all the user interface states or 'groups'
+# that can be displayed together with the currently active selection
 class UI_groups:
     elements = {}
     updater = None
     mode = 'waveform'
 
     def __init__(self, st, texts):
-        ui_datetime = create_datetime()[0]
-        ui_datetime.set_topleft(0,0)
-        self.elements['datetime'] = ui_datetime
+        self.elements['datetime'] = create_datetime()[0]
+        self.elements['datetime'].set_topleft(0,0)
 
         # waveform (oscilloscope) mode
-        ui_waveform = create_waveform_controls(st, texts)
-        ui_waveform.set_size(CONTROLS_BOX_SIZE)
-        ui_waveform.set_topright(*CONTROLS_BOX_POSITION)
-        self.elements['waveform'] = ui_waveform
+        self.elements['waveform'] = create_waveform_controls(st, texts)
+        self.elements['waveform'].set_size(CONTROLS_BOX_SIZE)
+        self.elements['waveform'].set_topright(*CONTROLS_BOX_POSITION)
 
         # multi-meter mode
         #ui_meter = create_meter_controls(st, texts)
@@ -620,27 +620,15 @@ class UI_groups:
         #ui_current_harmonic.set_topright(*CONTROLS_BOX_POSITION)
         #self.elements['current_harmonic'] = ui_current_harmonic
 
-        ui_mode = create_mode(st)
-        ui_mode.set_topright(*SETTINGS_BOX_POSITION)
-        self.elements['mode'] = ui_mode
+        self.elements['mode'] = create_mode(st)
+        self.elements['vertical'] = create_vertical(st)
+        self.elements['horizontal'] = create_horizontal(st)
+        
+        self.elements['trigger'] = create_trigger(st)
+        self.elements['options'] = create_options(st)
 
-        ui_vertical = create_vertical(st)
-        ui_vertical.set_topright(*SETTINGS_BOX_POSITION)
-        self.elements['vertical'] = ui_vertical
-
-        ui_horizontal = create_horizontal(st)
-        ui_horizontal.set_topright(*SETTINGS_BOX_POSITION)
-        self.elements['horizontal'] = ui_horizontal
-
-        ui_trigger = create_trigger(st)
-        ui_trigger.set_topright(*SETTINGS_BOX_POSITION)
-        self.elements['trigger'] = ui_trigger
-
-        ui_options = create_options(st)
-        ui_options.set_topright(*SETTINGS_BOX_POSITION)
-        self.elements['options'] = ui_options
-
-        self.set_updater('waveform')
+        for k in ['mode', 'vertical', 'horizontal', 'trigger', 'options']:
+            self.elements[k].set_topright(*SETTINGS_BOX_POSITION)
 
     def set_updater(self, group):
         # for 'waveform', 'meter', 'voltage_harmonic', 'current_harmonic',

@@ -15,7 +15,6 @@ import time
 import sys
 import os
 import select
-import signal
 import settings
 
 
@@ -112,8 +111,7 @@ def create_datetime():
 
 
 def configure_switch_button(size, value, callback_function):
-    button = thorpy.SwitchButton(
-        value, size, drag_size=(size[0]//3, size[1]//2))
+    button = thorpy.SwitchButton(value, size, drag_size=(size[0]//3, size[1]//2))
     button.set_bck_color(VERY_LIGHT_GREY, 'normal')
     button.set_bck_color(VERY_LIGHT_GREY, 'hover')
     button.set_font_color(WHITE)
@@ -630,12 +628,12 @@ class UI_groups:
         for k in ['mode', 'vertical', 'horizontal', 'trigger', 'options']:
             self.elements[k].set_topright(*SETTINGS_BOX_POSITION)
 
-    def set_updater(self, group):
+    def set_updater(self, elements_group):
         # for 'waveform', 'meter', 'voltage_harmonic', 'current_harmonic',
         # we retain the group in a 'mode' variable for recall after menu selections.
         try:
-            if group in ['waveform', 'meter', 'voltage_harmonic', 'current_harmonic']:
-                self.mode = group
+            if elements_group in ['waveform', 'meter', 'voltage_harmonic', 'current_harmonic']:
+                self.mode = elements_group
                 elements = [ 
                     self.elements[self.mode],
                     self.elements['datetime']
@@ -643,7 +641,7 @@ class UI_groups:
             else:
                 elements = [
                     self.elements[self.mode],
-                    self.elements[group],
+                    self.elements[elements_group],
                     self.elements['datetime']
                     ]
             self.updater = thorpy.Group(elements=elements, mode=None).get_updater()
@@ -665,7 +663,6 @@ def start_stop_reaction(texts, st):
     texts.refresh(st)    
 
 def mode_reaction():
-    global ui
     ui.set_updater('mode')
 
 def waveform_reaction():
@@ -681,23 +678,18 @@ def current_harmonics_reaction():
     pass
 
 def horizontal_reaction():
-    global ui
     ui.set_updater('horizontal')
 
 def vertical_reaction():
-    global ui
     ui.set_updater('vertical')
 
 def trigger_reaction():
-    global ui
     ui.set_updater('trigger')
 
 def options_reaction():
-    global ui
     ui.set_updater('options')
 
 def back_reaction():
-    global ui
     ui.set_updater('waveform')
 
 
@@ -740,7 +732,6 @@ class Texts:
         self.texts[item].set_text(value)
 
     def refresh(self, st):
-        global capturing
         self.set_colours(st)
         if capturing:
             self.texts[T_RUNSTOP].set_bck_color(GREEN)
@@ -1035,7 +1026,7 @@ def main():
                 plot_fn = _plot_lines
 
         # ui_current_updater.update() is an expensive function, so we use the simplest possible
-        # thorpy theme for performance
+        # thorpy theme to achieve highest performance/frame rate
         ui.get_updater().update(events=events)
         # push all of our updated work into the active display framebuffer
         pygame.display.flip()

@@ -527,12 +527,23 @@ def create_options(st):
         alert.launch_nonblocking()
 
     def software_update():
-        # do a git pull and then re-launch here
-        pass
+        # quit, requesting a git pull and then re-launch
+        pygame.quit() 
+        sys.exit(3)
+
+    def restart():
+        # quit, requesting reset of pico and restart
+        pygame.quit()
+        sys.exit(2)
+
+    def shutdown():
+        # quit, requesting a system shutdown
+        pygame.quit() 
+        sys.exit(4)
 
     def exit_application():
-        global running
-        running = False
+        pygame.quit()
+        sys.exit(0)
 
     button_done = configure_button(
         BUTTON_SIZE, 'Done', lambda: set_updater('back'))
@@ -543,15 +554,16 @@ def create_options(st):
         BUTTON_SIZE, 'Lines\nmode',
         lambda: update_plot_mode('linesmode'))
     button_about = configure_button(
-        BUTTON_SIZE, 'About...',
-        lambda: about_box())
+        BUTTON_SIZE, 'About...',about_box)
+    button_restart = configure_button(
+        BUTTON_SIZE, 'Restart', restart)
     button_software_update = configure_button(
-        BUTTON_SIZE,
-        'Software\nupdate', software_update())
-    button_exit = configure_button(
-        BUTTON_SIZE, 'QUIT',
-        lambda: exit_application())
- 
+        BUTTON_SIZE, 'Software\nupdate', software_update)
+    button_shutdown = configure_button(
+        BUTTON_SIZE, 'SHUTDOWN', shutdown)
+    button_quit = configure_button(
+        BUTTON_SIZE, 'QUIT', exit_application)
+
     options = thorpy.TitleBox(
         text='Options',
         children=[
@@ -563,9 +575,14 @@ def create_options(st):
                     ], mode='h'),
             thorpy.Group(
                 elements=[
-                    button_about,
+                    button_restart,
                     button_software_update,
-                    button_exit
+                    ], mode='h'),
+            thorpy.Group(
+                elements=[
+                    button_about,
+                    button_shutdown,
+                    button_quit
                     ], mode='h')
             ])
     for e in options.get_all_descendants():
@@ -930,7 +947,7 @@ class Lines:
 
 
 def main():
-    global capturing, running, ui, waveform_background
+    global capturing, ui, waveform_background
 
     # initialise pygame
     pygame.init()
@@ -965,7 +982,6 @@ def main():
 
     # initialise flags
     capturing = True        # allow/stop update of the lines on the screen
-    running   = True        # program runs until this flag is cleared
 
     # create objects that hold the state of the UI
     waveform_background = draw_background(st)
@@ -981,7 +997,7 @@ def main():
     
 
     # main loop
-    while running:
+    while True:
         # hack to make the cursor invisible while still responding to touch signals
         # would like to do this only once, rather than every trip round the loop
         if hide_mouse_pointer:
@@ -1006,7 +1022,7 @@ def main():
         global plot_fn
         for e in events:
             if (e.type == pygame.QUIT) or (e.type == pygame.KEYDOWN and e.key == pygame.K_q):
-                running = False
+                exit_application()
             elif e.type == pygame.KEYDOWN and e.key == pygame.K_d:
                 plot_fn = _plot_dots
             elif e.type == pygame.KEYDOWN and e.key == pygame.K_l:
@@ -1017,8 +1033,6 @@ def main():
         ui.get_updater().update(events=events)
         # push all of our updated work into the active display framebuffer
         pygame.display.flip()
-    pygame.quit()
-
 
 
 if __name__ == '__main__':

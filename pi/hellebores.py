@@ -109,41 +109,37 @@ def create_datetime():
     text_datetime.set_font_color(WHITE)
     return [ text_datetime ]
 
-
-def configure_switch_button(size, value, callback_function):
-    button = thorpy.SwitchButton(value, size, drag_size=(size[0]//3, size[1]//2))
+def configure_button_decorations(button, callback_function):
     button.set_bck_color(VERY_LIGHT_GREY, 'normal')
     button.set_bck_color(VERY_LIGHT_GREY, 'hover')
     button.set_font_color(WHITE)
     button.at_unclick = callback_function
+
+def configure_switch_button(size, value, callback_function):
+    button = thorpy.SwitchButton(value, size, drag_size=(size[0]//3, size[1]//2))
+    configure_button_decorations(button, callback_function)
     return button
 
 def configure_arrow_button(size, direction, callback_function):
     button = thorpy.ArrowButton(direction, size) 
-    button.set_bck_color(VERY_LIGHT_GREY, 'normal')
-    button.set_bck_color(VERY_LIGHT_GREY, 'hover')
-    button.set_font_color(WHITE)
-    button.at_unclick = callback_function
+    configure_button_decorations(button, callback_function)
     return button
  
 def configure_button(size, text, callback_function):
     button = thorpy.Button(text) 
-    button.set_bck_color(VERY_LIGHT_GREY, 'normal')
-    button.set_bck_color(VERY_LIGHT_GREY, 'hover')
-    button.set_font_color(WHITE)
+    configure_button_decorations(button, callback_function)
     button.set_size(size)
-    button.at_unclick = callback_function
     return button
     
 def create_waveform_controls(st, texts):
     """Waveform controls, on right of screen"""
     button_setup = [
         ('Run/Stop', lambda: start_stop_reaction(texts, st)),
-        ('Mode', mode_reaction), 
-        ('Horizontal', horizontal_reaction), 
-        ('Vertical', vertical_reaction), 
-        ('Trigger', trigger_reaction), 
-        ('Options', options_reaction)
+        ('Mode', lambda: set_updater('mode')), 
+        ('Horizontal', lambda: set_updater('horizontal')), 
+        ('Vertical', lambda: set_updater('vertical')), 
+        ('Trigger', lambda: set_updater('trigger')), 
+        ('Options', lambda: set_updater('options'))
         ]
     buttons = [ configure_button(BUTTON_SIZE, bt, bf) for bt, bf in button_setup ]
     waveform = thorpy.Box([ *texts.get()[0:2], *buttons, *texts.get()[2:] ])
@@ -152,12 +148,18 @@ def create_waveform_controls(st, texts):
         e.hand_cursor = False    
     return waveform
 
+# take care to ensure that UI text control elements that are referenced
+# stay in the same place for all grouping (eg thorpy.Group, thorpy.Box)
+# elements -- these tend to change the x,y placement of these controls.
 def create_meter_controls(st, texts):
     """Meter controls, on right of screen"""
     button_setup = [
         ('Run/Stop', lambda: start_stop_reaction(texts, st)),
-        ('Mode', mode_reaction), 
-        ('Options', options_reaction)
+        ('Mode', lambda: set_updater('mode')), 
+        ('', lambda: None),
+        ('', lambda: None),
+        ('', lambda: None),
+        ('Options', lambda: set_updater('options'))
         ]
     buttons = [ configure_button(BUTTON_SIZE, bt, bf) for bt, bf in button_setup ]
     meter = thorpy.Box([ *texts.get()[0:2], *buttons, *texts.get()[2:] ])
@@ -175,9 +177,8 @@ def create_current_harmonic_controls(st, texts):
 
 def create_mode(st):
     """Mode controls dialog"""
-    button_done = configure_button(BUTTON_SIZE, 'Done', back_reaction)
-    button_waveform = configure_button(BUTTON_WIDE_SIZE, 'Waveform', waveform_reaction)
-    button_meter = configure_button(BUTTON_WIDE_SIZE, 'Meter', meter_reaction)
+    button_waveform = configure_button(BUTTON_WIDE_SIZE, 'Waveform', lambda: set_updater('waveform'))
+    button_meter = configure_button(BUTTON_WIDE_SIZE, 'Meter', lambda: set_updater('meter'))
     button_voltage_harmonics = configure_button(
         BUTTON_WIDE_SIZE, 'Voltage harmonics', voltage_harmonics_reaction)
     button_current_harmonics = configure_button(
@@ -185,7 +186,6 @@ def create_mode(st):
 
     mode = thorpy.TitleBox(
         text='Mode', children=[
-            button_done, 
             thorpy.Group(elements=[
                 button_waveform,
                 button_meter,
@@ -207,7 +207,7 @@ def create_horizontal(st):
         st.time_display_index = times.get_index()
         st.send_to_all()
 
-    button_done = configure_button(BUTTON_SIZE, 'Done', back_reaction)
+    button_done = configure_button(BUTTON_SIZE, 'Done', lambda: set_updater('back'))
 
     times = Range_controller(st.time_display_ranges, st.time_display_index)
     time_display = thorpy.Text(f'{times.get_value()} ms/div') 
@@ -280,7 +280,7 @@ def create_vertical(st):
                 file=sys.stderr)
         st.send_to_all()
 
-    button_done = configure_button(BUTTON_SIZE, 'Done', back_reaction)
+    button_done = configure_button(BUTTON_SIZE, 'Done', lambda: set_updater('back'))
 
     voltages = Range_controller(
         st.voltage_display_ranges, st.voltage_display_index)
@@ -443,7 +443,7 @@ def create_trigger(st):
         'sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.')
     text_trigger_status.set_max_text_width(280)
     button_done = configure_button(
-        BUTTON_SIZE, 'Done', back_reaction)
+        BUTTON_SIZE, 'Done', lambda: set_updater('back'))
     button_freerun = configure_button(
         BUTTON_SIZE, 'Free-run',
         lambda: update_trigger_mode('freerun', text_trigger_status))
@@ -535,7 +535,7 @@ def create_options(st):
         running = False
 
     button_done = configure_button(
-        BUTTON_SIZE, 'Done', back_reaction)
+        BUTTON_SIZE, 'Done', lambda: set_updater('back'))
     button_dots_mode = configure_button(
         BUTTON_SIZE, 'Dots\nmode',
         lambda: update_plot_mode('dotsmode'))
@@ -595,16 +595,15 @@ class UI_groups:
         self.elements['datetime'] = create_datetime()[0]
         self.elements['datetime'].set_topleft(0,0)
 
-        # waveform (oscilloscope) mode
+        # waveform mode
         self.elements['waveform'] = create_waveform_controls(st, texts)
         self.elements['waveform'].set_size(CONTROLS_BOX_SIZE)
         self.elements['waveform'].set_topright(*CONTROLS_BOX_POSITION)
 
         # multi-meter mode
-        #ui_meter = create_meter_controls(st, texts)
-        #ui_meter.set_size(CONTROLS_BOX_SIZE)
-        #ui_meter.set_topright(*CONTROLS_BOX_POSITION)
-        #self.elements['meter'] = ui_meter
+        self.elements['meter'] = create_meter_controls(st, texts)
+        self.elements['meter'].set_size(CONTROLS_BOX_SIZE)
+        self.elements['meter'].set_topright(*CONTROLS_BOX_POSITION)
 
         # voltage harmonic mode
         #ui_voltage_harmonic = create_voltage_harmonic_controls(st, texts)
@@ -633,12 +632,21 @@ class UI_groups:
         # we retain the group in a 'mode' variable for recall after menu selections.
         try:
             if elements_group in ['waveform', 'meter', 'voltage_harmonic', 'current_harmonic']:
+                # if we picked a different display mode, store it in 'self.mode'.
                 self.mode = elements_group
                 elements = [ 
                     self.elements[self.mode],
                     self.elements['datetime']
                     ]
+            elif elements_group == 'back':
+                # if we picked 'back', then just use the pre-existing mode
+                elements = [
+                    self.elements[self.mode],
+                    self.elements['datetime']
+                    ]
             else:
+                # otherwise, use the pre-existing mode and add the selected overlay
+                # elements to it.
                 elements = [
                     self.elements[self.mode],
                     self.elements[elements_group],
@@ -662,35 +670,14 @@ def start_stop_reaction(texts, st):
     capturing = not capturing
     texts.refresh(st)    
 
-def mode_reaction():
-    ui.set_updater('mode')
-
-def waveform_reaction():
-    pass
-
-def meter_reaction():
-    pass
+def set_updater(updater):
+    ui.set_updater(updater)
 
 def voltage_harmonics_reaction():
     pass
 
 def current_harmonics_reaction():
     pass
-
-def horizontal_reaction():
-    ui.set_updater('horizontal')
-
-def vertical_reaction():
-    ui.set_updater('vertical')
-
-def trigger_reaction():
-    ui.set_updater('trigger')
-
-def options_reaction():
-    ui.set_updater('options')
-
-def back_reaction():
-    ui.set_updater('waveform')
 
 
 class Texts:

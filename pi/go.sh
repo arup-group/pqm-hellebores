@@ -17,6 +17,7 @@ if [ $exit_code -eq 2 ]; then
     # Reset the Pico and restart the app
     echo "Resetting Pico..."
     ./pico_reset.py
+    sleep 10
     echo "Restarting $0..."
     exec $0
 elif [ $exit_code -eq 3 ]; then

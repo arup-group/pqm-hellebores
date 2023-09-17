@@ -21,12 +21,13 @@ fi
 # Now check the exit code in case we need to do anything
 exit_code=$?
 if [[ $exit_code -eq 2 ]]; then
-    if [[ $have_pico -eq 1 ]]; then
-        # Reset the Pico
-        echo "Resetting Pico..."
-        ./pico_reset.py
-        sleep 10
-    fi
+    # Pico not recovering from this step!
+    #if [[ $have_pico -eq 1 ]]; then
+    #    # Reset the Pico
+    #    echo "Resetting Pico..."
+    #    ./pico_reset.py
+    #    sleep 10
+    #fi
     # Flush serial interface
     # open the serial port for reading on file descriptor 2
     # and then empty it

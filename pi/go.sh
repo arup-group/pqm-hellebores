@@ -22,10 +22,11 @@ fi
 exit_code=$?
 if [[ $exit_code -eq 2 ]]; then
     if [[ $have_pico -eq 1 ]]; then
-    # Reset the Pico
-    echo "Resetting Pico..."
-    ./pico_reset.py
-    sleep 10
+        # Reset the Pico
+        echo "Resetting Pico..."
+        ./pico_reset.py
+        sleep 10
+    fi
     # Flush serial interface
     # open the serial port for reading on file descriptor 2
     # and then empty it
@@ -34,6 +35,7 @@ if [[ $exit_code -eq 2 ]]; then
     # Trampoline: reload the current script and run again
     echo "Restarting $0..."
     exec $0
+
 elif [[ $exit_code -eq 3 ]]; then
     # Update software and restart the app
     echo "Updating software from repository..."
@@ -41,10 +43,12 @@ elif [[ $exit_code -eq 3 ]]; then
     # Trampoline: reload the current script and run again
     echo "Restarting $0..."
     exec $0 
+
 elif [[ $exit_code -eq 4 ]]; then
     # Shut down system
     echo "Shutting down system..."
     exec sudo shutdown -h now
+
 elif [[ $exit_code -ne 0 ]]; then
     # We have no idea what happened
     echo "The program quit with an unexpected exit code $exit_code. Not good."

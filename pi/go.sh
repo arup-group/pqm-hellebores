@@ -1,8 +1,11 @@
 #!/bin/bash
 
 # Figure out if we are running on real hardware or not
+# if we are, we disable the getty service for the serial port
+# as this can sometimes (infrequently) interfere with the communications
 if [[ -e /dev/ttyACM0 ]]; then 
     have_pico=1
+    sudo systemctl stop serial-getty@USB0.service
 else
     have_pico=0
 fi

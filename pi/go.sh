@@ -5,7 +5,7 @@
 # as this can sometimes (infrequently) interfere with the communications
 if [[ -e /dev/ttyACM0 ]]; then 
     have_pico=1
-    sudo systemctl stop serial-getty@USB0.service
+    sudo systemctl stop serial-getty@ACM0.service
 else
     have_pico=0
 fi

@@ -496,6 +496,10 @@ def create_trigger(st):
     update_trigger_status(text_trigger_status)
     return trigger
 
+def exit_application(option='quit'):
+    exit_codes = { 'quit': 0, 'restart': 2, 'software_update': 3, 'shutdown': 4, }
+    pygame.quit()
+    sys.exit(exit_codes[option])
 
 def create_options(st):
     """Option controls dialog"""
@@ -526,43 +530,22 @@ def create_options(st):
            e.hand_cursor = False
         alert.launch_nonblocking()
 
-    def software_update():
-        # quit, requesting a git pull and then re-launch
-        pygame.quit() 
-        sys.exit(3)
-
-    def restart():
-        # quit, requesting reset of pico and restart
-        pygame.quit()
-        sys.exit(2)
-
-    def shutdown():
-        # quit, requesting a system shutdown
-        pygame.quit() 
-        sys.exit(4)
-
-    def exit_application():
-        pygame.quit()
-        sys.exit(0)
-
     button_done = configure_button(
         BUTTON_SIZE, 'Done', lambda: set_updater('back'))
     button_dots_mode = configure_button(
-        BUTTON_SIZE, 'Dots\nmode',
-        lambda: update_plot_mode('dotsmode'))
+        BUTTON_SIZE, 'Dots\nmode', lambda: update_plot_mode('dotsmode'))
     button_lines_mode = configure_button(
-        BUTTON_SIZE, 'Lines\nmode',
-        lambda: update_plot_mode('linesmode'))
+        BUTTON_SIZE, 'Lines\nmode', lambda: update_plot_mode('linesmode'))
     button_about = configure_button(
         BUTTON_SIZE, 'About...',about_box)
     button_restart = configure_button(
-        BUTTON_SIZE, 'Restart', restart)
+        BUTTON_SIZE, 'Restart', lambda: exit_application('restart'))
     button_software_update = configure_button(
-        BUTTON_SIZE, 'Software\nupdate', software_update)
+        BUTTON_SIZE, 'Software\nupdate', lambda: exit_application('software_update'))
     button_shutdown = configure_button(
-        BUTTON_SIZE, 'SHUTDOWN', shutdown)
+        BUTTON_SIZE, 'SHUTDOWN', lambda: exit_application('shutdown'))
     button_quit = configure_button(
-        BUTTON_SIZE, 'QUIT', exit_application)
+        BUTTON_SIZE, 'QUIT', lambda: exit_application('quit'))
 
     options = thorpy.TitleBox(
         text='Options',
@@ -1022,7 +1005,7 @@ def main():
         global plot_fn
         for e in events:
             if (e.type == pygame.QUIT) or (e.type == pygame.KEYDOWN and e.key == pygame.K_q):
-                exit_application()
+                exit_application('quit')
             elif e.type == pygame.KEYDOWN and e.key == pygame.K_d:
                 plot_fn = _plot_dots
             elif e.type == pygame.KEYDOWN and e.key == pygame.K_l:

@@ -20,6 +20,10 @@ def main():
         print("reader.py: Couldn't open serial port.", file=sys.stderr)
         sys.exit(1)
 
+    # sometimes (rarely) there is a serial read error.
+    # this can be caused by the getty terminal process trying to read/write
+    # the serial port. We allow up to 5 successive re-tries.
+    retries = 5
     while True:    
         try:
             bs = (ser.read(256).hex())
@@ -27,8 +31,16 @@ def main():
             for i in range(0, len(bs), 16):
                 print(f'{i//16 :04x} {bs[i:i+4]} {bs[i+4:i+8]} {bs[i+8:i+12]} {bs[i+12:i+16]}')
             sys.stdout.flush()
+            retries = 5
         except ValueError:
-            print('reader.py, main(): Failed to read line.', file=sys.stderr)
+            print('reader.py, main(): The data was not correct or complete.', file=sys.stderr)
+        except OSError:
+            print('reader.py, main(): Failed to read from serial port.', file=sys.stderr)
+            retries = retries - 1
+            if retries == 0:
+                print('reader.py, main(): Read error was persistent, quitting.', file=sys.stderr)
+                break
+
     ser.close()
 
 

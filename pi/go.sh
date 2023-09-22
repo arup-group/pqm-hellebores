@@ -20,6 +20,7 @@ fi
 # The program finished.
 # Now check the exit code in case we need to do anything
 exit_code=$?
+# Restart
 if [[ $exit_code -eq 2 ]]; then
     # Pico not recovering from this step!
     #if [[ $have_pico -eq 1 ]]; then
@@ -33,25 +34,27 @@ if [[ $exit_code -eq 2 ]]; then
     # and then empty it
     2</dev/ttyACM0
     while read -t 0 -u 2 discard; do echo "Flushing serial port..."; done
-    # Trampoline: reload the current script and run again
+    # Trampoline: reload the launch script and run again
     echo "Restarting $0..."
     exec $0
 
+# Software update
 elif [[ $exit_code -eq 3 ]]; then
-    # Update software and restart the app
+    clear
     echo "Updating software from repository..."
     git pull
-    # Trampoline: reload the current script and run again
-    echo "Restarting $0..."
+    # Trampoline: reload the launch script and run again
+    echo "Restarting $0 in 5s..."
+    sleep 5
     exec $0 
 
+# Shutdown
 elif [[ $exit_code -eq 4 ]]; then
-    # Shut down system
     echo "Shutting down system..."
     exec sudo shutdown -h now
 
+# We have no idea what happened
 elif [[ $exit_code -ne 0 ]]; then
-    # We have no idea what happened
     echo "The program quit with an unexpected exit code $exit_code. Not good."
 fi
 

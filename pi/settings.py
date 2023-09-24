@@ -72,7 +72,6 @@ class Settings():
  
 
     def set_settings(self, js, cal):
-        self.frequency                                 = js['frequency']
         self.sample_rate                               = js['sample_rate']
         self.time_axis_divisions                       = js['time_axis_divisions']
         self.time_axis_pre_trigger_divisions           = js['time_axis_pre_trigger_divisions']
@@ -116,7 +115,6 @@ class Settings():
 
     def make_json(self):
         js = {}
-        js['frequency']                                = self.frequency
         js['sample_rate']                              = self.sample_rate
         js['time_axis_divisions']                      = self.time_axis_divisions
         js['time_axis_pre_trigger_divisions']          = self.time_axis_pre_trigger_divisions
@@ -242,7 +240,6 @@ class Settings():
 
 default_settings = '''
 {
-    "frequency": 51.0,
     "sample_rate": 7812.5,
     "time_axis_divisions": 10,
     "time_axis_pre_trigger_divisions": 5,

@@ -135,11 +135,11 @@ def create_waveform_controls(st, texts):
     """Waveform controls, on right of screen"""
     button_setup = [
         ('Run/Stop', lambda: start_stop_reaction(texts, st)),
-        ('Mode', lambda: set_updater('mode')), 
-        ('Horizontal', lambda: set_updater('horizontal')), 
-        ('Vertical', lambda: set_updater('vertical')), 
-        ('Trigger', lambda: set_updater('trigger')), 
-        ('Options', lambda: set_updater('options'))
+        ('Mode', lambda: ui.set_updater('mode')), 
+        ('Horizontal', lambda: ui.set_updater('horizontal')), 
+        ('Vertical', lambda: ui.set_updater('vertical')), 
+        ('Trigger', lambda: ui.set_updater('trigger')), 
+        ('Options', lambda: ui.set_updater('options'))
         ]
     buttons = [ configure_button(BUTTON_SIZE, bt, bf) for bt, bf in button_setup ]
     waveform = thorpy.Box([ *texts.get()[0:2], *buttons, *texts.get()[2:] ])
@@ -155,11 +155,11 @@ def create_meter_controls(st, texts):
     """Meter controls, on right of screen"""
     button_setup = [
         ('Run/Stop', lambda: start_stop_reaction(texts, st)),
-        ('Mode', lambda: set_updater('mode')), 
+        ('Mode', lambda: ui.set_updater('mode')), 
         ('', lambda: None),
         ('', lambda: None),
         ('', lambda: None),
-        ('Options', lambda: set_updater('options'))
+        ('Options', lambda: ui.set_updater('options'))
         ]
     buttons = [ configure_button(BUTTON_SIZE, bt, bf) for bt, bf in button_setup ]
     meter = thorpy.Box([ *texts.get()[0:2], *buttons, *texts.get()[2:] ])
@@ -177,8 +177,8 @@ def create_current_harmonic_controls(st, texts):
 
 def create_mode(st):
     """Mode controls dialog"""
-    button_waveform = configure_button(BUTTON_WIDE_SIZE, 'Waveform', lambda: set_updater('waveform'))
-    button_meter = configure_button(BUTTON_WIDE_SIZE, 'Meter', lambda: set_updater('meter'))
+    button_waveform = configure_button(BUTTON_WIDE_SIZE, 'Waveform', lambda: ui.set_updater('waveform'))
+    button_meter = configure_button(BUTTON_WIDE_SIZE, 'Meter', lambda: ui.set_updater('meter'))
     button_voltage_harmonics = configure_button(
         BUTTON_WIDE_SIZE, 'Voltage harmonics', voltage_harmonics_reaction)
     button_current_harmonics = configure_button(
@@ -207,7 +207,7 @@ def create_horizontal(st):
         st.time_display_index = times.get_index()
         st.send_to_all()
 
-    button_done = configure_button(BUTTON_SIZE, 'Done', lambda: set_updater('back'))
+    button_done = configure_button(BUTTON_SIZE, 'Done', lambda: ui.set_updater('back'))
 
     times = Range_controller(st.time_display_ranges, st.time_display_index)
     time_display = thorpy.Text(f'{times.get_value()} ms/div') 
@@ -280,7 +280,7 @@ def create_vertical(st):
                 file=sys.stderr)
         st.send_to_all()
 
-    button_done = configure_button(BUTTON_SIZE, 'Done', lambda: set_updater('back'))
+    button_done = configure_button(BUTTON_SIZE, 'Done', lambda: ui.set_updater('back'))
 
     voltages = Range_controller(
         st.voltage_display_ranges, st.voltage_display_index)
@@ -443,7 +443,7 @@ def create_trigger(st):
         'sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.')
     text_trigger_status.set_max_text_width(280)
     button_done = configure_button(
-        BUTTON_SIZE, 'Done', lambda: set_updater('back'))
+        BUTTON_SIZE, 'Done', lambda: ui.set_updater('back'))
     button_freerun = configure_button(
         BUTTON_SIZE, 'Free-run',
         lambda: update_trigger_mode('freerun', text_trigger_status))
@@ -492,14 +492,10 @@ def create_trigger(st):
             text_trigger_status]) 
     for e in trigger.get_all_descendants():
         e.hand_cursor = False    
-    # put the text status in after forming the box, so that the box dimensions are not affected by the text.
+    # put the text status in after forming the box,
+    # so that the box dimensions are not affected by the text.
     update_trigger_status(text_trigger_status)
     return trigger
-
-def exit_application(option='quit'):
-    exit_codes = { 'quit': 0, 'restart': 2, 'software_update': 3, 'shutdown': 4, }
-    pygame.quit()
-    sys.exit(exit_codes[option])
 
 def create_options(st):
     """Option controls dialog"""
@@ -531,19 +527,19 @@ def create_options(st):
         alert.launch_nonblocking()
 
     button_done = configure_button(
-        BUTTON_SIZE, 'Done', lambda: set_updater('back'))
-    button_dots_mode = configure_button(
-        BUTTON_SIZE, 'Dots\nmode', lambda: update_plot_mode('dotsmode'))
-    button_lines_mode = configure_button(
-        BUTTON_SIZE, 'Lines\nmode', lambda: update_plot_mode('linesmode'))
+        BUTTON_SIZE, 'Done', lambda: ui.set_updater('back'))
+    button_dots = configure_button(
+        BUTTON_SIZE, 'Dots', lambda: update_plot_mode('dotsmode'))
+    button_lines = configure_button(
+        BUTTON_SIZE, 'Lines', lambda: update_plot_mode('linesmode'))
     button_about = configure_button(
         BUTTON_SIZE, 'About...',about_box)
-    button_restart = configure_button(
-        BUTTON_SIZE, 'Restart', lambda: exit_application('restart'))
     button_software_update = configure_button(
         BUTTON_SIZE, 'Software\nupdate', lambda: exit_application('software_update'))
     button_shutdown = configure_button(
         BUTTON_SIZE, 'SHUTDOWN', lambda: exit_application('shutdown'))
+    button_restart = configure_button(
+        BUTTON_SIZE, 'RESTART', lambda: exit_application('restart'))
     button_quit = configure_button(
         BUTTON_SIZE, 'QUIT', lambda: exit_application('quit'))
 
@@ -553,17 +549,17 @@ def create_options(st):
             button_done,
             thorpy.Group(
                 elements=[
-                    button_dots_mode,
-                    button_lines_mode
-                    ], mode='h'),
-            thorpy.Group(
-                elements=[
-                    button_restart,
-                    button_software_update,
+                    button_dots,
+                    button_lines
                     ], mode='h'),
             thorpy.Group(
                 elements=[
                     button_about,
+                    button_software_update,
+                    ], mode='h'),
+            thorpy.Group(
+                elements=[
+                    button_restart,
                     button_shutdown,
                     button_quit
                     ], mode='h')
@@ -669,9 +665,6 @@ def start_stop_reaction(texts, st):
     global capturing
     capturing = not capturing
     texts.refresh(st)    
-
-def set_updater(updater):
-    ui.set_updater(updater)
 
 def voltage_harmonics_reaction():
     pass
@@ -927,6 +920,12 @@ class Lines:
 
     def __init__(self):
         pass
+
+
+def exit_application(option='quit'):
+    exit_codes = { 'quit': 0, 'restart': 2, 'software_update': 3, 'shutdown': 4, }
+    pygame.quit()
+    sys.exit(exit_codes[option])
 
 
 def main():

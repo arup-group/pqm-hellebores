@@ -30,10 +30,11 @@ if [[ $exit_code -eq 2 ]]; then
     #    sleep 10
     #fi
     # Flush serial interface
-    # open the serial port for reading on file descriptor 2
-    # and then empty it
-    2</dev/ttyACM0
-    while read -t 0 -u 2 discard; do echo "Flushing serial port..."; done
+    # open the serial port for reading on file descriptor 3
+    # drain it of data and then close
+    3</dev/ttyACM0
+    while read -t 0 -u 3 discard; do echo "Flushing serial port..."; done
+    exec 3>&-
     # Trampoline: reload the launch script and run again
     echo "Restarting $0..."
     exec $0

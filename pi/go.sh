@@ -18,9 +18,9 @@ else
 fi
 
 # The program finished.
-# Now check the exit code in case we need to do anything
+# Now check the exit code in case we need to do anything special
 exit_code=$?
-# Restart
+# 2: Restart
 if [[ $exit_code -eq 2 ]]; then
     # Pico not recovering from this step!
     #if [[ $have_pico -eq 1 ]]; then
@@ -31,7 +31,7 @@ if [[ $exit_code -eq 2 ]]; then
     #fi
     # Flush serial interface
     # open the serial port for reading on file descriptor 3
-    # drain it of data and then close
+    # drain fd 3 of data, and then close
     3</dev/ttyACM0
     while read -t 0 -u 3 discard; do echo "Flushing serial port..."; done
     exec 3>&-
@@ -39,7 +39,7 @@ if [[ $exit_code -eq 2 ]]; then
     echo "Restarting $0..."
     exec $0
 
-# Software update
+# 3: Software update
 elif [[ $exit_code -eq 3 ]]; then
     clear
     echo "Updating software from repository..."
@@ -49,16 +49,17 @@ elif [[ $exit_code -eq 3 ]]; then
     sleep 5
     exec $0 
 
-# Shutdown
+# 4: Shutdown
 elif [[ $exit_code -eq 4 ]]; then
     echo "Shutting down system..."
     exec sudo shutdown -h now
 
-# We have no idea what happened
+# Some other exit code: We have no idea what happened
 elif [[ $exit_code -ne 0 ]]; then
     echo "The program quit with an unexpected exit code $exit_code. Not good."
 fi
 
+# 0: Exit normally
 echo "Exited."
 
 

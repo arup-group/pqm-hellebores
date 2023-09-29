@@ -258,14 +258,15 @@ default_settings = '''
         40,
         100
     ],
-    "time_display_index": 5,
+    "time_display_index": 6,
     "voltage_display_ranges": [
         50,
         100,
         200,
-        500
+        500,
+        1000
     ],
-    "voltage_display_index": 2,
+    "voltage_display_index": 3,
     "voltage_display_status": true,
     "current_display_ranges": [
         0.001,
@@ -278,7 +279,8 @@ default_settings = '''
         0.2,
         0.5,
         1.0,
-        2.0
+        2.0,
+        5.0
     ],
     "current_display_index": 8,
     "current_display_status": true,
@@ -294,10 +296,11 @@ default_settings = '''
         50.0,
         100.0,
         200.0,
-        500.0
+        500.0,
+        1000.0
     ],
     "power_display_index": 8,
-    "power_display_status": true,
+    "power_display_status": false,
     "earth_leakage_current_display_ranges": [
         0.0001,
         0.0002,
@@ -305,13 +308,14 @@ default_settings = '''
         0.001,
         0.002,
         0.005,
-        0.01
+        0.01,
+        0.02
     ],
-    "earth_leakage_current_display_index": 4,
-    "earth_leakage_current_display_status": true,
-    "scale_c0": -4.08e-07,
+    "earth_leakage_current_display_index": 7,
+    "earth_leakage_current_display_status": false,
+    "scale_c0": -4.07e-07,
     "scale_c1": 2.44e-05,
-    "scale_c2": 0.001017,
+    "scale_c2": 0.00122,
     "scale_c3": 0.0489,
     "trigger_channel": 0,
     "trigger_slope": "rising",

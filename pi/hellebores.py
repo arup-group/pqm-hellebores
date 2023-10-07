@@ -44,7 +44,7 @@ TEXT_SIZE = (90,16)
 TEXT_WIDE_SIZE = (120,16)
 FONT = 'dejavusansmono'
 FONT_SIZE = 14
-LINES_BUFFER_SIZE = 100 
+SAMPLE_BUFFER_SIZE = 100 
 
 # Default pygame font: freesansbold
 # Ubuntu monospaced fonts:
@@ -134,7 +134,7 @@ def configure_button(size, text, callback_function):
 def create_waveform_controls(st, texts):
     """Waveform controls, on right of screen"""
     button_setup = [
-        ('Run/Stop', lambda: start_stop_reaction(texts, st)),
+        ('Run/Stop', start_stop_reaction),
         ('Mode', lambda: ui.set_updater('mode')), 
         ('Horizontal', lambda: ui.set_updater('horizontal')), 
         ('Vertical', lambda: ui.set_updater('vertical')), 
@@ -142,7 +142,7 @@ def create_waveform_controls(st, texts):
         ('Options', lambda: ui.set_updater('options'))
         ]
     buttons = [ configure_button(BUTTON_SIZE, bt, bf) for bt, bf in button_setup ]
-    waveform = thorpy.Box([ *texts.get()[0:2], *buttons, *texts.get()[2:] ])
+    waveform = thorpy.Box([ *texts.get_texts()[0:2], *buttons, *texts.get_texts()[2:] ])
     waveform.set_bck_color(LIGHT_GREY)
     for e in waveform.get_all_descendants():
         e.hand_cursor = False    
@@ -154,7 +154,7 @@ def create_waveform_controls(st, texts):
 def create_meter_controls(st, texts):
     """Meter controls, on right of screen"""
     button_setup = [
-        ('Run/Stop', lambda: start_stop_reaction(texts, st)),
+        ('Run/Stop', start_stop_reaction),
         ('Mode', lambda: ui.set_updater('mode')), 
         ('', lambda: None),
         ('', lambda: None),
@@ -587,27 +587,27 @@ class UI_groups:
     updater = None
     mode = 'waveform'
 
-    def __init__(self, st, texts):
+    def __init__(self, st, waveform):
         self.elements['datetime'] = create_datetime()[0]
         self.elements['datetime'].set_topleft(0,0)
 
-        # waveform mode
-        self.elements['waveform'] = create_waveform_controls(st, texts)
+        # waveform group
+        self.elements['waveform'] = waveform.create_waveform_controls(st)
         self.elements['waveform'].set_size(CONTROLS_BOX_SIZE)
         self.elements['waveform'].set_topright(*CONTROLS_BOX_POSITION)
 
-        # multi-meter mode
-        self.elements['meter'] = create_meter_controls(st, texts)
-        self.elements['meter'].set_size(CONTROLS_BOX_SIZE)
-        self.elements['meter'].set_topright(*CONTROLS_BOX_POSITION)
+        # multi-meter group
+        #self.elements['meter'] = create_meter_controls(st, texts)
+        #self.elements['meter'].set_size(CONTROLS_BOX_SIZE)
+        #self.elements['meter'].set_topright(*CONTROLS_BOX_POSITION)
 
-        # voltage harmonic mode
+        # voltage harmonic group
         #ui_voltage_harmonic = create_voltage_harmonic_controls(st, texts)
         #ui_voltage_harmonic.set_size(CONTROLS_BOX_SIZE)
         #ui_voltage_harmonic.set_topright(*CONTROLS_BOX_POSITION)
         #self.elements['voltage_harmonic'] = ui_voltage_harmonic
 
-        # current harmonic mode
+        # current harmonic group
         #ui_current_harmonic = create_current_harmonic_controls(st, texts)
         #ui_current_harmonic.set_size(CONTROLS_BOX_SIZE)
         #ui_current_harmonic.set_topright(*CONTROLS_BOX_POSITION)
@@ -661,10 +661,10 @@ class UI_groups:
         return self.elements[element]
 
 
-def start_stop_reaction(texts, st):
+def start_stop_reaction():
     global capturing
     capturing = not capturing
-    texts.refresh(st)    
+    #texts.refresh(st)    
 
 def voltage_harmonics_reaction():
     pass
@@ -673,9 +673,10 @@ def current_harmonics_reaction():
     pass
 
 
-class Texts:
+class Waveform:
     # array of thorpy text objects
     texts = []
+    waveform_background = None
 
     def set_colours(self, st):
         # text colours
@@ -704,11 +705,15 @@ class Texts:
             t.set_size(TEXT_SIZE)
             self.texts.append(t)
         self.refresh(st)
- 
-    def get(self):
+        self.draw_background(st)
+        # initial set up is lines
+        self.plot_fn = self._plot_lines
+
+
+    def get_texts(self):
         return self.texts
 
-    def set(self, item, value):
+    def set_text(self, item, value):
         self.texts[item].set_text(value)
 
     def refresh(self, st):
@@ -737,72 +742,85 @@ class Texts:
         self.texts[T_LEAKDIV].set_text(f'{elv} mA/', adapt_parent=False)
 
 
-def draw_background(st):
-    global waveform_background
-    xmax = SCOPE_BOX_SIZE[0] - 1
-    ymax = SCOPE_BOX_SIZE[1] - 1
+    def draw_background(self, st):
+        xmax = SCOPE_BOX_SIZE[0] - 1
+        ymax = SCOPE_BOX_SIZE[1] - 1
 
-    # empty background
-    waveform_background = pygame.Surface(SCOPE_BOX_SIZE)
-    waveform_background.fill(GREY)
+        # empty background
+        self.waveform_background = pygame.Surface(SCOPE_BOX_SIZE)
+        self.waveform_background.fill(GREY)
 
-    # draw the graticule lines
-    for dx in range(1, st.time_axis_divisions):
-        x = st.horizontal_pixels_per_division * dx
-        # mark the trigger position (t=0) with an emphasized line
-        if (dx == st.time_axis_pre_trigger_divisions) and (st.trigger_channel != -1):
-            lc = WHITE
-        else:
-            lc = LIGHT_GREY
-        pygame.draw.line(waveform_background, lc, (x, 0), (x, ymax), 1)
-    for dy in range(1, st.vertical_axis_divisions):
-        y = st.vertical_pixels_per_division * dy
-        # mark the central position (v, i = 0) with an emphasized line
-        if dy == st.vertical_axis_divisions // 2:
-            lc = WHITE
-        else:
-            lc = LIGHT_GREY
-        pygame.draw.line(waveform_background, lc, (0, y), (xmax, y), 1)
-    return waveform_background
+        # draw the graticule lines
+        for dx in range(1, st.time_axis_divisions):
+            x = st.horizontal_pixels_per_division * dx
+            # mark the trigger position (t=0) with an emphasized line
+            if (dx == st.time_axis_pre_trigger_divisions) and (st.trigger_channel != -1):
+                lc = WHITE
+            else:
+                lc = LIGHT_GREY
+            pygame.draw.line(self.waveform_background, lc, (x, 0), (x, ymax), 1)
+        for dy in range(1, st.vertical_axis_divisions):
+            y = st.vertical_pixels_per_division * dy
+            # mark the central position (v, i = 0) with an emphasized line
+            if dy == st.vertical_axis_divisions // 2:
+                lc = WHITE
+            else:
+                lc = LIGHT_GREY
+            pygame.draw.line(self.waveform_background, lc, (0, y), (xmax, y), 1)
 
 
-# The plot function that will be used is configurable
-# plot_fn is set to point to either _plot_dots() or _plot_lines()
-def _plot_dots(screen, linedata, display_status, colours):
-    pa = pygame.PixelArray(screen)
-    for i in range(len(linedata)):
-        if display_status[i] == True:
-            for pixel in linedata[i]:
-                pa[pixel[0], pixel[1]] = colours[i]
-    pa.close()
+    # The plot function that will be used is configurable
+    # plot_fn is set to point to either _plot_dots() or _plot_lines()
+    def _plot_dots(self, screen, buffer, display_status, colours):
+        pa = pygame.PixelArray(screen)
+        for i in range(len(buffer)):
+            if display_status[i] == True:
+                for pixel in buffer[i]:
+                    pa[pixel[0], pixel[1]] = colours[i]
+        pa.close()
 
-def _plot_lines(screen, linedata, display_status, colours):
-    for i in range(len(linedata)):
-        if display_status[i] == True:
-            pygame.draw.lines(screen, colours[i], False, linedata[i], 2)
+    def _plot_lines(self, screen, buffer, display_status, colours):
+        for i in range(len(buffer)):
+            if display_status[i] == True:
+                pygame.draw.lines(screen, colours[i], False, buffer[i], 2)
+    
+    def plot(self, st, buffer, screen):
+        # can handle up to six plots...
+        colours = [ GREEN, YELLOW, MAGENTA, CYAN, RED, BLUE ]
+        screen.blit(self.waveform_background, (0,0))
+        linedata = buffer.get_buffer()
+        display_status = [
+            st.voltage_display_status,
+            st.current_display_status,
+            st.power_display_status,
+            st.earth_leakage_current_display_status
+            ]
+        try:
+            self.plot_fn(screen, linedata, display_status, colours)
+        except (IndexError, ValueError):
+            # the pygame.draw.lines will throw an exception if there are not at
+            # least two points in each line - (sounds reasonable)
+            print(
+                f'exception in hellebores.py: plot_fn(). linedata is: {linedata}.\n',
+                file=sys.stderr)
 
-# initial set up is lines
-plot_fn = _plot_lines
+    def create_waveform_controls(self, st):
+        """Waveform controls, on right of screen"""
+        button_setup = [
+            ('Run/Stop', start_stop_reaction),
+            ('Mode', lambda: ui.set_updater('mode')), 
+            ('Horizontal', lambda: ui.set_updater('horizontal')), 
+            ('Vertical', lambda: ui.set_updater('vertical')), 
+            ('Trigger', lambda: ui.set_updater('trigger')), 
+            ('Options', lambda: ui.set_updater('options'))
+            ]
+        buttons = [ configure_button(BUTTON_SIZE, bt, bf) for bt, bf in button_setup ]
+        waveform = thorpy.Box([ *self.get_texts()[0:2], *buttons, *self.get_texts()[2:] ])
+        waveform.set_bck_color(LIGHT_GREY)
+        for e in waveform.get_all_descendants():
+            e.hand_cursor = False    
+        return waveform
 
-def plot(st, lines, screen, waveform_background):
-    # can handle up to six plots...
-    colours = [ GREEN, YELLOW, MAGENTA, CYAN, RED, BLUE ]
-    screen.blit(waveform_background, (0,0))
-    linedata = lines.get_lines()
-    display_status = [
-        st.voltage_display_status,
-        st.current_display_status,
-        st.power_display_status,
-        st.earth_leakage_current_display_status
-        ]
-    try:
-        plot_fn(screen, linedata, display_status, colours)
-    except (IndexError, ValueError):
-        # the pygame.draw.lines will throw an exception if there are not at
-        # least two points in each line - (sounds reasonable)
-        print(
-            f'exception in hellebores.py: plot_fn(). linedata is: {linedata}.\n',
-            file=sys.stderr)
 
 
 class WFS_Counter:
@@ -851,19 +869,19 @@ else:
     is_data_available = lambda f, t: True
  
 
-class Lines:
+class Sample_Buffer:
     # working points buffer for four lines
     ps = [ [],[],[],[] ] 
 
-    # lines history buffer
+    # sample buffer history
     # future extension is to use this buffer for electrical event history
     # (eg triggered by power fluctuation etc)
-    lines_history = [[] for i in range(LINES_BUFFER_SIZE+1)]
+    sample_buffer_history = [[] for i in range(SAMPLE_BUFFER_SIZE+1)]
     xp = -1                 # tracks previous 'x coordinate'
 
     def end_frame(self, capturing, wfs):
         if capturing:
-            self.lines_history[LINES_BUFFER_SIZE] = self.ps
+            self.sample_buffer_history[SAMPLE_BUFFER_SIZE] = self.ps
             wfs.increment()
         # reset the working buffer
         self.ps = [ [],[],[],[] ]
@@ -874,7 +892,7 @@ class Lines:
         self.ps[2].append((sample[0], sample[3]))
         self.ps[3].append((sample[0], sample[4]))
 
-    def read_lines(self, f, capturing, wfs):
+    def load_buffer(self, f, capturing, wfs):
         # the loop will exit if:
         # (a) there is no data currently waiting to be read, 
         # (b) negative x coordinate indicates last sample of current frame
@@ -909,14 +927,14 @@ class Lines:
                 break   # break if we have any type of error with the input data
         return False
 
-    def save_lines(self):
-        self.lines_history = self.lines_history[1:]
-        self.lines_history.append('')
+    def save_buffer(self):
+        self.sample_buffer_history = self.sample_buffer_history[1:]
+        self.sample_buffer_history.append('')
 
-    def get_lines(self, index = LINES_BUFFER_SIZE):
-        if (index < 0) or (index > LINES_BUFFER_SIZE):
-            index = LINES_BUFFER_SIZE
-        return self.lines_history[index]
+    def get_buffer(self, index = SAMPLE_BUFFER_SIZE):
+        if (index < 0) or (index > SAMPLE_BUFFER_SIZE):
+            index = SAMPLE_BUFFER_SIZE
+        return self.sample_buffer_history[index]
 
     def __init__(self):
         pass
@@ -966,16 +984,15 @@ def main():
     capturing = True        # allow/stop update of the lines on the screen
 
     # create objects that hold the state of the UI
-    waveform_background = draw_background(st)
     wfs       = WFS_Counter()
-    texts     = Texts(st, wfs)
-    ui        = UI_groups(st, texts)
+    waveform  = Waveform(st, wfs)
+    ui        = UI_groups(st, waveform)
 
     # start with the waveform group enabled
     ui.set_updater('waveform')
 
-    # set up lines object
-    lines = Lines()
+    # set up sample buffer object
+    buffer = Sample_Buffer()
     
 
     # main loop
@@ -989,26 +1006,30 @@ def main():
         if wfs.time_to_update():
             if capturing:
                 ui.get_element('datetime').set_text(time.ctime())
-            texts.refresh(st)
+            waveform.refresh(st)
         # ALWAYS read new data, even if we are not capturing it, to keep the incoming data
         # pipeline flowing. If the read rate doesn't keep up with the pipe, then we will see 
-        # artifacts on screen. Check the BUFFER led on PCB if performance problems are
-        # suspected here.
-        # The read_lines() function also implicitly manages display refresh speed when not
+        # artifacts on screen. Check if the BUFFER led on PCB is stalling if performance
+        # problems are suspected here.
+        # The load_buffer() function also implicitly manages display refresh speed when not
         # capturing, by waiting for a definite time for new data.
-        got_new_frame = lines.read_lines(sys.stdin, capturing, wfs)
-        
-        plot(st, lines, screen, waveform_background) 
-        # here we process mouse/touch/keyboard events.
+        got_new_frame = buffer.load_buffer(sys.stdin, capturing, wfs)
+       
+        # we don't use the event handler to schedule plotting updates, because it is not
+        # efficient enough for high frame rates. Instead e plot explicity when needed, every
+        # time round the loop. 
+        waveform.plot(st, buffer, screen) 
+
+        # here we process mouse/touch/keyboard events. This will also deal with text updates
+        # that are pending.
         events = pygame.event.get()
-        global plot_fn
         for e in events:
             if (e.type == pygame.QUIT) or (e.type == pygame.KEYDOWN and e.key == pygame.K_q):
                 exit_application('quit')
             elif e.type == pygame.KEYDOWN and e.key == pygame.K_d:
-                plot_fn = _plot_dots
+                waveform.plot_fn = waveform._plot_dots
             elif e.type == pygame.KEYDOWN and e.key == pygame.K_l:
-                plot_fn = _plot_lines
+                waveform.plot_fn = waveform._plot_lines
 
         # ui_current_updater.update() is an expensive function, so we use the simplest possible
         # thorpy theme to achieve highest performance/frame rate

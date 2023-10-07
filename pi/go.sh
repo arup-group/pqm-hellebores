@@ -14,7 +14,7 @@ if [[ $have_pico -eq 1 ]]; then
     ./reader.py | ./scaler.py | ./trigger.py | ./mapper.py | ./hellebores.py
 else
     echo "Running using generated data..."
-    ./rain_bucket.py laptop1.out | ./scaler.py | ./trigger.py | ./mapper.py | ./hellebores.py
+    ./rain_bucket.py ../sample_files/laptop1.out | ./scaler.py | ./trigger.py | ./mapper.py | ./hellebores.py
 fi
 
 # The program finished.

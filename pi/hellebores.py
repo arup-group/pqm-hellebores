@@ -131,27 +131,10 @@ def configure_button(size, text, callback_function):
     button.set_size(size)
     return button
     
-def create_waveform_controls(st, texts):
-    """Waveform controls, on right of screen"""
-    button_setup = [
-        ('Run/Stop', start_stop_reaction),
-        ('Mode', lambda: ui.set_updater('mode')), 
-        ('Horizontal', lambda: ui.set_updater('horizontal')), 
-        ('Vertical', lambda: ui.set_updater('vertical')), 
-        ('Trigger', lambda: ui.set_updater('trigger')), 
-        ('Options', lambda: ui.set_updater('options'))
-        ]
-    buttons = [ configure_button(BUTTON_SIZE, bt, bf) for bt, bf in button_setup ]
-    waveform = thorpy.Box([ *texts.get_texts()[0:2], *buttons, *texts.get_texts()[2:] ])
-    waveform.set_bck_color(LIGHT_GREY)
-    for e in waveform.get_all_descendants():
-        e.hand_cursor = False    
-    return waveform
-
 # take care to ensure that UI text control elements that are referenced
 # stay in the same place for all grouping (eg thorpy.Group, thorpy.Box)
 # elements -- these tend to change the x,y placement of these controls.
-def create_meter_controls(st, texts):
+def create_meter_controls(texts):
     """Meter controls, on right of screen"""
     button_setup = [
         ('Run/Stop', start_stop_reaction),
@@ -169,13 +152,13 @@ def create_meter_controls(st, texts):
     return meter
 
 
-def create_voltage_harmonic_controls(st, texts):
+def create_voltage_harmonic_controls(texts):
     pass
 
-def create_current_harmonic_controls(st, texts):
+def create_current_harmonic_controls(texts):
     pass
 
-def create_mode(st):
+def create_mode():
     """Mode controls dialog"""
     button_waveform = configure_button(BUTTON_WIDE_SIZE, 'Waveform', lambda: ui.set_updater('waveform'))
     button_meter = configure_button(BUTTON_WIDE_SIZE, 'Meter', lambda: ui.set_updater('meter'))
@@ -198,7 +181,7 @@ def create_mode(st):
         e.hand_cursor = False    
     return mode
 
-def create_horizontal(st):
+def create_horizontal():
     """Horizontal controls dialog"""
     def update_time_range(times, offset):
         times.change_range(offset)
@@ -235,7 +218,7 @@ def create_horizontal(st):
     return horizontal
  
 
-def create_vertical(st):
+def create_vertical():
     """Vertical controls dialog"""
     def update_voltage_range(voltages, offset):
         voltages.change_range(offset)
@@ -376,7 +359,7 @@ def create_vertical(st):
     return vertical
 
 
-def create_trigger(st):
+def create_trigger(waveform):
     """Trigger controls dialog"""
     #####
     # Trigger controls
@@ -387,7 +370,7 @@ def create_trigger(st):
     # inrush mode causes waveform update to stop on first trigger.
     def update_trigger_position(position, status):
         st.time_axis_pre_trigger_divisions = position
-        draw_background(st)
+        waveform.draw_background()
         update_trigger_status(status)
         st.send_to_all()
 
@@ -399,7 +382,7 @@ def create_trigger(st):
     def update_trigger_mode(mode, status):
         if mode == 'freerun':
             st.trigger_channel = -1
-            draw_background(st)
+            waveform.draw_background()
         elif mode == 'sync':
             st.trigger_channel = 0
             st.trigger_level = 0.0
@@ -411,7 +394,7 @@ def create_trigger(st):
                 'hellebores.py: update_trigger_mode(), invalid condition requested.',
                 sys.stderr)
         st.trigger_mode = mode
-        draw_background(st)
+        waveform.draw_background()
         update_trigger_status(status)
         st.send_to_all()
 
@@ -497,20 +480,8 @@ def create_trigger(st):
     update_trigger_status(text_trigger_status)
     return trigger
 
-def create_options(st):
+def create_options(waveform):
     """Option controls dialog"""
-    def update_plot_mode(mode):
-        global plot_fn
-        if mode == 'dotsmode':
-            plot_fn = _plot_dots
-        elif mode == 'linesmode':
-            plot_fn = _plot_lines
-        else:
-            print(
-                'hellebores.py: update_plot_mode(), '
-                'invalid plot function requested.',
-                sys.stderr)
-    
     def about_box():
         alert = thorpy.Alert(
             title="hellebores.py",
@@ -529,9 +500,9 @@ def create_options(st):
     button_done = configure_button(
         BUTTON_SIZE, 'Done', lambda: ui.set_updater('back'))
     button_dots = configure_button(
-        BUTTON_SIZE, 'Dots', lambda: update_plot_mode('dotsmode'))
+        BUTTON_SIZE, 'Dots', lambda: waveform.plot_mode('dots'))
     button_lines = configure_button(
-        BUTTON_SIZE, 'Lines', lambda: update_plot_mode('linesmode'))
+        BUTTON_SIZE, 'Lines', lambda: waveform.plot_mode('lines'))
     button_about = configure_button(
         BUTTON_SIZE, 'About...',about_box)
     button_software_update = configure_button(
@@ -587,38 +558,38 @@ class UI_groups:
     updater = None
     mode = 'waveform'
 
-    def __init__(self, st, waveform):
+    def __init__(self, waveform):
         self.elements['datetime'] = create_datetime()[0]
         self.elements['datetime'].set_topleft(0,0)
 
         # waveform group
-        self.elements['waveform'] = waveform.create_waveform_controls(st)
+        self.elements['waveform'] = waveform.create_waveform_controls()
         self.elements['waveform'].set_size(CONTROLS_BOX_SIZE)
         self.elements['waveform'].set_topright(*CONTROLS_BOX_POSITION)
 
         # multi-meter group
-        #self.elements['meter'] = create_meter_controls(st, texts)
+        #self.elements['meter'] = create_meter_controls(texts)
         #self.elements['meter'].set_size(CONTROLS_BOX_SIZE)
         #self.elements['meter'].set_topright(*CONTROLS_BOX_POSITION)
 
         # voltage harmonic group
-        #ui_voltage_harmonic = create_voltage_harmonic_controls(st, texts)
+        #ui_voltage_harmonic = create_voltage_harmonic_controls(texts)
         #ui_voltage_harmonic.set_size(CONTROLS_BOX_SIZE)
         #ui_voltage_harmonic.set_topright(*CONTROLS_BOX_POSITION)
         #self.elements['voltage_harmonic'] = ui_voltage_harmonic
 
         # current harmonic group
-        #ui_current_harmonic = create_current_harmonic_controls(st, texts)
+        #ui_current_harmonic = create_current_harmonic_controls(texts)
         #ui_current_harmonic.set_size(CONTROLS_BOX_SIZE)
         #ui_current_harmonic.set_topright(*CONTROLS_BOX_POSITION)
         #self.elements['current_harmonic'] = ui_current_harmonic
 
-        self.elements['mode'] = create_mode(st)
-        self.elements['vertical'] = create_vertical(st)
-        self.elements['horizontal'] = create_horizontal(st)
+        self.elements['mode'] = create_mode()
+        self.elements['vertical'] = create_vertical()
+        self.elements['horizontal'] = create_horizontal()
         
-        self.elements['trigger'] = create_trigger(st)
-        self.elements['options'] = create_options(st)
+        self.elements['trigger'] = create_trigger(waveform)
+        self.elements['options'] = create_options(waveform)
 
         for k in ['mode', 'vertical', 'horizontal', 'trigger', 'options']:
             self.elements[k].set_topright(*SETTINGS_BOX_POSITION)
@@ -664,7 +635,6 @@ class UI_groups:
 def start_stop_reaction():
     global capturing
     capturing = not capturing
-    #texts.refresh(st)    
 
 def voltage_harmonics_reaction():
     pass
@@ -677,10 +647,10 @@ class Waveform:
     # array of thorpy text objects
     texts = []
     waveform_background = None
+    waveform_colours = [ GREEN, YELLOW, MAGENTA, CYAN ]
+    text_colours = [BLACK, WHITE, WHITE] + waveform_colours
 
-    def set_colours(self, st):
-        # text colours
-        colours = [BLACK, WHITE, WHITE, GREEN, YELLOW, MAGENTA, CYAN]
+    def set_text_colours(self):
         # the boolean filter allows us to temporarily grey out lines
         # that are currently inactive/switched off
         colour_filter = [
@@ -690,34 +660,28 @@ class Waveform:
             st.voltage_display_status,
             st.current_display_status,
             st.power_display_status,
-            st.earth_leakage_current_display_status
+            st.earth_leakage_current_display_status,
             ]
+        colours = [ c if p == True else DARK_GREY for p, c in zip(colour_filter, self.text_colours) ]
         for i in range(len(self.texts)):
-            if colour_filter[i] == True:
-                self.texts[i].set_font_color(colours[i])
-            else:
-                self.texts[i].set_font_color(DARK_GREY)
+            self.texts[i].set_font_color(colours[i])
 
-    def __init__(self, st, wfs):
+    def __init__(self, wfs):
         self.wfs = wfs              # make a local note of the wfs object
         for s in range(7):
             t = thorpy.Text('')
             t.set_size(TEXT_SIZE)
             self.texts.append(t)
-        self.refresh(st)
-        self.draw_background(st)
+        self.draw_texts()
+        self.draw_background()
         # initial set up is lines
-        self.plot_fn = self._plot_lines
-
-
-    def get_texts(self):
-        return self.texts
+        self.plot_mode('lines')
 
     def set_text(self, item, value):
         self.texts[item].set_text(value)
 
-    def refresh(self, st):
-        self.set_colours(st)
+    def draw_texts(self):
+        self.set_text_colours()
         if capturing:
             self.texts[T_RUNSTOP].set_bck_color(GREEN)
             self.texts[T_RUNSTOP].set_text('Running', adapt_parent=False)
@@ -742,7 +706,7 @@ class Waveform:
         self.texts[T_LEAKDIV].set_text(f'{elv} mA/', adapt_parent=False)
 
 
-    def draw_background(self, st):
+    def draw_background(self):
         xmax = SCOPE_BOX_SIZE[0] - 1
         ymax = SCOPE_BOX_SIZE[1] - 1
 
@@ -771,22 +735,21 @@ class Waveform:
 
     # The plot function that will be used is configurable
     # plot_fn is set to point to either _plot_dots() or _plot_lines()
-    def _plot_dots(self, screen, buffer, display_status, colours):
+    def _plot_dots(self, screen, buffer, display_status):
         pa = pygame.PixelArray(screen)
         for i in range(len(buffer)):
             if display_status[i] == True:
                 for pixel in buffer[i]:
-                    pa[pixel[0], pixel[1]] = colours[i]
+                    pa[pixel[0], pixel[1]] = self.waveform_colours[i]
         pa.close()
 
-    def _plot_lines(self, screen, buffer, display_status, colours):
+    def _plot_lines(self, screen, buffer, display_status):
         for i in range(len(buffer)):
             if display_status[i] == True:
-                pygame.draw.lines(screen, colours[i], False, buffer[i], 2)
+                pygame.draw.lines(screen, self.waveform_colours[i], False, buffer[i], 2)
     
-    def plot(self, st, buffer, screen):
+    def plot(self, buffer, screen):
         # can handle up to six plots...
-        colours = [ GREEN, YELLOW, MAGENTA, CYAN, RED, BLUE ]
         screen.blit(self.waveform_background, (0,0))
         linedata = buffer.get_buffer()
         display_status = [
@@ -796,7 +759,7 @@ class Waveform:
             st.earth_leakage_current_display_status
             ]
         try:
-            self.plot_fn(screen, linedata, display_status, colours)
+            self.plot_fn(screen, linedata, display_status)
         except (IndexError, ValueError):
             # the pygame.draw.lines will throw an exception if there are not at
             # least two points in each line - (sounds reasonable)
@@ -804,7 +767,13 @@ class Waveform:
                 f'exception in hellebores.py: plot_fn(). linedata is: {linedata}.\n',
                 file=sys.stderr)
 
-    def create_waveform_controls(self, st):
+    def plot_mode(self, mode):
+        if mode == 'dots':
+            self.plot_fn = self._plot_dots
+        elif mode == 'lines':
+            self.plot_fn = self._plot_lines
+
+    def create_waveform_controls(self):
         """Waveform controls, on right of screen"""
         button_setup = [
             ('Run/Stop', start_stop_reaction),
@@ -815,7 +784,7 @@ class Waveform:
             ('Options', lambda: ui.set_updater('options'))
             ]
         buttons = [ configure_button(BUTTON_SIZE, bt, bf) for bt, bf in button_setup ]
-        waveform = thorpy.Box([ *self.get_texts()[0:2], *buttons, *self.get_texts()[2:] ])
+        waveform = thorpy.Box([ *self.texts[0:2], *buttons, *self.texts[2:] ])
         waveform.set_bck_color(LIGHT_GREY)
         for e in waveform.get_all_descendants():
             e.hand_cursor = False    
@@ -947,7 +916,7 @@ def exit_application(option='quit'):
 
 
 def main():
-    global capturing, ui, waveform_background
+    global capturing, ui, st
 
     # initialise pygame
     pygame.init()
@@ -968,9 +937,10 @@ def main():
     thorpy.set_default_font(FONT, FONT_SIZE)
     thorpy.init(screen, thorpy.theme_simple)
 
-    # get settings from settings.json
+    # load configuration settings from settings.json into a settings object 'st'.
     # the list of 'other programs' is used to send signals when we change
-    # settings in this program, they each then re-read the settings file.
+    # settings in this program. We call st.send_to_all() and then
+    # these programs are each told to re-read the settings file.
     st = settings.Settings(
         other_programs = [
             'rain.py',
@@ -985,13 +955,13 @@ def main():
 
     # create objects that hold the state of the UI
     wfs       = WFS_Counter()
-    waveform  = Waveform(st, wfs)
-    ui        = UI_groups(st, waveform)
+    waveform  = Waveform(wfs)
+    ui        = UI_groups(waveform)
 
     # start with the waveform group enabled
     ui.set_updater('waveform')
 
-    # set up sample buffer object
+    # set up a sample buffer object
     buffer = Sample_Buffer()
     
 
@@ -1006,7 +976,8 @@ def main():
         if wfs.time_to_update():
             if capturing:
                 ui.get_element('datetime').set_text(time.ctime())
-            waveform.refresh(st)
+            waveform.draw_texts()
+
         # ALWAYS read new data, even if we are not capturing it, to keep the incoming data
         # pipeline flowing. If the read rate doesn't keep up with the pipe, then we will see 
         # artifacts on screen. Check if the BUFFER led on PCB is stalling if performance
@@ -1016,20 +987,23 @@ def main():
         got_new_frame = buffer.load_buffer(sys.stdin, capturing, wfs)
        
         # we don't use the event handler to schedule plotting updates, because it is not
-        # efficient enough for high frame rates. Instead e plot explicity when needed, every
+        # efficient enough for high frame rates. Instead we plot explicitly when needed, every
         # time round the loop. 
-        waveform.plot(st, buffer, screen) 
+        waveform.plot(buffer, screen) 
 
-        # here we process mouse/touch/keyboard events. This will also deal with text updates
-        # that are pending.
+        # here we process mouse/touch/keyboard events.
         events = pygame.event.get()
         for e in events:
             if (e.type == pygame.QUIT) or (e.type == pygame.KEYDOWN and e.key == pygame.K_q):
                 exit_application('quit')
             elif e.type == pygame.KEYDOWN and e.key == pygame.K_d:
-                waveform.plot_fn = waveform._plot_dots
+                waveform.plot_mode('dots')
             elif e.type == pygame.KEYDOWN and e.key == pygame.K_l:
-                waveform.plot_fn = waveform._plot_lines
+                waveform.plot_mode('lines')
+            elif e.type == pygame.KEYDOWN and e.key == pygame.K_r:
+                capturing = True
+            elif e.type == pygame.KEYDOWN and e.key == pygame.K_s:
+                capturing = False
 
         # ui_current_updater.update() is an expensive function, so we use the simplest possible
         # thorpy theme to achieve highest performance/frame rate

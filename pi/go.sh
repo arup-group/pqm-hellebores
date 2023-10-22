@@ -7,10 +7,22 @@ else
     have_pico=0
 fi
 
+# Change working directory to the directory of this script
+DIRNAME=$(realpath $(dirname $0))
+cd $DIRNAME
+
+# Generate MD5 checksum of the program files and store it in environment variable
+# The environment variables are accessible from within the application
+# This allows us to reliably check if program versions on different devices are the same
+MD5SUM=$(cat go.sh rain_bucket.py reader.py scaler.py trigger.py mapper.py hellebores.py ../pico/spi-dual-core.py | md5sum | cut -d ' ' -f 1)
+VERSION=$(cat ../VERSION)
+echo Running in $DIRNAME
+echo Version $VERSION
+echo MD5 checksum $MD5SUM
+
 # Run the program
 if [[ $have_pico -eq 1 ]]; then
     echo "Running with data sourced from Pico..."
-    cd /home/pi/pqm-hellebores/pi
     ./reader.py | ./scaler.py | ./trigger.py | ./mapper.py | ./hellebores.py
 else
     echo "Running using generated data..."

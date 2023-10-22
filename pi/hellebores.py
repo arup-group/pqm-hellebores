@@ -595,16 +595,13 @@ class UI_groups:
     def set_current_range(self, required_range):
         self.current_range = required_range
 
-    # NEED TO DISPATCH TO OBJECT
     def refresh(self, buffer, screen):
-        if self.mode == 'waveform':
-            waveform.plot(buffer, screen) 
-        elif self.mode == 'multimeter':
-        else:
-            print('UI_groups.refresh() not implemented in this mode.', file=sys.stderr)
+        self.instruments[self.mode].refresh(buffer, screen)
+
 
     def draw_texts(self):
-        if self.mode == 'waveform':
+        self.instruments[self.mode].draw_texts()
+
 
     def set_updater(self, elements_group):
         # for 'waveform', 'multimeter', 'voltage_harmonic', 'current_harmonic',
@@ -779,6 +776,9 @@ class Waveform:
                 f'exception in hellebores.py: plot_fn(). linedata is: {linedata}.\n',
                 file=sys.stderr)
 
+    def refresh(self, buffer, screen):
+        self.plot(buffer, screen)
+
     def plot_mode(self, mode):
         if mode == 'dots':
             self.plot_fn = self._plot_dots
@@ -872,6 +872,8 @@ class Multimeter:
         self.multimeter_background = pygame.Surface(SCOPE_BOX_SIZE)
         self.multimeter_background.fill(GREY)
 
+    def refresh(self, buffer, screen):
+        pass
 
     def create_multimeter_controls(self):
         """Multimeter controls, on right of screen"""

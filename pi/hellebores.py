@@ -398,7 +398,7 @@ def create_trigger(waveform):
         elif st.trigger_mode == 'sync':
             status.set_text(
                 f'Sync: the trigger is enabled to find the {st.trigger_slope}' \
-                'edge of the voltage signal at magitude 0.0V.',
+                ' edge of the voltage signal at magitude 0.0V.',
                 adapt_parent=False)
         elif st.trigger_mode == 'inrush':
             status.set_text(

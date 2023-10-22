@@ -131,37 +131,10 @@ def configure_button(size, text, callback_function):
     button.set_size(size)
     return button
     
-# take care to ensure that UI text control elements that are referenced
-# stay in the same place for all grouping (eg thorpy.Group, thorpy.Box)
-# elements -- these tend to change the x,y placement of these controls.
-def create_meter_controls(texts):
-    """Meter controls, on right of screen"""
-    button_setup = [
-        ('Run/Stop', start_stop_reaction),
-        ('Mode', lambda: ui.set_updater('mode')), 
-        ('', lambda: None),
-        ('', lambda: None),
-        ('', lambda: None),
-        ('Options', lambda: ui.set_updater('options'))
-        ]
-    buttons = [ configure_button(BUTTON_SIZE, bt, bf) for bt, bf in button_setup ]
-    meter = thorpy.Box([ *texts.get()[0:2], *buttons, *texts.get()[2:] ])
-    meter.set_bck_color(LIGHT_GREY)
-    for e in meter.get_all_descendants():
-        e.hand_cursor = False    
-    return meter
-
-
-def create_voltage_harmonic_controls(texts):
-    pass
-
-def create_current_harmonic_controls(texts):
-    pass
-
 def create_mode():
     """Mode controls dialog"""
     button_waveform = configure_button(BUTTON_WIDE_SIZE, 'Waveform', lambda: ui.set_updater('waveform'))
-    button_meter = configure_button(BUTTON_WIDE_SIZE, 'Meter', lambda: ui.set_updater('meter'))
+    button_multimeter = configure_button(BUTTON_WIDE_SIZE, 'Multimeter', lambda: ui.set_updater('multimeter'))
     button_voltage_harmonics = configure_button(
         BUTTON_WIDE_SIZE, 'Voltage harmonics', voltage_harmonics_reaction)
     button_current_harmonics = configure_button(
@@ -171,7 +144,7 @@ def create_mode():
         text='Mode', children=[
             thorpy.Group(elements=[
                 button_waveform,
-                button_meter,
+                button_multimeter,
                 button_voltage_harmonics,
                 button_current_harmonics
                 ],
@@ -180,6 +153,25 @@ def create_mode():
     for e in mode.get_all_descendants():
         e.hand_cursor = False    
     return mode
+
+def create_current_range():
+    """Range controls dialog"""
+    button_done = configure_button(BUTTON_SIZE, 'Done', lambda: ui.set_updater('back'))
+    button_full = configure_button(BUTTON_WIDE_SIZE, 'Full', lambda: ui.set_current_range('full'))
+    button_low = configure_button(BUTTON_WIDE_SIZE, 'Low', lambda: ui.set_current_range('low'))
+
+    current_range = thorpy.TitleBox(
+        text='Current range', children=[
+            thorpy.Group(elements=[
+                button_done,
+                button_full,
+                button_low
+                ],
+                mode='v')
+            ])
+    for e in current_range.get_all_descendants():
+        e.hand_cursor = False    
+    return current_range
 
 def create_horizontal():
     """Horizontal controls dialog"""
@@ -557,8 +549,13 @@ class UI_groups:
     elements = {}
     updater = None
     mode = 'waveform'
+    current_range = 'full'
+    instruments = {}
 
-    def __init__(self, waveform):
+    def __init__(self, waveform, multimeter):
+        self.instruments['waveform'] = waveform
+        self.instruments['multimeter'] = multimeter
+
         self.elements['datetime'] = create_datetime()[0]
         self.elements['datetime'].set_topleft(0,0)
 
@@ -568,9 +565,9 @@ class UI_groups:
         self.elements['waveform'].set_topright(*CONTROLS_BOX_POSITION)
 
         # multi-meter group
-        #self.elements['meter'] = create_meter_controls(texts)
-        #self.elements['meter'].set_size(CONTROLS_BOX_SIZE)
-        #self.elements['meter'].set_topright(*CONTROLS_BOX_POSITION)
+        self.elements['multimeter'] = multimeter.create_multimeter_controls()
+        self.elements['multimeter'].set_size(CONTROLS_BOX_SIZE)
+        self.elements['multimeter'].set_topright(*CONTROLS_BOX_POSITION)
 
         # voltage harmonic group
         #ui_voltage_harmonic = create_voltage_harmonic_controls(texts)
@@ -584,21 +581,36 @@ class UI_groups:
         #ui_current_harmonic.set_topright(*CONTROLS_BOX_POSITION)
         #self.elements['current_harmonic'] = ui_current_harmonic
 
+        # control groups that overlay the main group when adjusting settings
         self.elements['mode'] = create_mode()
+        self.elements['current_range'] = create_current_range()
         self.elements['vertical'] = create_vertical()
         self.elements['horizontal'] = create_horizontal()
-        
         self.elements['trigger'] = create_trigger(waveform)
         self.elements['options'] = create_options(waveform)
 
-        for k in ['mode', 'vertical', 'horizontal', 'trigger', 'options']:
+        for k in ['mode', 'current_range', 'vertical', 'horizontal', 'trigger', 'options']:
             self.elements[k].set_topright(*SETTINGS_BOX_POSITION)
 
+    def set_current_range(self, required_range):
+        self.current_range = required_range
+
+    # NEED TO DISPATCH TO OBJECT
+    def refresh(self, buffer, screen):
+        if self.mode == 'waveform':
+            waveform.plot(buffer, screen) 
+        elif self.mode == 'multimeter':
+        else:
+            print('UI_groups.refresh() not implemented in this mode.', file=sys.stderr)
+
+    def draw_texts(self):
+        if self.mode == 'waveform':
+
     def set_updater(self, elements_group):
-        # for 'waveform', 'meter', 'voltage_harmonic', 'current_harmonic',
+        # for 'waveform', 'multimeter', 'voltage_harmonic', 'current_harmonic',
         # we retain the group in a 'mode' variable for recall after menu selections.
         try:
-            if elements_group in ['waveform', 'meter', 'voltage_harmonic', 'current_harmonic']:
+            if elements_group in ['waveform', 'multimeter', 'voltage_harmonic', 'current_harmonic']:
                 # if we picked a different display mode, store it in 'self.mode'.
                 self.mode = elements_group
                 elements = [ 
@@ -791,6 +803,91 @@ class Waveform:
         return waveform
 
 
+class Multimeter:
+    # array of thorpy text objects
+    texts = []
+    multimeter_background = None
+    multimeter_colours = [ GREEN, YELLOW, MAGENTA, CYAN ]
+    text_colours = [BLACK, WHITE, WHITE] + multimeter_colours
+    current_range = 'full'
+
+    def set_text_colours(self):
+        # the boolean filter allows us to temporarily grey out lines
+        # that are currently inactive/switched off
+        colour_filter = [
+            True,
+            True,
+            True,
+            st.voltage_display_status,
+            st.current_display_status,
+            st.power_display_status,
+            st.earth_leakage_current_display_status,
+            ]
+        colours = [ c if p == True else DARK_GREY for p, c in zip(colour_filter, self.text_colours) ]
+        for i in range(len(self.texts)):
+            self.texts[i].set_font_color(colours[i])
+
+    def __init__(self):
+        for s in range(7):
+            t = thorpy.Text('')
+            t.set_size(TEXT_SIZE)
+            self.texts.append(t)
+        self.draw_texts()
+        self.draw_background()
+
+    def set_text(self, item, value):
+        self.texts[item].set_text(value)
+
+    def draw_texts(self):
+        self.set_text_colours()
+        if capturing:
+            self.texts[T_RUNSTOP].set_bck_color(GREEN)
+            self.texts[T_RUNSTOP].set_text('Running', adapt_parent=False)
+        else:
+            self.texts[T_RUNSTOP].set_bck_color(RED)
+            self.texts[T_RUNSTOP].set_text('Stopped', adapt_parent=False)
+        self.texts[T_WFS].set_text(f'n/a wfm/s', adapt_parent=False)
+        self.texts[T_TIMEDIV].set_text(
+            f'{st.time_display_ranges[st.time_display_index]} ms/',
+            adapt_parent=False)
+        self.texts[T_VOLTSDIV].set_text(
+            f'{st.voltage_display_ranges[st.voltage_display_index]} V/',
+            adapt_parent=False)
+        self.texts[T_AMPSDIV].set_text(
+            f'{st.current_display_ranges[st.current_display_index]} A/',
+            adapt_parent=False)
+        self.texts[T_WATTSDIV].set_text(
+            f'{st.power_display_ranges[st.power_display_index]} W/',
+            adapt_parent=False)
+        elv = (st.earth_leakage_current_display_ranges
+               [st.earth_leakage_current_display_index] * 1000)
+        self.texts[T_LEAKDIV].set_text(f'{elv} mA/', adapt_parent=False)
+
+
+    def draw_background(self):
+        xmax = SCOPE_BOX_SIZE[0] - 1
+        ymax = SCOPE_BOX_SIZE[1] - 1
+
+        # empty background
+        self.multimeter_background = pygame.Surface(SCOPE_BOX_SIZE)
+        self.multimeter_background.fill(GREY)
+
+
+    def create_multimeter_controls(self):
+        """Multimeter controls, on right of screen"""
+        button_setup = [
+            ('Run/Stop', start_stop_reaction),
+            ('Mode', lambda: ui.set_updater('mode')), 
+            ('Range', lambda: ui.set_updater('current_range')), 
+            ('Options', lambda: ui.set_updater('options'))
+            ]
+        buttons = [ configure_button(BUTTON_SIZE, bt, bf) for bt, bf in button_setup ]
+        multimeter_controls = thorpy.Box([ *self.texts[0:2], *buttons, *self.texts[2:] ])
+        multimeter_controls.set_bck_color(LIGHT_GREY)
+        for e in multimeter_controls.get_all_descendants():
+            e.hand_cursor = False    
+        return multimeter_controls
+
 
 class WFS_Counter:
 
@@ -956,7 +1053,8 @@ def main():
     # create objects that hold the state of the UI
     wfs       = WFS_Counter()
     waveform  = Waveform(wfs)
-    ui        = UI_groups(waveform)
+    multimeter = Multimeter()
+    ui        = UI_groups(waveform, multimeter)
 
     # start with the waveform group enabled
     ui.set_updater('waveform')
@@ -976,7 +1074,7 @@ def main():
         if wfs.time_to_update():
             if capturing:
                 ui.get_element('datetime').set_text(time.ctime())
-            waveform.draw_texts()
+            ui.draw_texts()
 
         # ALWAYS read new data, even if we are not capturing it, to keep the incoming data
         # pipeline flowing. If the read rate doesn't keep up with the pipe, then we will see 
@@ -989,7 +1087,7 @@ def main():
         # we don't use the event handler to schedule plotting updates, because it is not
         # efficient enough for high frame rates. Instead we plot explicitly when needed, every
         # time round the loop. 
-        waveform.plot(buffer, screen) 
+        ui.refresh(buffer, screen)
 
         # here we process mouse/touch/keyboard events.
         events = pygame.event.get()

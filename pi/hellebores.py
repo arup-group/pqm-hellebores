@@ -16,62 +16,9 @@ import sys
 import os
 import select
 import settings
+from hellebores_constants import *
+from hellebores_multimeter import Multimeter
 
-
-
-      
-RED = (255, 0, 0)
-BLUE = (0, 0, 255)
-GREEN = (0, 255, 0)
-YELLOW = (255, 255, 0)
-MAGENTA = (255, 0, 255)
-CYAN = (0, 255, 255)
-WHITE = (255, 255, 255)
-BLACK = (0, 0, 0)
-DARK_GREY = (30, 30, 30)
-GREY = (75, 75, 75)
-LIGHT_GREY = (100, 100, 100)
-VERY_LIGHT_GREY = (150, 150, 150)
-PI_SCREEN_SIZE = (800,480)
-SCOPE_BOX_SIZE = (700,480)
-CONTROLS_BOX_SIZE = (100,480)        # main buttons and status texts
-CONTROLS_BOX_POSITION = (800,0)      # top right corner
-SETTINGS_BOX_SIZE = (500,400)        # 'dialog' boxes
-SETTINGS_BOX_POSITION = (690,100)    # top right corner
-BUTTON_SIZE = (90,50) 
-BUTTON_WIDE_SIZE = (180,50) 
-TEXT_SIZE = (90,16)
-TEXT_WIDE_SIZE = (120,16)
-FONT = 'dejavusansmono'
-FONT_SIZE = 14
-SAMPLE_BUFFER_SIZE = 100 
-
-# Default pygame font: freesansbold
-# Ubuntu monospaced fonts:
-# dejavusansmono
-# ubuntumono
-# bitstreamverasansmono
-# nimbusmonops
-# notosansmono
-# notomono
- 
-# button enumerations
-B_RUNSTOP     = 0
-B_MODE        = 1
-B_HORIZONTAL  = 2
-B_VERTICAL    = 3
-B_TRIGGER     = 4
-B_OPTIONS     = 5
-
-
-# text message cell enumerations
-T_RUNSTOP     = 0
-T_WFS         = 1
-T_TIMEDIV     = 2
-T_VOLTSDIV    = 3
-T_AMPSDIV     = 4
-T_WATTSDIV    = 5
-T_LEAKDIV     = 6
 
 
 class Range_controller:
@@ -599,8 +546,8 @@ class UI_groups:
         self.instruments[self.mode].refresh(buffer, screen)
 
 
-    def draw_texts(self):
-        self.instruments[self.mode].draw_texts()
+    def draw_texts(self, capturing):
+        self.instruments[self.mode].draw_texts(capturing)
 
 
     def set_updater(self, elements_group):
@@ -681,7 +628,6 @@ class Waveform:
             t = thorpy.Text('')
             t.set_size(TEXT_SIZE)
             self.texts.append(t)
-        self.draw_texts()
         self.draw_background()
         # initial set up is lines
         self.plot_mode('lines')
@@ -689,7 +635,7 @@ class Waveform:
     def set_text(self, item, value):
         self.texts[item].set_text(value)
 
-    def draw_texts(self):
+    def draw_texts(self, capturing):
         self.set_text_colours()
         if capturing:
             self.texts[T_RUNSTOP].set_bck_color(GREEN)
@@ -801,94 +747,6 @@ class Waveform:
         for e in waveform.get_all_descendants():
             e.hand_cursor = False    
         return waveform
-
-
-class Multimeter:
-    # array of thorpy text objects
-    texts = []
-    multimeter_background = None
-    multimeter_colours = [ GREEN, YELLOW, MAGENTA, CYAN ]
-    text_colours = [BLACK, WHITE, WHITE] + multimeter_colours
-    current_range = 'full'
-
-    def set_text_colours(self):
-        # the boolean filter allows us to temporarily grey out lines
-        # that are currently inactive/switched off
-        colour_filter = [
-            True,
-            True,
-            True,
-            st.voltage_display_status,
-            st.current_display_status,
-            st.power_display_status,
-            st.earth_leakage_current_display_status,
-            ]
-        colours = [ c if p == True else DARK_GREY for p, c in zip(colour_filter, self.text_colours) ]
-        for i in range(len(self.texts)):
-            self.texts[i].set_font_color(colours[i])
-
-    def __init__(self):
-        for s in range(7):
-            t = thorpy.Text('')
-            t.set_size(TEXT_SIZE)
-            self.texts.append(t)
-        self.draw_texts()
-        self.draw_background()
-
-    def set_text(self, item, value):
-        self.texts[item].set_text(value)
-
-    def draw_texts(self):
-        self.set_text_colours()
-        if capturing:
-            self.texts[T_RUNSTOP].set_bck_color(GREEN)
-            self.texts[T_RUNSTOP].set_text('Running', adapt_parent=False)
-        else:
-            self.texts[T_RUNSTOP].set_bck_color(RED)
-            self.texts[T_RUNSTOP].set_text('Stopped', adapt_parent=False)
-        self.texts[T_WFS].set_text(f'n/a wfm/s', adapt_parent=False)
-        self.texts[T_TIMEDIV].set_text(
-            f'{st.time_display_ranges[st.time_display_index]} ms/',
-            adapt_parent=False)
-        self.texts[T_VOLTSDIV].set_text(
-            f'{st.voltage_display_ranges[st.voltage_display_index]} V/',
-            adapt_parent=False)
-        self.texts[T_AMPSDIV].set_text(
-            f'{st.current_display_ranges[st.current_display_index]} A/',
-            adapt_parent=False)
-        self.texts[T_WATTSDIV].set_text(
-            f'{st.power_display_ranges[st.power_display_index]} W/',
-            adapt_parent=False)
-        elv = (st.earth_leakage_current_display_ranges
-               [st.earth_leakage_current_display_index] * 1000)
-        self.texts[T_LEAKDIV].set_text(f'{elv} mA/', adapt_parent=False)
-
-
-    def draw_background(self):
-        xmax = SCOPE_BOX_SIZE[0] - 1
-        ymax = SCOPE_BOX_SIZE[1] - 1
-
-        # empty background
-        self.multimeter_background = pygame.Surface(SCOPE_BOX_SIZE)
-        self.multimeter_background.fill(GREY)
-
-    def refresh(self, buffer, screen):
-        pass
-
-    def create_multimeter_controls(self):
-        """Multimeter controls, on right of screen"""
-        button_setup = [
-            ('Run/Stop', start_stop_reaction),
-            ('Mode', lambda: ui.set_updater('mode')), 
-            ('Range', lambda: ui.set_updater('current_range')), 
-            ('Options', lambda: ui.set_updater('options'))
-            ]
-        buttons = [ configure_button(BUTTON_SIZE, bt, bf) for bt, bf in button_setup ]
-        multimeter_controls = thorpy.Box([ *self.texts[0:2], *buttons, *self.texts[2:] ])
-        multimeter_controls.set_bck_color(LIGHT_GREY)
-        for e in multimeter_controls.get_all_descendants():
-            e.hand_cursor = False    
-        return multimeter_controls
 
 
 class WFS_Counter:
@@ -1055,7 +913,7 @@ def main():
     # create objects that hold the state of the UI
     wfs       = WFS_Counter()
     waveform  = Waveform(wfs)
-    multimeter = Multimeter()
+    multimeter = Multimeter(st)
     ui        = UI_groups(waveform, multimeter)
 
     # start with the waveform group enabled
@@ -1076,7 +934,7 @@ def main():
         if wfs.time_to_update():
             if capturing:
                 ui.get_element('datetime').set_text(time.ctime())
-            ui.draw_texts()
+            ui.draw_texts(capturing)
 
         # ALWAYS read new data, even if we are not capturing it, to keep the incoming data
         # pipeline flowing. If the read rate doesn't keep up with the pipe, then we will see 

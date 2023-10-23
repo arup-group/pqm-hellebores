@@ -1,7 +1,7 @@
 import thorpy
 import pygame
 from hellebores_constants import *
-
+from hellebores_controls import *
 
 class Multimeter:
     # array of thorpy text objects
@@ -28,8 +28,10 @@ class Multimeter:
         for i in range(len(self.texts)):
             self.texts[i].set_font_color(colours[i])
 
-    def __init__(self, st):
+    def __init__(self, st, start_stop_fn, set_updater_fn):
         self.st = st
+        self.start_stop_fn = start_stop_fn
+        self.set_updater_fn = set_updater_fn
         for s in range(7):
             t = thorpy.Text('')
             t.set_size(TEXT_SIZE)
@@ -78,13 +80,13 @@ class Multimeter:
     *** NEED THESE REACTION FUNCTIONS TO BE AVAILABLE IN ANOTHER IMPORT ***
     *** THE UI OBJECT IN PARTICULAR WILL NEED TO RESOLVED IF IT IS DEFINED ***
     *** AFTER THIS FILE ***
-    def create_multimeter_controls(self):
+    def create_multimeter_controls(self, reaction_fns):
         """Multimeter controls, on right of screen"""
         button_setup = [
-            ('Run/Stop', start_stop_reaction),
-            ('Mode', lambda: ui.set_updater('mode')), 
-            ('Range', lambda: ui.set_updater('current_range')), 
-            ('Options', lambda: ui.set_updater('options'))
+            ('Run/Stop', reaction_fns.start_stop),
+            ('Mode', lambda: reaction_fns.set_updater('mode')), 
+            ('Range', lambda: reaction_fns.set_updater('current_range')), 
+            ('Options', lambda: reaction_fns.set_updater('options'))
             ]
         buttons = [ configure_button(BUTTON_SIZE, bt, bf) for bt, bf in button_setup ]
         multimeter_controls = thorpy.Box([ *self.texts[0:2], *buttons, *self.texts[2:] ])

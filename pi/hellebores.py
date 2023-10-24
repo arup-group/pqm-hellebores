@@ -91,10 +91,8 @@ class UI_groups:
     def refresh(self, buffer, screen):
         self.instruments[self.mode].refresh(buffer, screen)
 
-
     def draw_texts(self, capturing):
         self.instruments[self.mode].draw_texts(capturing)
-
 
     def set_updater(self, elements_group):
         # for 'waveform', 'multimeter', 'voltage_harmonic', 'current_harmonic',
@@ -252,7 +250,6 @@ class Sample_Buffer:
 
 
 def main():
-    global capturing, ui, st
 
     # initialise pygame
     pygame.init()
@@ -329,7 +326,7 @@ def main():
                 (8,8), (0,0), (0,0,0,0,0,0,0,0), (0,0,0,0,0,0,0,0))
         # we update status texts and datetime every second
         if wfs.time_to_update():
-            if reaction_fns.capturing:
+            if reaction_fns.capturing == True:
                 ui.get_element('datetime').set_text(time.ctime())
             ui.draw_texts(reaction_fns.capturing)
 

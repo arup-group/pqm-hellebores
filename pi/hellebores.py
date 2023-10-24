@@ -17,6 +17,7 @@ import os
 import select
 import settings
 from hellebores_constants import *
+from hellebores_controls import *
 from hellebores_waveform import Waveform
 from hellebores_multimeter import Multimeter
 
@@ -40,7 +41,7 @@ class UI_groups:
     current_range = 'full'
     instruments = {}
 
-    def __init__(self, waveform, multimeter):
+    def __init__(self, st, waveform, multimeter, reaction_fns):
         self.instruments['waveform'] = waveform
         self.instruments['multimeter'] = multimeter
 
@@ -70,15 +71,19 @@ class UI_groups:
         #self.elements['current_harmonic'] = ui_current_harmonic
 
         # control groups that overlay the main group when adjusting settings
-        self.elements['mode'] = create_mode()
-        self.elements['current_range'] = create_current_range()
-        self.elements['vertical'] = create_vertical()
-        self.elements['horizontal'] = create_horizontal()
-        self.elements['trigger'] = create_trigger(waveform)
-        self.elements['options'] = create_options(waveform)
+        self.elements['mode'] = create_mode(reaction_fns)
+        self.elements['current_range'] = create_current_range(reaction_fns)
+        self.elements['vertical'] = create_vertical(st, reaction_fns)
+        self.elements['horizontal'] = create_horizontal(st, reaction_fns)
+        self.elements['trigger'] = create_trigger(st, waveform, reaction_fns)
+        self.elements['options'] = create_options(waveform, reaction_fns)
 
         for k in ['mode', 'current_range', 'vertical', 'horizontal', 'trigger', 'options']:
             self.elements[k].set_topright(*SETTINGS_BOX_POSITION)
+
+        # re-point the updater function in the external object to target the function in this object
+        # NB dynamically altering a function definition is a relatively unusual programming move
+        reaction_fns.set_updater = self.set_updater
 
     def set_current_range(self, required_range):
         self.current_range = required_range
@@ -127,13 +132,6 @@ class UI_groups:
 
     def get_element(self, element):
         return self.elements[element]
-
-
-def voltage_harmonics_reaction():
-    pass
-
-def current_harmonics_reaction():
-    pass
 
 
 class WFS_Counter:
@@ -294,27 +292,28 @@ def main():
             'mapper.py'
             ])
 
-    # initialise start/stop flag
-    capturing = True        # allow/stop update of the lines on the screen
 
     class Reaction_Functions:
-        def start_stop():
-            global capturing
-            capturing = not capturing
+        capturing = True        # allow/stop update of the lines on the screen
 
-        def set_updater(mode):
+        def start_stop(self):
+            self.capturing = not self.capturing
+
+        def set_updater(self, mode):
+            # this placeholder function will be replaced dynamically by the definition
+            # inside the ui object
             pass
 
  
     # create objects that hold the state of the UI
     reaction_fns = Reaction_Functions()
-    wfs       = WFS_Counter()
-    waveform  = Waveform(st, wfs, reaction_fns)
-    multimeter = Multimeter(st, reaction_fns)
-    ui        = UI_groups(st, reaction_fns, waveform, multimeter)
+    wfs          = WFS_Counter()
+    waveform     = Waveform(st, wfs, reaction_fns)
+    multimeter   = Multimeter(st, reaction_fns)
+    ui           = UI_groups(st, waveform, multimeter, reaction_fns)
 
     # start with the waveform group enabled
-    ui.set_updater('waveform')
+    reaction_fns.set_updater('waveform')
 
     # set up a sample buffer object
     buffer = Sample_Buffer()
@@ -329,9 +328,9 @@ def main():
                 (8,8), (0,0), (0,0,0,0,0,0,0,0), (0,0,0,0,0,0,0,0))
         # we update status texts and datetime every second
         if wfs.time_to_update():
-            if capturing:
+            if reaction_fns.capturing:
                 ui.get_element('datetime').set_text(time.ctime())
-            ui.draw_texts(capturing)
+            ui.draw_texts(reaction_fns.capturing)
 
         # ALWAYS read new data, even if we are not capturing it, to keep the incoming data
         # pipeline flowing. If the read rate doesn't keep up with the pipe, then we will see 
@@ -339,7 +338,7 @@ def main():
         # problems are suspected here.
         # The load_buffer() function also implicitly manages display refresh speed when not
         # capturing, by waiting for a definite time for new data.
-        got_new_frame = buffer.load_buffer(sys.stdin, capturing, wfs)
+        got_new_frame = buffer.load_buffer(sys.stdin, reaction_fns.capturing, wfs)
        
         # we don't use the event handler to schedule plotting updates, because it is not
         # efficient enough for high frame rates. Instead we plot explicitly when needed, every
@@ -356,9 +355,9 @@ def main():
             elif e.type == pygame.KEYDOWN and e.key == pygame.K_l:
                 waveform.plot_mode('lines')
             elif e.type == pygame.KEYDOWN and e.key == pygame.K_r:
-                capturing = True
+                reaction_fns.capturing = True
             elif e.type == pygame.KEYDOWN and e.key == pygame.K_s:
-                capturing = False
+                reaction_fns.capturing = False
 
         # ui_current_updater.update() is an expensive function, so we use the simplest possible
         # thorpy theme to achieve highest performance/frame rate

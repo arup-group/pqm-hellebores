@@ -28,10 +28,9 @@ class Multimeter:
         for i in range(len(self.texts)):
             self.texts[i].set_font_color(colours[i])
 
-    def __init__(self, st, start_stop_fn, set_updater_fn):
+    def __init__(self, st, reaction_fns):
         self.st = st
-        self.start_stop_fn = start_stop_fn
-        self.set_updater_fn = set_updater_fn
+        self.reaction_fns = reaction_fns
         for s in range(7):
             t = thorpy.Text('')
             t.set_size(TEXT_SIZE)
@@ -76,17 +75,13 @@ class Multimeter:
         # display all the readings
         pass
 
-
-    *** NEED THESE REACTION FUNCTIONS TO BE AVAILABLE IN ANOTHER IMPORT ***
-    *** THE UI OBJECT IN PARTICULAR WILL NEED TO RESOLVED IF IT IS DEFINED ***
-    *** AFTER THIS FILE ***
-    def create_multimeter_controls(self, reaction_fns):
+    def create_multimeter_controls(self):
         """Multimeter controls, on right of screen"""
         button_setup = [
-            ('Run/Stop', reaction_fns.start_stop),
-            ('Mode', lambda: reaction_fns.set_updater('mode')), 
-            ('Range', lambda: reaction_fns.set_updater('current_range')), 
-            ('Options', lambda: reaction_fns.set_updater('options'))
+            ('Run/Stop', self.reaction_fns.start_stop),
+            ('Mode', lambda: self.reaction_fns.set_updater('mode')), 
+            ('Range', lambda: self.reaction_fns.set_updater('current_range')), 
+            ('Options', lambda: self.reaction_fns.set_updater('options'))
             ]
         buttons = [ configure_button(BUTTON_SIZE, bt, bf) for bt, bf in button_setup ]
         multimeter_controls = thorpy.Box([ *self.texts[0:2], *buttons, *self.texts[2:] ])

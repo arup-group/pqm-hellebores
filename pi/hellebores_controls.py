@@ -1,3 +1,8 @@
+import thorpy
+import pygame
+import time
+from hellebores_constants import *
+
 
 class Range_controller:
     ranges = []
@@ -56,10 +61,10 @@ def configure_button(size, text, callback_function):
     button.set_size(size)
     return button
     
-def create_mode():
+def create_mode(reaction_fns):
     """Mode controls dialog"""
-    button_waveform = configure_button(BUTTON_WIDE_SIZE, 'Waveform', lambda: ui.set_updater('waveform'))
-    button_multimeter = configure_button(BUTTON_WIDE_SIZE, 'Multimeter', lambda: ui.set_updater('multimeter'))
+    button_waveform = configure_button(BUTTON_WIDE_SIZE, 'Waveform', lambda: reaction_fns.set_updater('waveform'))
+    button_multimeter = configure_button(BUTTON_WIDE_SIZE, 'Multimeter', lambda: reaction_fns.set_updater('multimeter'))
     button_voltage_harmonics = configure_button(
         BUTTON_WIDE_SIZE, 'Voltage harmonics', voltage_harmonics_reaction)
     button_current_harmonics = configure_button(
@@ -79,11 +84,11 @@ def create_mode():
         e.hand_cursor = False    
     return mode
 
-def create_current_range():
+def create_current_range(reaction_fns):
     """Range controls dialog"""
-    button_done = configure_button(BUTTON_SIZE, 'Done', lambda: ui.set_updater('back'))
-    button_full = configure_button(BUTTON_WIDE_SIZE, 'Full', lambda: ui.set_current_range('full'))
-    button_low = configure_button(BUTTON_WIDE_SIZE, 'Low', lambda: ui.set_current_range('low'))
+    button_done = configure_button(BUTTON_SIZE, 'Done', lambda: reaction_fns.set_updater('back'))
+    button_full = configure_button(BUTTON_WIDE_SIZE, 'Full', lambda: reaction_fns.set_current_range('full'))
+    button_low = configure_button(BUTTON_WIDE_SIZE, 'Low', lambda: reaction_fns.set_current_range('low'))
 
     current_range = thorpy.TitleBox(
         text='Current range', children=[
@@ -98,7 +103,7 @@ def create_current_range():
         e.hand_cursor = False    
     return current_range
 
-def create_horizontal():
+def create_horizontal(st, reaction_fns):
     """Horizontal controls dialog"""
     def update_time_range(times, offset):
         times.change_range(offset)
@@ -107,7 +112,7 @@ def create_horizontal():
         st.time_display_index = times.get_index()
         st.send_to_all()
 
-    button_done = configure_button(BUTTON_SIZE, 'Done', lambda: ui.set_updater('back'))
+    button_done = configure_button(BUTTON_SIZE, 'Done', lambda: reaction_fns.set_updater('back'))
 
     times = Range_controller(st.time_display_ranges, st.time_display_index)
     time_display = thorpy.Text(f'{times.get_value()} ms/div') 
@@ -135,7 +140,7 @@ def create_horizontal():
     return horizontal
  
 
-def create_vertical():
+def create_vertical(st, reaction_fns):
     """Vertical controls dialog"""
     def update_voltage_range(voltages, offset):
         voltages.change_range(offset)
@@ -165,7 +170,7 @@ def create_vertical():
         st.earth_leakage_current_display_index = leakage_currents.get_index()
         st.send_to_all()
 
-    def flip_display_switch(channel, switch_status):
+    def flip_display_switch(st, channel, switch_status):
         if channel == 'voltage':
             st.voltage_display_status = switch_status
         elif channel == 'current':
@@ -180,7 +185,7 @@ def create_vertical():
                 file=sys.stderr)
         st.send_to_all()
 
-    button_done = configure_button(BUTTON_SIZE, 'Done', lambda: ui.set_updater('back'))
+    button_done = configure_button(BUTTON_SIZE, 'Done', lambda: reaction_fns.set_updater('back'))
 
     voltages = Range_controller(
         st.voltage_display_ranges, st.voltage_display_index)
@@ -276,7 +281,7 @@ def create_vertical():
     return vertical
 
 
-def create_trigger(waveform):
+def create_trigger(st, waveform, reaction_fns):
     """Trigger controls dialog"""
     #####
     # Trigger controls
@@ -343,7 +348,7 @@ def create_trigger(waveform):
         'sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.')
     text_trigger_status.set_max_text_width(280)
     button_done = configure_button(
-        BUTTON_SIZE, 'Done', lambda: ui.set_updater('back'))
+        BUTTON_SIZE, 'Done', lambda: reaction_fns.set_updater('back'))
     button_freerun = configure_button(
         BUTTON_SIZE, 'Free-run',
         lambda: update_trigger_mode('freerun', text_trigger_status))
@@ -397,7 +402,7 @@ def create_trigger(waveform):
     update_trigger_status(text_trigger_status)
     return trigger
 
-def create_options(waveform):
+def create_options(waveform, reaction_fns):
     """Option controls dialog"""
     def about_box():
         alert = thorpy.Alert(
@@ -415,7 +420,7 @@ def create_options(waveform):
         alert.launch_nonblocking()
 
     button_done = configure_button(
-        BUTTON_SIZE, 'Done', lambda: ui.set_updater('back'))
+        BUTTON_SIZE, 'Done', lambda: reaction_fns.set_updater('back'))
     button_dots = configure_button(
         BUTTON_SIZE, 'Dots', lambda: waveform.plot_mode('dots'))
     button_lines = configure_button(
@@ -423,13 +428,13 @@ def create_options(waveform):
     button_about = configure_button(
         BUTTON_SIZE, 'About...',about_box)
     button_software_update = configure_button(
-        BUTTON_SIZE, 'Software\nupdate', lambda: exit_application('software_update'))
+        BUTTON_SIZE, 'Software\nupdate', lambda: reaction_fns.exit_application('software_update'))
     button_shutdown = configure_button(
-        BUTTON_SIZE, 'SHUTDOWN', lambda: exit_application('shutdown'))
+        BUTTON_SIZE, 'SHUTDOWN', lambda: reaction_fns.exit_application('shutdown'))
     button_restart = configure_button(
-        BUTTON_SIZE, 'RESTART', lambda: exit_application('restart'))
+        BUTTON_SIZE, 'RESTART', lambda: reaction_fns.exit_application('restart'))
     button_quit = configure_button(
-        BUTTON_SIZE, 'QUIT', lambda: exit_application('quit'))
+        BUTTON_SIZE, 'QUIT', lambda: reaction_fns.exit_application('quit'))
 
     options = thorpy.TitleBox(
         text='Options',
@@ -456,4 +461,11 @@ def create_options(waveform):
         e.hand_cursor = False    
     return options
 
+
+
+def voltage_harmonics_reaction():
+    pass
+
+def current_harmonics_reaction():
+    pass
 

@@ -34,15 +34,6 @@ SAMPLE_BUFFER_SIZE = 100
 # notosansmono
 # notomono
  
-# button enumerations
-B_RUNSTOP     = 0
-B_MODE        = 1
-B_HORIZONTAL  = 2
-B_VERTICAL    = 3
-B_TRIGGER     = 4
-B_OPTIONS     = 5
-
-
 # text message cell enumerations
 T_RUNSTOP     = 0
 T_WFS         = 1

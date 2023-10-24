@@ -28,9 +28,9 @@ class Multimeter:
         for i in range(len(self.texts)):
             self.texts[i].set_font_color(colours[i])
 
-    def __init__(self, st, reaction_fns):
+    def __init__(self, st, app_actions):
         self.st = st
-        self.reaction_fns = reaction_fns
+        self.app_actions = app_actions
         for s in range(7):
             t = thorpy.Text('')
             t.set_size(TEXT_SIZE)
@@ -50,16 +50,16 @@ class Multimeter:
             self.texts[T_RUNSTOP].set_text('Stopped', adapt_parent=False)
         self.texts[T_WFS].set_text(f'n/a wfm/s', adapt_parent=False)
         self.texts[T_TIMEDIV].set_text(
-            f'{st.time_display_ranges[st.time_display_index]} ms/',
+            f'{self.st.time_display_ranges[self.st.time_display_index]} ms/',
             adapt_parent=False)
         self.texts[T_VOLTSDIV].set_text(
-            f'{st.voltage_display_ranges[st.voltage_display_index]} V/',
+            f'{self.st.voltage_display_ranges[self.st.voltage_display_index]} V/',
             adapt_parent=False)
         self.texts[T_AMPSDIV].set_text(
-            f'{st.current_display_ranges[st.current_display_index]} A/',
+            f'{self.st.current_display_ranges[self.st.current_display_index]} A/',
             adapt_parent=False)
         self.texts[T_WATTSDIV].set_text(
-            f'{st.power_display_ranges[st.power_display_index]} W/',
+            f'{self.st.power_display_ranges[self.st.power_display_index]} W/',
             adapt_parent=False)
         elv = (self.st.earth_leakage_current_display_ranges
                [self.st.earth_leakage_current_display_index] * 1000)
@@ -78,10 +78,10 @@ class Multimeter:
     def create_multimeter_controls(self):
         """Multimeter controls, on right of screen"""
         button_setup = [
-            ('Run/Stop', self.reaction_fns.start_stop),
-            ('Mode', lambda: self.reaction_fns.set_updater('mode')), 
-            ('Range', lambda: self.reaction_fns.set_updater('current_range')), 
-            ('Options', lambda: self.reaction_fns.set_updater('options'))
+            ('Run/Stop', self.app_actions.start_stop),
+            ('Mode', lambda: self.app_actions.set_updater('mode')), 
+            ('Range', lambda: self.app_actions.set_updater('current_range')), 
+            ('Options', lambda: self.app_actions.set_updater('options'))
             ]
         buttons = [ configure_button(BUTTON_SIZE, bt, bf) for bt, bf in button_setup ]
         multimeter_controls = thorpy.Box([ *self.texts[0:2], *buttons, *self.texts[2:] ])

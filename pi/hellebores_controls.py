@@ -191,7 +191,7 @@ def create_vertical(st, reaction_fns):
         st.voltage_display_ranges, st.voltage_display_index)
     voltage_onoff = configure_switch_button(
         BUTTON_SIZE,st.voltage_display_status,
-        lambda: flip_display_switch('voltage', voltage_onoff.value))
+        lambda: flip_display_switch(st, 'voltage', voltage_onoff.value))
     voltage_display = thorpy.Text(f'{voltages.get_value()} V/div') 
     voltage_display.set_size(TEXT_WIDE_SIZE)
     voltage_down = configure_arrow_button(
@@ -203,7 +203,7 @@ def create_vertical(st, reaction_fns):
         st.current_display_ranges, st.current_display_index)
     current_onoff = configure_switch_button(
         BUTTON_SIZE, st.current_display_status,
-        lambda: flip_display_switch('current', current_onoff.value))
+        lambda: flip_display_switch(st, 'current', current_onoff.value))
     current_display = thorpy.Text(f'{currents.get_value()} A/div')
     current_display.set_size(TEXT_WIDE_SIZE)
     current_down = configure_arrow_button(
@@ -215,7 +215,7 @@ def create_vertical(st, reaction_fns):
         st.power_display_ranges, st.power_display_index)
     power_onoff = configure_switch_button(
         BUTTON_SIZE, st.power_display_status,
-        lambda: flip_display_switch('power', power_onoff.value))
+        lambda: flip_display_switch(st, 'power', power_onoff.value))
     power_display = thorpy.Text(f'{powers.get_value()} W/div')
     power_display.set_size(TEXT_WIDE_SIZE)
     power_down = configure_arrow_button(
@@ -229,7 +229,7 @@ def create_vertical(st, reaction_fns):
     leakage_current_onoff = configure_switch_button(
         BUTTON_SIZE,
         st.earth_leakage_current_display_status,
-        lambda: flip_display_switch('leakage', leakage_current_onoff.value))
+        lambda: flip_display_switch(st, 'leakage', leakage_current_onoff.value))
     leakage_current_display = thorpy.Text(f'{leakage_currents.get_value()*1000.0} mA/div')
     leakage_current_display.set_size(TEXT_WIDE_SIZE)
     leakage_current_down = configure_arrow_button(

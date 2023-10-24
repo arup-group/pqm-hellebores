@@ -26,11 +26,13 @@ from hellebores_multimeter import Multimeter
 #
 # Measurements-1 (summary)
 # Measurements-2 (harmonics)
-# Wifi setting
-# Shell prompt
-# Software update, rollback and Raspberry Pi OS update
+# Wifi setting USE DEFAULT UI AND BLUETOOTH OR ONSCREEN KEYBOARD
+# Shell prompt USE DEFAULT UI
+# Software update DONE
+# rollback NOT IMPLEMENTED
+# Raspberry Pi OS update USE DEFAULT UI PROMPT
 # About (including software version, kernel version, uuid of Pi and Pico)
-# Exit to desktop
+# Exit to desktop DONE
 
 # The instance of this class will hold all the user interface states or 'groups'
 # that can be displayed together with the currently active selection
@@ -38,10 +40,10 @@ class UI_groups:
     elements = {}
     updater = None
     mode = 'waveform'
-    current_range = 'full'
+    current_range = 'full' # move this to settings.py or the multimeter definition
     instruments = {}
 
-    def __init__(self, st, waveform, multimeter, reaction_fns):
+    def __init__(self, st, waveform, multimeter, app_actions):
         self.instruments['waveform'] = waveform
         self.instruments['multimeter'] = multimeter
 
@@ -71,19 +73,21 @@ class UI_groups:
         #self.elements['current_harmonic'] = ui_current_harmonic
 
         # control groups that overlay the main group when adjusting settings
-        self.elements['mode'] = create_mode(reaction_fns)
-        self.elements['current_range'] = create_current_range(reaction_fns)
-        self.elements['vertical'] = create_vertical(st, reaction_fns)
-        self.elements['horizontal'] = create_horizontal(st, reaction_fns)
-        self.elements['trigger'] = create_trigger(st, waveform, reaction_fns)
-        self.elements['options'] = create_options(waveform, reaction_fns)
+        self.elements['mode'] = create_mode(app_actions)
+        self.elements['current_range'] = create_current_range(app_actions)
+        self.elements['vertical'] = create_vertical(st, app_actions)
+        self.elements['horizontal'] = create_horizontal(st, app_actions)
+        self.elements['trigger'] = create_trigger(st, waveform, app_actions)
+        self.elements['options'] = create_options(waveform, app_actions)
 
         for k in ['mode', 'current_range', 'vertical', 'horizontal', 'trigger', 'options']:
             self.elements[k].set_topright(*SETTINGS_BOX_POSITION)
 
         # re-point the updater function in the external object to target the function in this object
-        # NB dynamically altering a function definition is a relatively unusual programming move
-        reaction_fns.set_updater = self.set_updater
+        # NB dynamically altering a function definition in another object is a relatively unusual
+        # programming move, but I can't think of another convenient way to do it, because 'self' is
+        # instantiated for this object only after the other object was created.
+        app_actions.set_updater = self.set_updater
 
     def set_current_range(self, required_range):
         self.current_range = required_range
@@ -249,6 +253,26 @@ class Sample_Buffer:
         pass
 
 
+class App_Actions:
+    capturing = True        # allow/stop update of the lines on the screen
+
+    def start_stop(self):
+        self.capturing = not self.capturing
+
+    def set_updater(self, mode):
+        # this placeholder function is replaced dynamically by the implementation
+        # inside the ui object
+        pass
+
+    def exit_application(self, option='quit'):
+        exit_codes = { 'quit': 0, 'restart': 2, 'software_update': 3, 'shutdown': 4, }
+        pygame.quit()
+        sys.exit(exit_codes[option])
+
+    def __init__(self):
+        pass
+
+
 def main():
 
     # initialise pygame
@@ -283,35 +307,16 @@ def main():
             'mapper.py'
             ])
 
-
-    class Reaction_Functions:
-        capturing = True        # allow/stop update of the lines on the screen
-
-        def start_stop(self):
-            self.capturing = not self.capturing
-
-        def set_updater(self, mode):
-            # this placeholder function is replaced dynamically by the implementation
-            # inside the ui object
-            pass
-
-        def exit_application(self, option='quit'):
-            exit_codes = { 'quit': 0, 'restart': 2, 'software_update': 3, 'shutdown': 4, }
-            pygame.quit()
-            sys.exit(exit_codes[option])
-
-
-
  
     # create objects that hold the state of the UI
-    reaction_fns = Reaction_Functions()
+    app_actions = App_Actions()
     wfs          = WFS_Counter()
-    waveform     = Waveform(st, wfs, reaction_fns)
-    multimeter   = Multimeter(st, reaction_fns)
-    ui           = UI_groups(st, waveform, multimeter, reaction_fns)
+    waveform     = Waveform(st, wfs, app_actions)
+    multimeter   = Multimeter(st, app_actions)
+    ui           = UI_groups(st, waveform, multimeter, app_actions)
 
     # start with the waveform group enabled
-    reaction_fns.set_updater('waveform')
+    app_actions.set_updater('waveform')
 
     # set up a sample buffer object
     buffer = Sample_Buffer()
@@ -326,9 +331,9 @@ def main():
                 (8,8), (0,0), (0,0,0,0,0,0,0,0), (0,0,0,0,0,0,0,0))
         # we update status texts and datetime every second
         if wfs.time_to_update():
-            if reaction_fns.capturing == True:
+            if app_actions.capturing == True:
                 ui.get_element('datetime').set_text(time.ctime())
-            ui.draw_texts(reaction_fns.capturing)
+            ui.draw_texts(app_actions.capturing)
 
         # ALWAYS read new data, even if we are not capturing it, to keep the incoming data
         # pipeline flowing. If the read rate doesn't keep up with the pipe, then we will see 
@@ -336,7 +341,7 @@ def main():
         # problems are suspected here.
         # The load_buffer() function also implicitly manages display refresh speed when not
         # capturing, by waiting for a definite time for new data.
-        got_new_frame = buffer.load_buffer(sys.stdin, reaction_fns.capturing, wfs)
+        got_new_frame = buffer.load_buffer(sys.stdin, app_actions.capturing, wfs)
        
         # we don't use the event handler to schedule plotting updates, because it is not
         # efficient enough for high frame rates. Instead we plot explicitly when needed, every
@@ -347,15 +352,15 @@ def main():
         events = pygame.event.get()
         for e in events:
             if (e.type == pygame.QUIT) or (e.type == pygame.KEYDOWN and e.key == pygame.K_q):
-                reaction_fns.exit_application('quit')
+                app_actions.exit_application('quit')
             elif e.type == pygame.KEYDOWN and e.key == pygame.K_d:
                 waveform.plot_mode('dots')
             elif e.type == pygame.KEYDOWN and e.key == pygame.K_l:
                 waveform.plot_mode('lines')
             elif e.type == pygame.KEYDOWN and e.key == pygame.K_r:
-                reaction_fns.capturing = True
+                app_actions.capturing = True
             elif e.type == pygame.KEYDOWN and e.key == pygame.K_s:
-                reaction_fns.capturing = False
+                app_actions.capturing = False
 
         # ui_current_updater.update() is an expensive function, so we use the simplest possible
         # thorpy theme to achieve highest performance/frame rate

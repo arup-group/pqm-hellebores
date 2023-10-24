@@ -251,12 +251,6 @@ class Sample_Buffer:
         pass
 
 
-def exit_application(option='quit'):
-    exit_codes = { 'quit': 0, 'restart': 2, 'software_update': 3, 'shutdown': 4, }
-    pygame.quit()
-    sys.exit(exit_codes[option])
-
-
 def main():
     global capturing, ui, st
 
@@ -300,9 +294,16 @@ def main():
             self.capturing = not self.capturing
 
         def set_updater(self, mode):
-            # this placeholder function will be replaced dynamically by the definition
+            # this placeholder function is replaced dynamically by the implementation
             # inside the ui object
             pass
+
+        def exit_application(self, option='quit'):
+            exit_codes = { 'quit': 0, 'restart': 2, 'software_update': 3, 'shutdown': 4, }
+            pygame.quit()
+            sys.exit(exit_codes[option])
+
+
 
  
     # create objects that hold the state of the UI
@@ -349,7 +350,7 @@ def main():
         events = pygame.event.get()
         for e in events:
             if (e.type == pygame.QUIT) or (e.type == pygame.KEYDOWN and e.key == pygame.K_q):
-                exit_application('quit')
+                reaction_fns.exit_application('quit')
             elif e.type == pygame.KEYDOWN and e.key == pygame.K_d:
                 waveform.plot_mode('dots')
             elif e.type == pygame.KEYDOWN and e.key == pygame.K_l:

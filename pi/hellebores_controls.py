@@ -61,10 +61,10 @@ def configure_button(size, text, callback_function):
     button.set_size(size)
     return button
     
-def create_mode(reaction_fns):
+def create_mode(app_actions):
     """Mode controls dialog"""
-    button_waveform = configure_button(BUTTON_WIDE_SIZE, 'Waveform', lambda: reaction_fns.set_updater('waveform'))
-    button_multimeter = configure_button(BUTTON_WIDE_SIZE, 'Multimeter', lambda: reaction_fns.set_updater('multimeter'))
+    button_waveform = configure_button(BUTTON_WIDE_SIZE, 'Waveform', lambda: app_actions.set_updater('waveform'))
+    button_multimeter = configure_button(BUTTON_WIDE_SIZE, 'Multimeter', lambda: app_actions.set_updater('multimeter'))
     button_voltage_harmonics = configure_button(
         BUTTON_WIDE_SIZE, 'Voltage harmonics', voltage_harmonics_reaction)
     button_current_harmonics = configure_button(
@@ -84,11 +84,11 @@ def create_mode(reaction_fns):
         e.hand_cursor = False    
     return mode
 
-def create_current_range(reaction_fns):
+def create_current_range(app_actions):
     """Range controls dialog"""
-    button_done = configure_button(BUTTON_SIZE, 'Done', lambda: reaction_fns.set_updater('back'))
-    button_full = configure_button(BUTTON_WIDE_SIZE, 'Full', lambda: reaction_fns.set_current_range('full'))
-    button_low = configure_button(BUTTON_WIDE_SIZE, 'Low', lambda: reaction_fns.set_current_range('low'))
+    button_done = configure_button(BUTTON_SIZE, 'Done', lambda: app_actions.set_updater('back'))
+    button_full = configure_button(BUTTON_WIDE_SIZE, 'Full', lambda: app_actions.set_current_range('full'))
+    button_low = configure_button(BUTTON_WIDE_SIZE, 'Low', lambda: app_actions.set_current_range('low'))
 
     current_range = thorpy.TitleBox(
         text='Current range', children=[
@@ -103,7 +103,7 @@ def create_current_range(reaction_fns):
         e.hand_cursor = False    
     return current_range
 
-def create_horizontal(st, reaction_fns):
+def create_horizontal(st, app_actions):
     """Horizontal controls dialog"""
     def update_time_range(times, offset):
         times.change_range(offset)
@@ -112,7 +112,7 @@ def create_horizontal(st, reaction_fns):
         st.time_display_index = times.get_index()
         st.send_to_all()
 
-    button_done = configure_button(BUTTON_SIZE, 'Done', lambda: reaction_fns.set_updater('back'))
+    button_done = configure_button(BUTTON_SIZE, 'Done', lambda: app_actions.set_updater('back'))
 
     times = Range_controller(st.time_display_ranges, st.time_display_index)
     time_display = thorpy.Text(f'{times.get_value()} ms/div') 
@@ -140,7 +140,7 @@ def create_horizontal(st, reaction_fns):
     return horizontal
  
 
-def create_vertical(st, reaction_fns):
+def create_vertical(st, app_actions):
     """Vertical controls dialog"""
     def update_voltage_range(voltages, offset):
         voltages.change_range(offset)
@@ -185,7 +185,7 @@ def create_vertical(st, reaction_fns):
                 file=sys.stderr)
         st.send_to_all()
 
-    button_done = configure_button(BUTTON_SIZE, 'Done', lambda: reaction_fns.set_updater('back'))
+    button_done = configure_button(BUTTON_SIZE, 'Done', lambda: app_actions.set_updater('back'))
 
     voltages = Range_controller(
         st.voltage_display_ranges, st.voltage_display_index)
@@ -281,7 +281,7 @@ def create_vertical(st, reaction_fns):
     return vertical
 
 
-def create_trigger(st, waveform, reaction_fns):
+def create_trigger(st, waveform, app_actions):
     """Trigger controls dialog"""
     #####
     # Trigger controls
@@ -348,7 +348,7 @@ def create_trigger(st, waveform, reaction_fns):
         'sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.')
     text_trigger_status.set_max_text_width(280)
     button_done = configure_button(
-        BUTTON_SIZE, 'Done', lambda: reaction_fns.set_updater('back'))
+        BUTTON_SIZE, 'Done', lambda: app_actions.set_updater('back'))
     button_freerun = configure_button(
         BUTTON_SIZE, 'Free-run',
         lambda: update_trigger_mode('freerun', text_trigger_status))
@@ -402,7 +402,7 @@ def create_trigger(st, waveform, reaction_fns):
     update_trigger_status(text_trigger_status)
     return trigger
 
-def create_options(waveform, reaction_fns):
+def create_options(waveform, app_actions):
     """Option controls dialog"""
     def about_box():
         alert = thorpy.Alert(
@@ -420,7 +420,7 @@ def create_options(waveform, reaction_fns):
         alert.launch_nonblocking()
 
     button_done = configure_button(
-        BUTTON_SIZE, 'Done', lambda: reaction_fns.set_updater('back'))
+        BUTTON_SIZE, 'Done', lambda: app_actions.set_updater('back'))
     button_dots = configure_button(
         BUTTON_SIZE, 'Dots', lambda: waveform.plot_mode('dots'))
     button_lines = configure_button(
@@ -428,13 +428,13 @@ def create_options(waveform, reaction_fns):
     button_about = configure_button(
         BUTTON_SIZE, 'About...',about_box)
     button_software_update = configure_button(
-        BUTTON_SIZE, 'Software\nupdate', lambda: reaction_fns.exit_application('software_update'))
+        BUTTON_SIZE, 'Software\nupdate', lambda: app_actions.exit_application('software_update'))
     button_shutdown = configure_button(
-        BUTTON_SIZE, 'SHUTDOWN', lambda: reaction_fns.exit_application('shutdown'))
+        BUTTON_SIZE, 'SHUTDOWN', lambda: app_actions.exit_application('shutdown'))
     button_restart = configure_button(
-        BUTTON_SIZE, 'RESTART', lambda: reaction_fns.exit_application('restart'))
+        BUTTON_SIZE, 'RESTART', lambda: app_actions.exit_application('restart'))
     button_quit = configure_button(
-        BUTTON_SIZE, 'QUIT', lambda: reaction_fns.exit_application('quit'))
+        BUTTON_SIZE, 'QUIT', lambda: app_actions.exit_application('quit'))
 
     options = thorpy.TitleBox(
         text='Options',

@@ -43,7 +43,8 @@ class UI_groups:
     current_range = 'full' # move this to settings.py or the multimeter definition
     instruments = {}
 
-    def __init__(self, st, waveform, multimeter, app_actions):
+    def __init__(self, st, screen, waveform, multimeter, app_actions):
+        self.screen = screen
         self.instruments['waveform'] = waveform
         self.instruments['multimeter'] = multimeter
 
@@ -52,13 +53,9 @@ class UI_groups:
 
         # waveform group
         self.elements['waveform'] = waveform.create_waveform_controls()
-        self.elements['waveform'].set_size(CONTROLS_BOX_SIZE)
-        self.elements['waveform'].set_topright(*CONTROLS_BOX_POSITION)
 
         # multi-meter group
         self.elements['multimeter'] = multimeter.create_multimeter_controls()
-        self.elements['multimeter'].set_size(CONTROLS_BOX_SIZE)
-        self.elements['multimeter'].set_topright(*CONTROLS_BOX_POSITION)
 
         # voltage harmonic group
         #ui_voltage_harmonic = create_voltage_harmonic_controls(texts)
@@ -309,11 +306,11 @@ def main():
 
  
     # create objects that hold the state of the UI
-    app_actions = App_Actions()
+    app_actions  = App_Actions()
     wfs          = WFS_Counter()
     waveform     = Waveform(st, wfs, app_actions)
     multimeter   = Multimeter(st, app_actions)
-    ui           = UI_groups(st, waveform, multimeter, app_actions)
+    ui           = UI_groups(st, screen, waveform, multimeter, app_actions)
 
     # start with the waveform group enabled
     app_actions.set_updater('waveform')

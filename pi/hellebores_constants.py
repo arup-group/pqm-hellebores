@@ -34,13 +34,4 @@ SAMPLE_BUFFER_SIZE = 100
 # notosansmono
 # notomono
  
-# text message cell enumerations
-T_RUNSTOP     = 0
-T_WFS         = 1
-T_TIMEDIV     = 2
-T_VOLTSDIV    = 3
-T_AMPSDIV     = 4
-T_WATTSDIV    = 5
-T_LEAKDIV     = 6
-
 

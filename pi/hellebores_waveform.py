@@ -3,6 +3,17 @@ import pygame
 from hellebores_constants import *
 from hellebores_controls import *
 
+
+# text message cell enumerations
+T_RUNSTOP     = 0
+T_WFS         = 1
+T_TIMEDIV     = 2
+T_VOLTSDIV    = 3
+T_AMPSDIV     = 4
+T_WATTSDIV    = 5
+T_LEAKDIV     = 6
+
+
 class Waveform:
     # array of thorpy text objects
     texts = []
@@ -149,6 +160,7 @@ class Waveform:
             ]
         buttons = [ configure_button(BUTTON_SIZE, bt, bf) for bt, bf in button_setup ]
         waveform = thorpy.Box([ *self.texts[0:2], *buttons, *self.texts[2:] ])
+        waveform.set_topright(*CONTROLS_BOX_POSITION)
         waveform.set_bck_color(LIGHT_GREY)
         for e in waveform.get_all_descendants():
             e.hand_cursor = False    

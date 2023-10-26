@@ -18,31 +18,7 @@ class Multimeter:
     # array of thorpy text objects
     texts = []
     multimeter_background = None
-    multimeter_colours = [ GREEN, YELLOW, MAGENTA, CYAN ]
-    text_colours = [BLACK, WHITE, WHITE] + multimeter_colours + [WHITE, WHITE, WHITE, WHITE, WHITE]
     current_range = 'full'
-    st = None   # set in __init__ to point to settings
-
-    def set_text_colours(self):
-        # the boolean filter allows us to temporarily grey out lines
-        # that are currently inactive/switched off
-        colour_filter = [
-            True,
-            True,
-            True,
-            self.st.voltage_display_status,
-            self.st.current_display_status,
-            self.st.power_display_status,
-            self.st.earth_leakage_current_display_status,
-            True,
-            True,
-            True,
-            True,
-            True
-            ]
-        colours = [ c if p == True else DARK_GREY for p, c in zip(colour_filter, self.text_colours) ]
-        for i in range(len(self.texts)):
-            self.texts[i].set_font_color(colours[i])
 
     def __init__(self, st, app_actions):
         self.st = st
@@ -50,6 +26,10 @@ class Multimeter:
         for s in range(12):
             t = thorpy.Text('')
             t.set_size(TEXT_SIZE)
+            if s==0:
+                t.set_font_color(BLACK)
+            else:
+                t.set_font_color(WHITE)
             self.texts.append(t)
         self.draw_background()
 
@@ -57,30 +37,12 @@ class Multimeter:
         self.texts[item].set_text(value)
 
     def draw_texts(self, capturing):
-        self.set_text_colours()
         if capturing:
             self.texts[T_RUNSTOP].set_bck_color(GREEN)
             self.texts[T_RUNSTOP].set_text('Running', adapt_parent=False)
         else:
             self.texts[T_RUNSTOP].set_bck_color(RED)
             self.texts[T_RUNSTOP].set_text('Stopped', adapt_parent=False)
-        self.texts[T_WFS].set_text(f'n/a wfm/s', adapt_parent=False)
-        self.texts[T_TIMEDIV].set_text(
-            f'{self.st.time_display_ranges[self.st.time_display_index]} ms/',
-            adapt_parent=False)
-        self.texts[T_VOLTSDIV].set_text(
-            f'{self.st.voltage_display_ranges[self.st.voltage_display_index]} V/',
-            adapt_parent=False)
-        self.texts[T_AMPSDIV].set_text(
-            f'{self.st.current_display_ranges[self.st.current_display_index]} A/',
-            adapt_parent=False)
-        self.texts[T_WATTSDIV].set_text(
-            f'{self.st.power_display_ranges[self.st.power_display_index]} W/',
-            adapt_parent=False)
-        elv = (self.st.earth_leakage_current_display_ranges
-               [self.st.earth_leakage_current_display_index] * 1000)
-        self.texts[T_LEAKDIV].set_text(f'{elv} mA/', adapt_parent=False)
-
 
     def draw_background(self):
         # empty background

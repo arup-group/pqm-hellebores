@@ -37,7 +37,8 @@ def create_datetime():
     #####
     text_datetime = thorpy.Text(time.ctime())
     text_datetime.set_font_color(WHITE)
-    return [ text_datetime ]
+    text_datetime.set_topleft(0,0)
+    return text_datetime
 
 def configure_button_decorations(button, callback_function):
     button.set_bck_color(VERY_LIGHT_GREY, 'normal')

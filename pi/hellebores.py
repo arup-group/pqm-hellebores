@@ -41,13 +41,20 @@ class UI_groups:
     mode = 'waveform'
     instruments = {}
  
-    def __init__(self, st, screen, waveform, multimeter, app_actions):
-        self.screen = screen
+    def __init__(self, st, waveform, multimeter, app_actions):
+        # re-point the updater function in the app_actions object to target the function in this object
+        # NB dynamically altering a function definition in another object is a relatively unusual
+        # programming move, but I can't think of another convenient way to do it, because 'self' is
+        # instantiated for this object only after the app_actions object was created.
+        app_actions.set_updater = self.set_updater
+        # and make a local reference to that object
+        self.app_actions = app_actions
+
         self.instruments['waveform'] = waveform
         self.instruments['multimeter'] = multimeter
 
-        self.elements['datetime'] = create_datetime()[0]
-        self.elements['datetime'].set_topleft(0,0)
+        # datetime group
+        self.elements['datetime'] = create_datetime()
 
         # waveform group
         self.elements['waveform'] = waveform.create_waveform_controls()
@@ -70,14 +77,6 @@ class UI_groups:
         for k in ['mode', 'current_range', 'vertical', 'horizontal', 'trigger', 'options']:
             self.elements[k].set_topright(*SETTINGS_BOX_POSITION)
 
-        # re-point the updater function in the external object to target the function in this object
-        # NB dynamically altering a function definition in another object is a relatively unusual
-        # programming move, but I can't think of another convenient way to do it, because 'self' is
-        # instantiated for this object only after the other object was created.
-        app_actions.set_updater = self.set_updater
-        # set initial mode
-        self.draw_background()
-
     def set_current_range(self, required_range):
         self.current_range = required_range
 
@@ -87,43 +86,37 @@ class UI_groups:
     def draw_texts(self, capturing):
         self.instruments[self.mode].draw_texts(capturing)
 
-    def draw_background(self):
-        # empty background for the entire display
-        self.display_background = pygame.Surface(PI_SCREEN_SIZE)
-        self.display_background.fill(DARK_GREY)
-
     def set_updater(self, elements_group):
         # for 'waveform', 'multimeter', 'voltage_harmonic', 'current_harmonic',
         # we retain the group in a 'mode' variable for recall after menu selections.
-        try:
-            if elements_group in ['waveform', 'multimeter', 'voltage_harmonic', 'current_harmonic']:
-                # if we picked a different display mode, store it in 'self.mode'.
-                self.mode = elements_group
-                elements = [ 
-                    self.elements[self.mode],
-                    self.elements['datetime']
-                    ]
-                # clear the display
-                self.screen.blit(self.display_background, (0,0))
-            elif elements_group == 'back':
-                # if we picked 'back', then just use the pre-existing mode
-                elements = [
-                    self.elements[self.mode],
-                    self.elements['datetime']
-                    ]
-            else:
-                # otherwise, use the pre-existing mode and add the selected overlay
-                # elements to it.
-                elements = [
-                    self.elements[self.mode],
-                    self.elements[elements_group],
-                    self.elements['datetime']
-                    ]
-            self.updater = thorpy.Group(elements=elements, mode=None).get_updater()
+        if elements_group in ['waveform', 'multimeter', 'voltage_harmonic', 'current_harmonic']:
+            # if we picked a different display mode, store it in 'self.mode'.
+            self.mode = elements_group
+            selected_elements = [ 
+                self.elements[self.mode],
+                self.elements['datetime']
+                ]
+            self.app_actions.post_clear_screen_event()
+        elif elements_group == 'back':
+            # if we picked 'back', then just use the pre-existing mode
+            selected_elements = [
+                self.elements[self.mode],
+                self.elements['datetime']
+                ]
+        else:
+            # otherwise, use the pre-existing mode and add the selected overlay
+            # elements to it.
+            selected_elements = [
+                self.elements[self.mode],
+                self.elements[elements_group],
+                self.elements['datetime']
+                ]
+        try: 
+            self.updater = thorpy.Group(elements=selected_elements, mode=None).get_updater()
         except:
-            print(
-                f"UI_groups.set_updater(): group parameter '{elements_group}' not recognised.\n",
-                file=sys.stderr)
+            print(f"UI_groups.set_updater(): couldn't set or find"
+                  f" '{elements_group}' updater object.\n", file=sys.stderr)
+        return self.updater
 
     def get_updater(self):
         return self.updater 
@@ -181,6 +174,9 @@ else:
 class Sample_Buffer:
     # working points buffer for four lines
     ps = [ [],[],[],[] ] 
+
+    def __init__(self):
+        pass
 
     # sample buffer history
     # future extension is to use this buffer for electrical event history
@@ -245,12 +241,17 @@ class Sample_Buffer:
             index = SAMPLE_BUFFER_SIZE
         return self.sample_buffer_history[index]
 
-    def __init__(self):
-        pass
-
 
 class App_Actions:
-    capturing = True        # allow/stop update of the lines on the screen
+
+    def __init__(self):
+        # allow/stop update of the lines on the screen
+        self.capturing = True
+        # create a custom pygame event, which we'll use for clearing the screen
+        self.clear_screen_event = pygame.event.custom_type()
+
+    def post_clear_screen_event(self):
+        status = pygame.event.post(pygame.event.Event(self.clear_screen_event, {}))
 
     def start_stop(self):
         self.capturing = not self.capturing
@@ -258,16 +259,19 @@ class App_Actions:
     def set_updater(self, mode):
         # this placeholder function is replaced dynamically by the implementation
         # inside the ui object
-        pass
+        print('hellebores.py: App_Actions.set_updater() virtual function '
+              'should be substituted prior to calling it.', file=sys.stderr)
 
     def exit_application(self, option='quit'):
-        exit_codes = { 'quit': 0, 'restart': 2, 'software_update': 3, 'shutdown': 4, }
+        exit_codes = { 'quit': 0, 'restart': 2, 'software_update': 3, 'shutdown': 4 }
+        try:
+            code = exit_codes[option]
+        except:
+            print(f"hellebores.py: App_Actions.exit_application() exit option '{option}'"
+                   " isn't implemented, exiting with error code 1.", file=sys.stderr)
+            code = 1
         pygame.quit()
-        sys.exit(exit_codes[option])
-
-    def __init__(self):
-        pass
-
+        sys.exit(code)
 
 def main():
 
@@ -303,20 +307,18 @@ def main():
             'mapper.py'
             ])
 
- 
     # create objects that hold the state of the UI
     app_actions  = App_Actions()
     wfs          = WFS_Counter()
     waveform     = Waveform(st, wfs, app_actions)
     multimeter   = Multimeter(st, app_actions)
-    ui           = UI_groups(st, screen, waveform, multimeter, app_actions)
+    ui           = UI_groups(st, waveform, multimeter, app_actions)
 
-    # start with the waveform group enabled
-    app_actions.set_updater('waveform')
+    # start with the waveform mode enabled
+    ui.app_actions.set_updater('waveform')
 
     # set up a sample buffer object
     buffer = Sample_Buffer()
-    
 
     # main loop
     while True:
@@ -338,7 +340,7 @@ def main():
         # The load_buffer() function also implicitly manages display refresh speed when not
         # capturing, by waiting for a definite time for new data.
         got_new_frame = buffer.load_buffer(sys.stdin, app_actions.capturing, wfs)
-       
+ 
         # we don't use the event handler to schedule plotting updates, because it is not
         # efficient enough for high frame rates. Instead we plot explicitly when needed, every
         # time round the loop. 
@@ -357,10 +359,13 @@ def main():
                 app_actions.capturing = True
             elif e.type == pygame.KEYDOWN and e.key == pygame.K_s:
                 app_actions.capturing = False
+            elif e.type == app_actions.clear_screen_event:
+                screen.fill(LIGHT_GREY)
 
         # ui_current_updater.update() is an expensive function, so we use the simplest possible
         # thorpy theme to achieve highest performance/frame rate
         ui.get_updater().update(events=events)
+
         # push all of our updated work into the active display framebuffer
         pygame.display.flip()
 

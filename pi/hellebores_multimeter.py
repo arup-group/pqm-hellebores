@@ -23,7 +23,7 @@ class Multimeter:
     def __init__(self, st, app_actions):
         self.st = st
         self.app_actions = app_actions
-        for s in range(12):
+        for s in range(4):
             t = thorpy.Text('')
             t.set_size(TEXT_SIZE)
             if s==0:
@@ -31,7 +31,9 @@ class Multimeter:
             else:
                 t.set_font_color(WHITE)
             self.texts.append(t)
-        self.draw_background()
+        # create an empty background to draw onto
+        self.multimeter_background = pygame.Surface(SCOPE_BOX_SIZE)
+        self.multimeter_background.fill(GREY)
 
     def set_text(self, item, value):
         self.texts[item].set_text(value)
@@ -43,11 +45,6 @@ class Multimeter:
         else:
             self.texts[T_RUNSTOP].set_bck_color(RED)
             self.texts[T_RUNSTOP].set_text('Stopped', adapt_parent=False)
-
-    def draw_background(self):
-        # empty background
-        self.multimeter_background = pygame.Surface(SCOPE_BOX_SIZE)
-        self.multimeter_background.fill(GREY)
 
     def refresh(self, buffer, screen):
         # display all the readings

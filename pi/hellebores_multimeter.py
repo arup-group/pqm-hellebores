@@ -15,12 +15,9 @@ T_LEAKDIV     = 6
 
 
 class Multimeter:
-    # array of thorpy text objects
-    texts = []
-    multimeter_background = None
-    current_range = 'full'
 
     def __init__(self, st, app_actions):
+        self.texts = []
         self.st = st
         self.app_actions = app_actions
         for s in range(4):
@@ -34,6 +31,8 @@ class Multimeter:
         # create an empty background to draw onto
         self.multimeter_background = pygame.Surface(SCOPE_BOX_SIZE)
         self.multimeter_background.fill(GREY)
+        # create the controls
+        self.multimeter_controls = self.create_multimeter_controls()
 
     def set_text(self, item, value):
         self.texts[item].set_text(value)
@@ -65,4 +64,3 @@ class Multimeter:
         for e in multimeter_controls.get_all_descendants():
             e.hand_cursor = False    
         return multimeter_controls
-

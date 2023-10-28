@@ -21,7 +21,7 @@ BUTTON_SIZE = (90,50)
 BUTTON_WIDE_SIZE = (180,50) 
 TEXT_SIZE = (90,16)
 TEXT_WIDE_SIZE = (120,16)
-FONT = 'font/Roboto-Regular.ttf'
+FONT = 'font/RobotoMono-Medium.ttf'
 FONT_SIZE = 14
 SAMPLE_BUFFER_SIZE = 100 
 

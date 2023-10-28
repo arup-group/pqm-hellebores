@@ -38,11 +38,9 @@ from hellebores_multimeter import Multimeter
 # that can be displayed together with the currently active selection
 class UI_groups:
     elements = {}
-    updater = None
     mode = 'waveform'
-    current_range = 'full' # move this to settings.py or the multimeter definition
     instruments = {}
-
+ 
     def __init__(self, st, screen, waveform, multimeter, app_actions):
         self.screen = screen
         self.instruments['waveform'] = waveform
@@ -58,16 +56,8 @@ class UI_groups:
         self.elements['multimeter'] = multimeter.create_multimeter_controls()
 
         # voltage harmonic group
-        #ui_voltage_harmonic = create_voltage_harmonic_controls(texts)
-        #ui_voltage_harmonic.set_size(CONTROLS_BOX_SIZE)
-        #ui_voltage_harmonic.set_topright(*CONTROLS_BOX_POSITION)
-        #self.elements['voltage_harmonic'] = ui_voltage_harmonic
 
         # current harmonic group
-        #ui_current_harmonic = create_current_harmonic_controls(texts)
-        #ui_current_harmonic.set_size(CONTROLS_BOX_SIZE)
-        #ui_current_harmonic.set_topright(*CONTROLS_BOX_POSITION)
-        #self.elements['current_harmonic'] = ui_current_harmonic
 
         # control groups that overlay the main group when adjusting settings
         self.elements['mode'] = create_mode(app_actions)
@@ -85,6 +75,8 @@ class UI_groups:
         # programming move, but I can't think of another convenient way to do it, because 'self' is
         # instantiated for this object only after the other object was created.
         app_actions.set_updater = self.set_updater
+        # set initial mode
+        self.draw_background()
 
     def set_current_range(self, required_range):
         self.current_range = required_range
@@ -94,6 +86,11 @@ class UI_groups:
 
     def draw_texts(self, capturing):
         self.instruments[self.mode].draw_texts(capturing)
+
+    def draw_background(self):
+        # empty background for the entire display
+        self.display_background = pygame.Surface(PI_SCREEN_SIZE)
+        self.display_background.fill(DARK_GREY)
 
     def set_updater(self, elements_group):
         # for 'waveform', 'multimeter', 'voltage_harmonic', 'current_harmonic',
@@ -106,6 +103,8 @@ class UI_groups:
                     self.elements[self.mode],
                     self.elements['datetime']
                     ]
+                # clear the display
+                self.screen.blit(self.display_background, (0,0))
             elif elements_group == 'back':
                 # if we picked 'back', then just use the pre-existing mode
                 elements = [
@@ -123,7 +122,7 @@ class UI_groups:
             self.updater = thorpy.Group(elements=elements, mode=None).get_updater()
         except:
             print(
-                'UI_groups.set_updater(): group parameter not recognised.\n',
+                f"UI_groups.set_updater(): group parameter '{elements_group}' not recognised.\n",
                 file=sys.stderr)
 
     def get_updater(self):

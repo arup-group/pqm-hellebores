@@ -42,25 +42,25 @@ class UI_groups:
     instruments = {}
  
     def __init__(self, st, waveform, multimeter, app_actions):
+        # make a local reference to app_actions
+        self.app_actions = app_actions
+
         # re-point the updater function in the app_actions object to target the function in this object
         # NB dynamically altering a function definition in another object is a relatively unusual
         # programming move, but I can't think of another convenient way to do it, because 'self' is
         # instantiated for this object only after the app_actions object was created.
         app_actions.set_updater = self.set_updater
-        # and make a local reference to that object
-        self.app_actions = app_actions
-
-        self.instruments['waveform'] = waveform
-        self.instruments['multimeter'] = multimeter
 
         # datetime group
         self.elements['datetime'] = create_datetime()
 
         # waveform group
-        self.elements['waveform'] = waveform.create_waveform_controls()
+        self.instruments['waveform'] = waveform
+        self.elements['waveform'] = waveform.waveform_controls
 
         # multi-meter group
-        self.elements['multimeter'] = multimeter.create_multimeter_controls()
+        self.instruments['multimeter'] = multimeter
+        self.elements['multimeter'] = multimeter.multimeter_controls
 
         # voltage harmonic group
 
@@ -172,21 +172,20 @@ else:
  
 
 class Sample_Buffer:
-    # working points buffer for four lines
-    ps = [ [],[],[],[] ] 
 
     def __init__(self):
-        pass
+        # working points buffer for four lines
+        self.ps = [ [],[],[],[] ] 
 
     # sample buffer history
     # future extension is to use this buffer for electrical event history
     # (eg triggered by power fluctuation etc)
-    sample_buffer_history = [[] for i in range(SAMPLE_BUFFER_SIZE+1)]
+    sample_waveform_history = [[] for i in range(SAMPLE_BUFFER_SIZE+1)]
     xp = -1                 # tracks previous 'x coordinate'
 
     def end_frame(self, capturing, wfs):
         if capturing:
-            self.sample_buffer_history[SAMPLE_BUFFER_SIZE] = self.ps
+            self.sample_waveform_history[SAMPLE_BUFFER_SIZE] = self.ps
             wfs.increment()
         # reset the working buffer
         self.ps = [ [],[],[],[] ]
@@ -197,7 +196,16 @@ class Sample_Buffer:
         self.ps[2].append((sample[0], sample[3]))
         self.ps[3].append((sample[0], sample[4]))
 
-    def load_buffer(self, f, capturing, wfs):
+    def load_calculation(self, f, capturing):
+        while is_data_available(f, 0.01):
+            try:
+                cs = f.readline().split()
+            except:
+                print('hellebores.py: Sample_Buffer.load_calculation()'
+                      ' file error.', file=sys.stderr) 
+        return True
+
+    def load_waveform(self, f, capturing, wfs):
         # the loop will exit if:
         # (a) there is no data currently waiting to be read, 
         # (b) negative x coordinate indicates last sample of current frame
@@ -232,19 +240,20 @@ class Sample_Buffer:
                 break   # break if we have any type of error with the input data
         return False
 
-    def save_buffer(self):
-        self.sample_buffer_history = self.sample_buffer_history[1:]
-        self.sample_buffer_history.append('')
+    def save_waveform(self):
+        self.sample_waveform_history = self.sample_waveform_history[1:]
+        self.sample_waveform_history.append('')
 
-    def get_buffer(self, index = SAMPLE_BUFFER_SIZE):
+    def get_waveform(self, index = SAMPLE_BUFFER_SIZE):
         if (index < 0) or (index > SAMPLE_BUFFER_SIZE):
             index = SAMPLE_BUFFER_SIZE
-        return self.sample_buffer_history[index]
+        return self.sample_waveform_history[index]
 
 
 class App_Actions:
 
-    def __init__(self):
+    def __init__(self, waveform_stream, calculation_stream):
+        self.streams = (waveform_stream, calculation_stream)
         # allow/stop update of the lines on the screen
         self.capturing = True
         # create a custom pygame event, which we'll use for clearing the screen
@@ -270,6 +279,8 @@ class App_Actions:
             print(f"hellebores.py: App_Actions.exit_application() exit option '{option}'"
                    " isn't implemented, exiting with error code 1.", file=sys.stderr)
             code = 1
+        self.streams[0].close()
+        self.streams[1].close() 
         pygame.quit()
         sys.exit(code)
 
@@ -294,10 +305,20 @@ def main():
     thorpy.set_default_font(FONT, FONT_SIZE)
     thorpy.init(screen, thorpy.theme_simple)
 
+    # open the input stream fifos
+    try:
+        waveform_stream = open(sys.argv[1], 'r') 
+        calculation_stream = open(sys.argv[2], 'r')
+    except:
+        print("hellebores.py: main() Couldn't open the fifo streams", file=sys.stderr)
+        sys.exit(1)
+
     # load configuration settings from settings.json into a settings object 'st'.
     # the list of 'other programs' is used to send signals when we change
     # settings in this program. We call st.send_to_all() and then
     # these programs are each told to re-read the settings file.
+    # NB it's important that the programs are running and the stream files are 
+    # open before instantiating here.
     st = settings.Settings(
         other_programs = [
             'rain.py',
@@ -308,7 +329,7 @@ def main():
             ])
 
     # create objects that hold the state of the UI
-    app_actions  = App_Actions()
+    app_actions  = App_Actions(waveform_stream, calculation_stream)
     wfs          = WFS_Counter()
     waveform     = Waveform(st, wfs, app_actions)
     multimeter   = Multimeter(st, app_actions)
@@ -339,7 +360,8 @@ def main():
         # problems are suspected here.
         # The load_buffer() function also implicitly manages display refresh speed when not
         # capturing, by waiting for a definite time for new data.
-        got_new_frame = buffer.load_buffer(sys.stdin, app_actions.capturing, wfs)
+        got_new_frame = buffer.load_waveform(waveform_stream, app_actions.capturing, wfs)
+        got_new_calculation = buffer.load_calculation(calculation_stream, app_actions.capturing)
  
         # we don't use the event handler to schedule plotting updates, because it is not
         # efficient enough for high frame rates. Instead we plot explicitly when needed, every

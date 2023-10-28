@@ -16,10 +16,23 @@ T_LEAKDIV     = 6
 
 class Waveform:
     # array of thorpy text objects
-    texts = []
-    waveform_background = None
     waveform_colours = [ GREEN, YELLOW, MAGENTA, CYAN ]
     text_colours = [BLACK, WHITE, WHITE] + waveform_colours
+
+    def __init__(self, st, wfs, app_actions):
+        self.texts = []
+        self.st = st
+        self.wfs = wfs
+        self.app_actions = app_actions
+        for s in range(7):
+            t = thorpy.Text('')
+            t.set_size(TEXT_SIZE)
+            self.texts.append(t)
+        self.waveform_background = self.draw_background()
+        self.waveform_controls = self.create_waveform_controls()
+        # initial set up is lines
+        self.plot_mode('lines')
+         
 
     def set_text_colours(self):
         # the boolean filter allows us to temporarily grey out lines
@@ -36,18 +49,6 @@ class Waveform:
         colours = [ c if p == True else DARK_GREY for p, c in zip(colour_filter, self.text_colours) ]
         for i in range(len(self.texts)):
             self.texts[i].set_font_color(colours[i])
-
-    def __init__(self, st, wfs, app_actions):
-        self.st = st
-        self.wfs = wfs
-        self.app_actions = app_actions
-        for s in range(7):
-            t = thorpy.Text('')
-            t.set_size(TEXT_SIZE)
-            self.texts.append(t)
-        self.draw_background()
-        # initial set up is lines
-        self.plot_mode('lines')
 
     def set_text(self, item, value):
         self.texts[item].set_text(value)
@@ -83,8 +84,8 @@ class Waveform:
         ymax = SCOPE_BOX_SIZE[1] - 1
 
         # empty background
-        self.waveform_background = pygame.Surface(SCOPE_BOX_SIZE)
-        self.waveform_background.fill(GREY)
+        waveform_background = pygame.Surface(SCOPE_BOX_SIZE)
+        waveform_background.fill(GREY)
 
         # draw the graticule lines
         for dx in range(1, self.st.time_axis_divisions):
@@ -94,7 +95,7 @@ class Waveform:
                 lc = WHITE
             else:
                 lc = LIGHT_GREY
-            pygame.draw.line(self.waveform_background, lc, (x, 0), (x, ymax), 1)
+            pygame.draw.line(waveform_background, lc, (x, 0), (x, ymax), 1)
         for dy in range(1, self.st.vertical_axis_divisions):
             y = self.st.vertical_pixels_per_division * dy
             # mark the central position (v, i = 0) with an emphasized line
@@ -102,8 +103,8 @@ class Waveform:
                 lc = WHITE
             else:
                 lc = LIGHT_GREY
-            pygame.draw.line(self.waveform_background, lc, (0, y), (xmax, y), 1)
-
+            pygame.draw.line(waveform_background, lc, (0, y), (xmax, y), 1)
+        return waveform_background
 
     # The plot function that will be used is configurable
     # plot_fn is set to point to either _plot_dots() or _plot_lines()
@@ -123,7 +124,7 @@ class Waveform:
     def plot(self, buffer, screen):
         # can handle up to six plots...
         screen.blit(self.waveform_background, (0,0))
-        linedata = buffer.get_buffer()
+        linedata = buffer.get_waveform()
         display_status = [
             self.st.voltage_display_status,
             self.st.current_display_status,
@@ -159,10 +160,10 @@ class Waveform:
             ('Options', lambda: self.app_actions.set_updater('options'))
             ]
         buttons = [ configure_button(BUTTON_SIZE, bt, bf) for bt, bf in button_setup ]
-        waveform = thorpy.Box([ *self.texts[0:2], *buttons, *self.texts[2:] ])
-        waveform.set_topright(*CONTROLS_BOX_POSITION)
-        waveform.set_bck_color(LIGHT_GREY)
-        for e in waveform.get_all_descendants():
+        waveform_controls = thorpy.Box([ *self.texts[0:2], *buttons, *self.texts[2:] ])
+        waveform_controls.set_topright(*CONTROLS_BOX_POSITION)
+        waveform_controls.set_bck_color(LIGHT_GREY)
+        for e in waveform_controls.get_all_descendants():
             e.hand_cursor = False    
-        return waveform
+        return waveform_controls
 

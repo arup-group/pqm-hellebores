@@ -14,24 +14,34 @@ cd $DIRNAME
 # Generate MD5 checksum of the program files and store it in environment variable
 # The environment variables are accessible from within the application
 # This allows us to reliably check if program versions on different devices are the same
-MD5SUM=$(cat go.sh rain_bucket.py reader.py scaler.py trigger.py mapper.py hellebores.py ../pico/spi-dual-core.py | md5sum | cut -d ' ' -f 1)
+MD5SUM=$(cat go.sh rain_bucket.py reader.py scaler.py trigger.py mapper.py \
+             hellebores.py hellebores_constants.py hellebores_waveform.py \
+             hellebores_multimeter.py ../pico/spi-dual-core.py | md5sum | cut -d ' ' -f 1)
 VERSION=$(cat ../VERSION)
 echo Running in $DIRNAME
 echo Version $VERSION
 echo MD5 checksum $MD5SUM
 
-# Run the program
+# Start the data pipeline, output feeding fifos waveform_stream and calculation_stream
 if [[ $have_pico -eq 1 ]]; then
     echo "Running with data sourced from Pico..."
-    ./reader.py | ./scaler.py | ./trigger.py | ./mapper.py | ./hellebores.py
+    ./reader.py | ./scaler.py | tee >(./calculate.py > ./calculation_stream) \
+    | ./trigger.py | ./mapper.py > ./waveform_stream &
 else
     echo "Running using generated data..."
-    ./rain_bucket.py ../sample_files/laptop1.out | ./scaler.py | ./trigger.py | ./mapper.py | ./hellebores.py
+    ./rain_bucket.py ../sample_files/laptop1.out | ./scaler.py \
+    | tee >(./calculate.py > ./calculation_stream) \
+    | ./trigger.py | ./mapper.py > ./waveform_stream &
 fi
+# Start the GUI, reading from the fifo pipelines in parallel
+./hellebores.py ./waveform_stream ./calculation_stream
 
 # The program finished.
-# Now check the exit code in case we need to do anything special
+# Capture the exit code in case we need to do anything special
 exit_code=$?
+# Shutdown the data processing pipeline
+killall python3
+# Now check the exit code
 # 2: Restart
 if [[ $exit_code -eq 2 ]]; then
     # Pico not recovering from this step!

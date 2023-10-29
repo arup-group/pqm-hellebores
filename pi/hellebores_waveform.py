@@ -28,8 +28,8 @@ class Waveform:
             t = thorpy.Text('')
             t.set_size(TEXT_SIZE)
             self.texts.append(t)
-        self.waveform_background = self.draw_background()
-        self.waveform_controls = self.create_waveform_controls()
+        self.draw_background()
+        self.create_waveform_controls()
         # initial set up is lines
         self.plot_mode('lines')
          
@@ -84,8 +84,8 @@ class Waveform:
         ymax = SCOPE_BOX_SIZE[1] - 1
 
         # empty background
-        waveform_background = pygame.Surface(SCOPE_BOX_SIZE)
-        waveform_background.fill(GREY)
+        self.waveform_background = pygame.Surface(SCOPE_BOX_SIZE)
+        self.waveform_background.fill(GREY)
 
         # draw the graticule lines
         for dx in range(1, self.st.time_axis_divisions):
@@ -95,7 +95,7 @@ class Waveform:
                 lc = WHITE
             else:
                 lc = LIGHT_GREY
-            pygame.draw.line(waveform_background, lc, (x, 0), (x, ymax), 1)
+            pygame.draw.line(self.waveform_background, lc, (x, 0), (x, ymax), 1)
         for dy in range(1, self.st.vertical_axis_divisions):
             y = self.st.vertical_pixels_per_division * dy
             # mark the central position (v, i = 0) with an emphasized line
@@ -103,8 +103,8 @@ class Waveform:
                 lc = WHITE
             else:
                 lc = LIGHT_GREY
-            pygame.draw.line(waveform_background, lc, (0, y), (xmax, y), 1)
-        return waveform_background
+            pygame.draw.line(self.waveform_background, lc, (0, y), (xmax, y), 1)
+
 
     # The plot function that will be used is configurable
     # plot_fn is set to point to either _plot_dots() or _plot_lines()
@@ -160,10 +160,9 @@ class Waveform:
             ('Options', lambda: self.app_actions.set_updater('options'))
             ]
         buttons = [ configure_button(BUTTON_SIZE, bt, bf) for bt, bf in button_setup ]
-        waveform_controls = thorpy.Box([ *self.texts[0:2], *buttons, *self.texts[2:] ])
-        waveform_controls.set_topright(*CONTROLS_BOX_POSITION)
-        waveform_controls.set_bck_color(LIGHT_GREY)
-        for e in waveform_controls.get_all_descendants():
+        self.waveform_controls = thorpy.Box([ *self.texts[0:2], *buttons, *self.texts[2:] ])
+        self.waveform_controls.set_topright(*CONTROLS_BOX_POSITION)
+        self.waveform_controls.set_bck_color(LIGHT_GREY)
+        for e in self.waveform_controls.get_all_descendants():
             e.hand_cursor = False    
-        return waveform_controls
 

@@ -197,7 +197,7 @@ class Sample_Buffer:
         self.ps[3].append((sample[0], sample[4]))
 
     def load_calculation(self, f, capturing):
-        while is_data_available(f, 0.01):
+        while is_data_available(f, 0.0):
             try:
                 cs = f.readline().split()
             except:

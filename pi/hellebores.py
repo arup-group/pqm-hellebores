@@ -304,14 +304,15 @@ def main():
 
     # construct file objects to correspond to the incoming file descriptors
     f_waveform = os.fdopen(0)
-    f_calculation = os.fdopen(3)
+    f_calculation = os.fdopen(10)
 
     # load configuration settings from settings.json into a settings object 'st'.
     # the list of 'other programs' is used to send signals when we change
     # settings in this program. We call st.send_to_all() and then
     # these programs are each told to re-read the settings file.
     # NB it's important that the programs are running and the stream files are 
-    # open before instantiating here.
+    # open before instantiating here, hence the pause.
+    time.sleep(1)
     st = settings.Settings(
         other_programs = [
             'rain.py',

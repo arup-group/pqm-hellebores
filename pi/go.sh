@@ -26,15 +26,17 @@ echo MD5 checksum $MD5SUM
 # Waveform points are sent via standard output (fd 1) and
 # calculation data is redirected via fd 10. NB It turns out that fd 3
 # is used by the touchscreen on Raspberry Pi, so don't use that.
+# Create an anonymous file descriptor 10
+exec 10<> <(:)
 if [[ $have_pico -eq 1 ]]; then
     echo "Running with data sourced from Pico..."
     ./reader.py | ./scaler.py \
-    | tee >(./calculate.py &>10) \
+    | tee >(./calculate.py >&10) \
     | ./trigger.py | ./mapper.py | ./hellebores.py
 else
     echo "Running using generated data..."
     ./rain_bucket.py ../sample_files/laptop1.out | ./scaler.py \
-    | tee >(./calculate.py &>10) \
+    | tee >(./calculate.py >&10) \
     | ./trigger.py | ./mapper.py | ./hellebores.py
 fi
 
@@ -43,6 +45,9 @@ fi
 
 # Capture the exit code in case we need to do anything special
 exit_code=$?
+
+# Remove the fd 10
+exec 10>&-
 
 # Now check the exit code
 # 2: Restart

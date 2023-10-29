@@ -22,31 +22,19 @@ echo Running in $DIRNAME
 echo Version $VERSION
 echo MD5 checksum $MD5SUM
 
-# If they don't already exist, create named pipes (fifos) to receive data from
-# the waveform and calculation processes
-for PIPE_FILE in waveform_stream calculation_stream; do
-    if [[ ! -e $PIPE_FILE ]]; then
-        mkfifo $PIPE_FILE
-        if [[ $? -ne 0 ]]; then
-            echo "There was an error creating a pipe file."
-            echo "Check your filesystem supports this."
-            exit 1
-        fi
-    fi
-done
-
 # Start the pipeline
 # Waveform points are sent via standard output (fd 1) and
-# calculation data is redirected via fd 3
+# calculation data is redirected via fd 10. NB It turns out that fd 3
+# is used by the touchscreen on Raspberry Pi, so don't use that.
 if [[ $have_pico -eq 1 ]]; then
     echo "Running with data sourced from Pico..."
     ./reader.py | ./scaler.py \
-    | tee >(./calculate.py &>3) \
+    | tee >(./calculate.py &>10) \
     | ./trigger.py | ./mapper.py | ./hellebores.py
 else
     echo "Running using generated data..."
     ./rain_bucket.py ../sample_files/laptop1.out | ./scaler.py \
-    | tee >(./calculate.py &>3) \
+    | tee >(./calculate.py &>10) \
     | ./trigger.py | ./mapper.py | ./hellebores.py
 fi
 

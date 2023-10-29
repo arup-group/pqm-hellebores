@@ -35,23 +35,22 @@ for PIPE_FILE in waveform_stream calculation_stream; do
     fi
 done
 
-# Start the data pipeline, output feeding the two named pipes
+# Start the pipeline
+# Waveform points are sent via standard output (fd 1) and
+# calculation data is redirected via fd 3
 if [[ $have_pico -eq 1 ]]; then
     echo "Running with data sourced from Pico..."
     ./reader.py | ./scaler.py \
-    | tee >(./calculate.py > ./calculation_stream) \
-    | ./trigger.py | ./mapper.py > ./waveform_stream &
+    | tee >(./calculate.py &>3) \
+    | ./trigger.py | ./mapper.py | ./hellebores.py
 else
     echo "Running using generated data..."
     ./rain_bucket.py ../sample_files/laptop1.out | ./scaler.py \
-    | tee >(./calculate.py > ./calculation_stream) \
-    | ./trigger.py | ./mapper.py > ./waveform_stream &
+    | tee >(./calculate.py &>3) \
+    | ./trigger.py | ./mapper.py | ./hellebores.py
 fi
 
-# Start the GUI, passing the two pipe files as parameters
-./hellebores.py ./waveform_stream ./calculation_stream
-
-# The program finished. NB Programs in the data pipeline all
+# The program finished. NB All programs in the data pipeline
 # terminate when the pipeline is broken
 
 # Capture the exit code in case we need to do anything special

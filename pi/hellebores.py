@@ -252,8 +252,7 @@ class Sample_Buffer:
 
 class App_Actions:
 
-    def __init__(self, waveform_stream, calculation_stream):
-        self.streams = (waveform_stream, calculation_stream)
+    def __init__(self):
         # allow/stop update of the lines on the screen
         self.capturing = True
         # create a custom pygame event, which we'll use for clearing the screen
@@ -279,8 +278,6 @@ class App_Actions:
             print(f"hellebores.py: App_Actions.exit_application() exit option '{option}'"
                    " isn't implemented, exiting with error code 1.", file=sys.stderr)
             code = 1
-        self.streams[0].close()
-        self.streams[1].close() 
         pygame.quit()
         sys.exit(code)
 
@@ -305,13 +302,9 @@ def main():
     thorpy.set_default_font(FONT, FONT_SIZE)
     thorpy.init(screen, thorpy.theme_simple)
 
-    # open the input stream fifos
-    try:
-        waveform_stream = open(sys.argv[1], 'r') 
-        calculation_stream = open(sys.argv[2], 'r')
-    except:
-        print("hellebores.py: main() Couldn't open the fifo streams", file=sys.stderr)
-        sys.exit(1)
+    # construct file objects to correspond to the incoming file descriptors
+    f_waveform = os.fdopen(0)
+    f_calculation = os.fdopen(3)
 
     # load configuration settings from settings.json into a settings object 'st'.
     # the list of 'other programs' is used to send signals when we change
@@ -329,7 +322,7 @@ def main():
             ])
 
     # create objects that hold the state of the UI
-    app_actions  = App_Actions(waveform_stream, calculation_stream)
+    app_actions  = App_Actions()
     wfs          = WFS_Counter()
     waveform     = Waveform(st, wfs, app_actions)
     multimeter   = Multimeter(st, app_actions)
@@ -360,8 +353,10 @@ def main():
         # problems are suspected here.
         # The load_buffer() function also implicitly manages display refresh speed when not
         # capturing, by waiting for a definite time for new data.
-        got_new_frame = buffer.load_waveform(waveform_stream, app_actions.capturing, wfs)
-        got_new_calculation = buffer.load_calculation(calculation_stream, app_actions.capturing)
+        # Data is read from incoming pipeline, fd 0 (stdin) for waveform data, and fd 3 for
+        # calculation data.
+        got_new_frame = buffer.load_waveform(f_waveform, app_actions.capturing, wfs)
+        got_new_calculation = buffer.load_calculation(f_calculation, app_actions.capturing)
  
         # we don't use the event handler to schedule plotting updates, because it is not
         # efficient enough for high frame rates. Instead we plot explicitly when needed, every

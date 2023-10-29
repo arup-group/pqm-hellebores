@@ -188,13 +188,13 @@ class Settings():
     def get_program_pids(self, other_programs):
         # we use a function in the psutil module to find the PIDs of the other programs
         pids = {}
-        if len(other_programs) > 0:
+        if other_programs != []:
             for p in psutil.process_iter():
                 try:
                     pcmd = ' '.join(p.cmdline())
                     for program in other_programs:
                         if program in pcmd:
-                            print(f'Collected PID {p.pid} for {pcmd}', file=sys.stderr)
+                            # print(f'Collected PID {p.pid} for {pcmd}', file=sys.stderr)
                             pids[p.pid] = pcmd
                 except:
                     # p.cmdline() generates permission errors on some system processes, so

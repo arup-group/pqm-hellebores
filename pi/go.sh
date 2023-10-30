@@ -22,8 +22,8 @@ echo Running in $DIRNAME
 echo Version $VERSION
 echo MD5 checksum $MD5SUM
 
-WAVEFORM_PIPE=/tmp/waveform_pipe
-ANALYSIS_PIPE=/tmp/analysis_pipe
+WAVEFORM_PIPE=/tmp/pqm-hellebores/waveform_pipe
+ANALYSIS_PIPE=/tmp/pqm-hellebores/analysis_pipe
 ERROR_LOG_FILE=/tmp/pqm-hellebores/error.log
 
 # If they don't already exist, create named pipes (fifos) to receive data from
@@ -40,43 +40,53 @@ for PIPE_FILE in $WAVEFORM_PIPE $ANALYSIS_PIPE; do
 done
 
 # Start the data pipeline, output feeding the two named pipes
+# Clear old log file
+rm $ERROR_LOG_FILE
+# Duplicate stderr file descriptor to $STDERR
+exec 4>&2
+# Redirect stderr (fd 2) to file
+exec 2> $ERROR_LOG_FILE
+
 if [[ $have_pico -eq 1 ]]; then
     echo "Running with data sourced from Pico..."
-    ./reader.py | ./scaler.py \
+    ./reader.py \
+    | ./scaler.py \
     | tee >(./analyser.py > $ANALYSIS_PIPE) \
-    | ./trigger.py | ./mapper.py > $WAVEFORM_PIPE 2> $ERROR_LOG_FILE &
+    | ./trigger.py \
+    | ./mapper.py > $WAVEFORM_PIPE &
 else
     echo "Running using generated data..."
-    ./rain_bucket.py ../sample_files/laptop1.out | ./scaler.py \
+    ./rain_bucket.py ../sample_files/laptop1.out \
+    | ./scaler.py \
     | tee >(./analyser.py > $ANALYSIS_PIPE) \
-    | ./trigger.py | ./mapper.py > $WAVEFORM_PIPE 2> $ERROR_LOG_FILE &
+    | ./trigger.py \
+    | ./mapper.py > $WAVEFORM_PIPE &
 fi
 
 # Start the GUI, passing the two pipe files as parameters
-./hellebores.py $WAVEFORM_PIPE $ANALYSIS_PIPE 2> $ERROR_LOG_FILE
+./hellebores.py $WAVEFORM_PIPE $ANALYSIS_PIPE
 
 # The program finished. NB Programs in the data pipeline all
 # terminate when the pipeline is broken
 
-# Capture the exit code in case we need to do anything special
+# Capture the exit code from hellebores.py
+# We'll check it's status shortly
 exit_code=$?
+
+# Restore stderr file descriptor from saved state
+exec 2>&4 4>&-
 
 # Now check the exit code
 # 2: Restart
 if [[ $exit_code -eq 2 ]]; then
-    # Pico not recovering from this step!
-    #if [[ $have_pico -eq 1 ]]; then
-    #    # Reset the Pico
-    #    echo "Resetting Pico..."
-    #    ./pico_reset.py
-    #    sleep 10
-    #fi
     # Flush serial interface
-    # open the serial port for reading on file descriptor 3
-    # drain fd 3 of data, and then close
-    3</dev/ttyACM0
-    while read -t 0 -u 3 discard; do echo "Flushing serial port..."; done
-    exec 3>&-
+    # open the serial port for reading on a new file descriptor,
+    # drain of data, and then close
+    if [[ $have_pico -eq 1 ]]; then
+        exec 5</dev/ttyACM0
+        while read -t 0 -u 11 discard; do echo "Flushing serial port..."; done
+        exec 5>&-
+    fi
     # Trampoline: reload the launch script and run again
     echo "Restarting $0..."
     exec $0

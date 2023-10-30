@@ -22,32 +22,40 @@ echo Running in $DIRNAME
 echo Version $VERSION
 echo MD5 checksum $MD5SUM
 
-# Start the pipeline
-# Waveform points are sent via standard output (fd 1) and
-# calculation data is redirected via fd 10. NB It turns out that fd 3
-# is used by the touchscreen on Raspberry Pi, so don't use that.
-# Create an anonymous file descriptor 10
-exec 10<> <(:)
+# If they don't already exist, create named pipes (fifos) to receive data from
+# the waveform and calculation processes
+for PIPE_FILE in /tmp/waveform_stream /tmp/calculation_stream; do
+    if [[ ! -e $PIPE_FILE ]]; then
+        mkfifo $PIPE_FILE
+        if [[ $? -ne 0 ]]; then
+            echo "There was an error creating a pipe file."
+            echo "Check your filesystem supports this."
+            exit 1
+        fi
+    fi
+done
+
+# Start the data pipeline, output feeding the two named pipes
 if [[ $have_pico -eq 1 ]]; then
     echo "Running with data sourced from Pico..."
     ./reader.py | ./scaler.py \
-    | tee >(./calculate.py >&10) \
-    | ./trigger.py | ./mapper.py | ./hellebores.py
+    | tee >(./calculate.py > ./calculation_stream) \
+    | ./trigger.py | ./mapper.py > /tmp/waveform_stream &
 else
     echo "Running using generated data..."
     ./rain_bucket.py ../sample_files/laptop1.out | ./scaler.py \
-    | tee >(./calculate.py >&10) \
-    | ./trigger.py | ./mapper.py | ./hellebores.py
+    | tee >(./calculate.py > ./calculation_stream) \
+    | ./trigger.py | ./mapper.py > /tmp/waveform_stream &
 fi
 
-# The program finished. NB All programs in the data pipeline
+# Start the GUI, passing the two pipe files as parameters
+./hellebores.py /tmp/waveform_stream /tmp/calculation_stream
+
+# The program finished. NB Programs in the data pipeline all
 # terminate when the pipeline is broken
 
 # Capture the exit code in case we need to do anything special
 exit_code=$?
-
-# Remove the fd 10
-exec 10>&-
 
 # Now check the exit code
 # 2: Restart

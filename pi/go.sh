@@ -39,12 +39,12 @@ done
 if [[ $have_pico -eq 1 ]]; then
     echo "Running with data sourced from Pico..."
     ./reader.py | ./scaler.py \
-    | tee >(./calculate.py > ./calculation_stream) \
+    | tee >(./calculate.py > /tmp/calculation_stream) \
     | ./trigger.py | ./mapper.py > /tmp/waveform_stream &
 else
     echo "Running using generated data..."
     ./rain_bucket.py ../sample_files/laptop1.out | ./scaler.py \
-    | tee >(./calculate.py > ./calculation_stream) \
+    | tee >(./calculate.py > /tmp/calculation_stream) \
     | ./trigger.py | ./mapper.py > /tmp/waveform_stream &
 fi
 

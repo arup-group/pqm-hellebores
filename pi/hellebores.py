@@ -196,12 +196,12 @@ class Sample_Buffer:
         self.ps[2].append((sample[0], sample[3]))
         self.ps[3].append((sample[0], sample[4]))
 
-    def load_calculation(self, f, capturing):
+    def load_analysis(self, f, capturing):
         while is_data_available(f, 0.0):
             try:
                 cs = f.readline().split()
             except:
-                print('hellebores.py: Sample_Buffer.load_calculation()'
+                print('hellebores.py: Sample_Buffer.load_analysis()'
                       ' file error.', file=sys.stderr) 
         return True
 
@@ -252,8 +252,8 @@ class Sample_Buffer:
 
 class App_Actions:
 
-    def __init__(self, waveform_stream, calculation_stream):
-        self.streams = (waveform_stream, calculation_stream)
+    def __init__(self, waveform_stream, analysis_stream):
+        self.streams = (waveform_stream, analysis_stream)
         # allow/stop update of the lines on the screen
         self.capturing = True
         # create a custom pygame event, which we'll use for clearing the screen
@@ -308,7 +308,7 @@ def main():
     # open the input stream fifos
     try:
         waveform_stream = open(sys.argv[1], 'r') 
-        calculation_stream = open(sys.argv[2], 'r')
+        analysis_stream = open(sys.argv[2], 'r')
     except:
         print("hellebores.py: main() Couldn't open the input streams", file=sys.stderr)
         sys.exit(1)
@@ -330,7 +330,7 @@ def main():
             ])
 
     # create objects that hold the state of the UI
-    app_actions  = App_Actions(waveform_stream, calculation_stream)
+    app_actions  = App_Actions(waveform_stream, analysis_stream)
     wfs          = WFS_Counter()
     waveform     = Waveform(st, wfs, app_actions)
     multimeter   = Multimeter(st, app_actions)
@@ -362,7 +362,7 @@ def main():
         # The load_buffer() function also implicitly manages display refresh speed when not
         # capturing, by waiting for a definite time for new data.
         got_new_frame = buffer.load_waveform(waveform_stream, app_actions.capturing, wfs)
-        got_new_calculation = buffer.load_calculation(calculation_stream, app_actions.capturing)
+        got_new_analysis = buffer.load_analysis(analysis_stream, app_actions.capturing)
  
         # we don't use the event handler to schedule plotting updates, because it is not
         # efficient enough for high frame rates. Instead we plot explicitly when needed, every

@@ -22,9 +22,13 @@ echo Running in $DIRNAME
 echo Version $VERSION
 echo MD5 checksum $MD5SUM
 
+WAVEFORM_PIPE=/tmp/waveform_pipe
+ANALYSIS_PIPE=/tmp/analysis_pipe
+ERROR_LOG_FILE=/tmp/pqm-hellebores/error.log
+
 # If they don't already exist, create named pipes (fifos) to receive data from
 # the waveform and calculation processes
-for PIPE_FILE in /tmp/waveform_stream /tmp/calculation_stream; do
+for PIPE_FILE in $WAVEFORM_PIPE $ANALYSIS_PIPE; do
     if [[ ! -e $PIPE_FILE ]]; then
         mkfifo $PIPE_FILE
         if [[ $? -ne 0 ]]; then
@@ -39,17 +43,17 @@ done
 if [[ $have_pico -eq 1 ]]; then
     echo "Running with data sourced from Pico..."
     ./reader.py | ./scaler.py \
-    | tee >(./calculate.py > /tmp/calculation_stream) \
-    | ./trigger.py | ./mapper.py > /tmp/waveform_stream &
+    | tee >(./analyser.py > $ANALYSIS_PIPE) \
+    | ./trigger.py | ./mapper.py > $WAVEFORM_PIPE 2> $ERROR_LOG_FILE &
 else
     echo "Running using generated data..."
     ./rain_bucket.py ../sample_files/laptop1.out | ./scaler.py \
-    | tee >(./calculate.py > /tmp/calculation_stream) \
-    | ./trigger.py | ./mapper.py > /tmp/waveform_stream &
+    | tee >(./analyser.py > $ANALYSIS_PIPE) \
+    | ./trigger.py | ./mapper.py > $WAVEFORM_PIPE 2> $ERROR_LOG_FILE &
 fi
 
 # Start the GUI, passing the two pipe files as parameters
-./hellebores.py /tmp/waveform_stream /tmp/calculation_stream
+./hellebores.py $WAVEFORM_PIPE $ANALYSIS_PIPE 2> $ERROR_LOG_FILE
 
 # The program finished. NB Programs in the data pipeline all
 # terminate when the pipeline is broken

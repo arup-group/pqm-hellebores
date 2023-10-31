@@ -42,28 +42,25 @@ done
 # Start the data pipeline, output feeding the two named pipes
 # Clear old log file
 rm $ERROR_LOG_FILE
-# Duplicate stderr file descriptor to $STDERR
-exec 4>&2
-# Redirect stderr (fd 2) to file
-exec 2> $ERROR_LOG_FILE
+# Duplicate stderr file descriptor 2 to 4
+# then redirect 2 to file
+exec 4>&2 2>$ERROR_LOG_FILE
 
 if [[ $have_pico -eq 1 ]]; then
     echo "Running with data sourced from Pico..."
-    ./reader.py \
-    | ./scaler.py \
-    | tee >(./analyser.py > $ANALYSIS_PIPE) \
-    | ./trigger.py \
-    | ./mapper.py > $WAVEFORM_PIPE &
+    READER="./reader.py"
 else
-    echo "Running using generated data..."
-    ./rain_bucket.py ../sample_files/laptop1.out \
-    | ./scaler.py \
-    | tee >(./analyser.py > $ANALYSIS_PIPE) \
-    | ./trigger.py \
-    | ./mapper.py > $WAVEFORM_PIPE &
+    echo "Running using previously captured data..."
+    READER="./rain_bucket.py ../sample_files/laptop1.out"
 fi
 
-# Start the GUI, passing the two pipe files as parameters
+# Run the capture and analysis, feeding two pipe files,
+# passing both pipes as parameters to the GUI
+$READER \
+| ./scaler.py \
+| tee >(./analyser.py > $ANALYSIS_PIPE) \
+| ./trigger.py | ./mapper.py > $WAVEFORM_PIPE &
+
 ./hellebores.py $WAVEFORM_PIPE $ANALYSIS_PIPE
 
 # The program finished. NB Programs in the data pipeline all
@@ -73,10 +70,10 @@ fi
 # We'll check it's status shortly
 exit_code=$?
 
-# Restore stderr file descriptor from saved state
+# Restore stderr file descriptor 2 from saved state on 4
 exec 2>&4 4>&-
 
-# Now check the exit code
+# Now check the exit code from hellebores.py
 # 2: Restart
 if [[ $exit_code -eq 2 ]]; then
     # Flush serial interface
@@ -109,6 +106,10 @@ elif [[ $exit_code -eq 4 ]]; then
 # Some other exit code: We have no idea what happened
 elif [[ $exit_code -ne 0 ]]; then
     echo "The program quit with an unexpected exit code $exit_code. Not good."
+    echo "Here's the error log file $ERROR_LOG_FILE, hope it helps:"
+    cat $ERROR_LOG_FILE
+    sleep 60
+    exit $exit_code
 fi
 
 # 0: Exit normally

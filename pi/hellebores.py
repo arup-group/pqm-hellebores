@@ -200,6 +200,7 @@ class Sample_Buffer:
         while is_data_available(f, 0.0):
             try:
                 cs = f.readline().split()
+                print(cs)
             except:
                 print('hellebores.py: Sample_Buffer.load_analysis()'
                       ' file error.', file=sys.stderr) 

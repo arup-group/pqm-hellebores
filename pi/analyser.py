@@ -17,6 +17,7 @@ def main():
         if i == 0:
             print(line)
         i = (i + 1) % 7812
+        sys.stdout.flush()
     print('Finished calculations.')
 
 if __name__ == '__main__':

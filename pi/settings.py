@@ -220,15 +220,12 @@ class Settings():
         # if we receive 'SIGUSR1' signal (on linux/unix) set things up so that updated settings will
         # be read from settings.json via the signal_handler function
         if os.name == 'posix':
-            # for faster update performance, and to reduce SD card wear, we save the settings.json
-            # file to RAM disk in /tmp, and we'll use the temporary version from now on
-            if os.system(
-                f'[ -d /tmp/pqm-hellebores ] || mkdir /tmp/pqm-hellebores') == 0:
-                # (NB 0 means the command succeeded, the directory exists)
-                self.sfile = f'/tmp/pqm-hellebores/{self.sfile}'
+            # for faster update performance, and to reduce SD card wear, if TEMP_DIR is set to RAM disk,
+            # we'll save updates to the settings.json file there.
+            temp_dir = os.getenv('TEMP_DIR')
+            if temp_dir:
+                self.sfile = f'{temp_dir}/{self.sfile}'
                 self.save_settings()
-            # wait a moment before gathering process pids, to make sure all the programs have started
-            time.sleep(0.5)
             self.pids = self.get_program_pids(other_programs)
             # link to the send_to_all function and set up a signal handler
             self.send_to_all = self._send_to_all

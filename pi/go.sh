@@ -28,6 +28,7 @@ echo MD5 checksum $MD5SUM
 
 WAVEFORM_PIPE=$TEMP_DIR/waveform_pipe
 ANALYSIS_PIPE=$TEMP_DIR/analysis_pipe
+MEASUREMENT_LOG_FILE=$TEMP_DIR/pqm.$$.csv
 ERROR_LOG_FILE=$TEMP_DIR/error.log
 
 # If they don't already exist, create named pipes (fifos) to receive data from
@@ -43,7 +44,7 @@ done
 
 # Start the data pipeline, output feeding the two named pipes
 # Clear old log file
-rm $ERROR_LOG_FILE
+[[ -e $ERROR_LOG_FILE ]] || rm $ERROR_LOG_FILE
 # Duplicate stderr file descriptor 2 to 4
 # then redirect 2 to file
 exec 4>&2 2>$ERROR_LOG_FILE
@@ -60,7 +61,7 @@ fi
 # passing both pipes as parameters to the GUI
 $READER \
 | ./scaler.py \
-| tee >(./analyser.py > $ANALYSIS_PIPE) \
+| tee >(./analyser.py | tee $MEASUREMENT_LOG_FILE > $ANALYSIS_PIPE) \
 | ./trigger.py | ./mapper.py > $WAVEFORM_PIPE &
 
 ./hellebores.py $WAVEFORM_PIPE $ANALYSIS_PIPE
@@ -83,7 +84,7 @@ if [[ $exit_code -eq 2 ]]; then
     # drain of data, and then close
     if $have_pico; then
         exec 5</dev/ttyACM0
-        while read -t 0 -u 11 discard; do echo "Flushing serial port..."; done
+        while read -t 0 -u 5 discard; do echo "Flushing serial port..."; done
         exec 5>&-
     fi
     # Trampoline: reload the launch script and run again
@@ -108,7 +109,7 @@ elif [[ $exit_code -eq 4 ]]; then
 # Some other exit code: We have no idea what happened
 elif [[ $exit_code -ne 0 ]]; then
     echo "The program quit with an unexpected exit code $exit_code. Not good."
-    echo "Here's the error log file $ERROR_LOG_FILE, hope it helps:"
+    echo "Here's the error log file $ERROR_LOG_FILE, hope it helps :-)"
     cat $ERROR_LOG_FILE
     sleep 60
     exit $exit_code

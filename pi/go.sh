@@ -13,7 +13,7 @@ cd $DIRNAME
 
 # Generate MD5 checksum of the program files and store it in environment variable
 # The environment variables are accessible from within the application
-# This allows us to reliably check if program versions on different devices are the same
+# This allows us to reliably check if program versions on different PQMs are the same
 export MD5SUM=$(cat go.sh rain_bucket.py reader.py scaler.py trigger.py mapper.py \
                 hellebores.py hellebores_constants.py hellebores_waveform.py \
                 hellebores_multimeter.py ../pico/spi-dual-core.py | md5sum | cut -d ' ' -f 1)
@@ -87,7 +87,7 @@ if [[ $exit_code -eq 2 ]]; then
         while read -t 0 -u 5 discard; do echo "Flushing serial port..."; done
         exec 5>&-
     fi
-    # Trampoline: reload the launch script and run again
+    # Trampoline: reload the launch script (this file) and run again
     echo "Restarting $0..."
     exec $0
 

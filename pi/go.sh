@@ -47,8 +47,10 @@ done
 
 # Figure out if we are running on real hardware or not
 if [[ -e /dev/ttyACM0 ]]; then
+    have_pico=true
     READER="./reader.py"
 else
+    have_pico=false
     READER="./rain_bucket.py ../sample_files/simulated.out"
 fi
 
@@ -66,28 +68,29 @@ echo "Measurement data     : $READER"
 exec 4>&2 2>$ERROR_LOG_FILE
 
 # Run the capture and analysis, feeding two pipe files,
-# passing both pipes as parameters to the GUI
+# then pass both pipes as parameters to the GUI
 echo "Starting processing..."
 
+# Plumbing, pipe, pipe, pipe...
 $READER \
-| ./scaler.py \
-| tee >(./analyser.py | tee $MEASUREMENT_LOG_FILE > $ANALYSIS_PIPE) \
-| ./trigger.py | ./mapper.py > $WAVEFORM_PIPE &
+    | ./scaler.py \
+        | tee >(./analyser.py | tee $MEASUREMENT_LOG_FILE > $ANALYSIS_PIPE) \
+            | ./trigger.py \
+                | ./mapper.py \
+                    > $WAVEFORM_PIPE &
 
 ./hellebores.py $WAVEFORM_PIPE $ANALYSIS_PIPE
-
-# The program finished. NB Programs in the data pipeline all
-# terminate when the pipeline is broken
-echo "Finished processing."
 
 # Capture the exit code from hellebores.py
 # We'll check it's status shortly
 exit_code=$?
 
+echo "Finished processing."
+
 # Restore stderr file descriptor 2 from saved state on 4
 exec 2>&4 4>&-
 
-# Now check the exit code from hellebores.py
+# Now check the exit code
 # 2: Restart
 if [[ $exit_code -eq 2 ]]; then
     # Flush serial interface

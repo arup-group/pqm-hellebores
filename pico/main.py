@@ -91,10 +91,13 @@ def setup_adc(spi, cs, reset, adc_settings):
     # XXXXXXXX XXXX---- --------
     # channel ->   3332 22111000
     G = { '32x':0b101, '16x':0b100, '8x':0b011, '4x':0b010, '2x':0b001, '1x':0b000 } 
-    gain_bits = (G[adc_settings[gains[3]]] << 9)
-                + (G[adc_settings[gains[2]]] << 6)
-                + (G[adc_settings[gains[1]]] << 3)
-                + G[adc_settings[gains[0]]] 
+    try:
+        gain_bits = (G[adc_settings[gains[3]]] << 9)
+                    + (G[adc_settings[gains[2]]] << 6)
+                    + (G[adc_settings[gains[1]]] << 3)
+                    + G[adc_settings[gains[0]]] 
+    except KeyError:
+        gain_bits = (G['1x'] << 9) + (G['1x'] << 6) + (G['1x']) << 3) + G['1x']
     bs = [0x00, gain_bits >> 8, gain_bits & 0b11111111]
     if DEBUG:
         print('Setting gain register at 0b to 0x{:02x} 0x{:02x} 0x{:02x}'.format(*bs))
@@ -121,9 +124,12 @@ def setup_adc(spi, cs, reset, adc_settings):
     # 0xe0 = 4096:   244 Sa/s
     # 3rd byte sets temperature coefficient (leave as default 0x50)
     osr_table = { '244':0xe0, '488':0xc0, '976':0xa0, '1.953k':0x80, '3.906k':0x60, '7.812k':0x40, '15.625k':0x20, '31.250k':0x00 }
-    bs = [0x24, osr_table[adc_settings[sample_rate]], 0x50]
+    try:
+        bs = [0x24, osr_table[adc_settings[sample_rate]], 0x50]
+    except KeyError:
+        bs = [0x24, osr_table['7.812k'], 0x50]
     if DEBUG:
-        bs[1] = osr_table['976']    # SLOW DOWN sampling rate for debug mode
+        bs = [0x24, osr_table['976'], 0x50]   # SLOW DOWN sampling rate for debug mode
         print('Setting configuration register CONFIG0 at 0d to 0x{:02x} 0x{:02x} 0x{:02x}'.format(*bs))
         time.sleep(1)
     set_and_verify_adc_register(spi, cs, 0x0d, bytes(bs))
@@ -156,7 +162,6 @@ def configure_interrupts():
 
 
 def configure_buffer_memory():
-    global mv_acq
     # Make an array of memoryview objects that point into an acquire_buffer.
     # this makes it possible to access slices of the buffer without creating new objects
     # or allocating new memory when the main loop is running. In turn this allows us 
@@ -169,7 +174,7 @@ def configure_buffer_memory():
     mv_cells = []
     for i in range(0, BUFFER_SIZE):
         mv_cells.append(memoryview(mv_acq[i*8 : i*8+8]))
-    return mv_cells
+    return (mv_acq, mv_cells)
 
 
 def start_adc():
@@ -238,7 +243,7 @@ def streaming_loop_core_0(mv_cells):
 # This allows the print operation to synchronise to what is happening on Core 0,
 # so that it only tries to print the portion of buffer that is not currently 
 # being overwritten.
-def streaming_loop_core_1():
+def streaming_loop_core_1(mv_acq):
     # Create memoryview objects that point to each half of the buffer.
     # This avoids having to make a copy of a portion of the buffer every
     # time we print, which would waste time and leak memory that would need GC.
@@ -274,7 +279,7 @@ def main():
         print('Waiting for 10 seconds...')
     time.sleep(10)
 
-    mv_cells = configure_buffer_memory()
+    mv_acq, mv_cells = configure_buffer_memory()
     configure_interrupts()
  
     adc_settings = { gains: ['1x', '1x', '1x', '1x'], sample_rate: '7.812k' } 
@@ -289,7 +294,7 @@ def main():
             # Both 'streaming loops' will continue until mode variable
             # changes value. Core 1 watches for print_flag to change value
             # and will print half buffer to serial output each time
-            _thread.start_new_thread(streaming_loop_core_1, ())
+            _thread.start_new_thread(streaming_loop_core_1, (mv_acq))
             # Core 0 acquires the samples and flips print_flag when required
             streaming_loop_core_0(mv_cells)
             gc.enable()

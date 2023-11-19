@@ -267,6 +267,7 @@ def streaming_loop_core_1(mv_acq):
 
 def process_command():
     adc_settings = { gains: ['1x', '1x', '1x', '1x'], sample_rate: '7.812k' } 
+    time.sleep(0.2)
     return adc_settings
 
 
@@ -285,6 +286,7 @@ def main():
     adc_settings = { gains: ['1x', '1x', '1x', '1x'], sample_rate: '7.812k' } 
     in_ptr = 0               # buffer cell pointer (for DR* interrupt service routine)
     print_flag = 0           # flag to indicate which chunk of the buffer to print
+    mode = STREAMING
 
     while mode != QUIT:
         if mode == STREAMING: 
@@ -308,7 +310,6 @@ def main():
 # Run from here
 if __name__ == '__main__':
     try:
-        mode = STREAMING
         main()
     except:
         if DEBUG:

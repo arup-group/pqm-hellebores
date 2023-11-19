@@ -58,7 +58,7 @@ echo "Working directory    : $PROGRAM_DIR"
 echo "Temporary files      : $TEMP_DIR"
 echo "Version              : $VERSION"
 echo "MD5 checksum         : $MD5SUM"
-echo "Measurement data     : $READER"
+echo "Measurement source   : $READER"
 
 # Start the data pipeline, output feeding the two named pipes
 # Clear old log file
@@ -75,9 +75,7 @@ echo "Starting processing..."
 $READER \
     | ./scaler.py \
         | tee >(./analyser.py | tee $MEASUREMENT_LOG_FILE > $ANALYSIS_PIPE) \
-            | ./trigger.py \
-                | ./mapper.py \
-                    > $WAVEFORM_PIPE &
+            | ./trigger.py | ./mapper.py > $WAVEFORM_PIPE &
 
 ./hellebores.py $WAVEFORM_PIPE $ANALYSIS_PIPE
 
@@ -95,7 +93,7 @@ exec 2>&4 4>&-
 if [[ $exit_code -eq 2 ]]; then
     # Flush serial interface
     # open the serial port for reading on a new file descriptor,
-    # drain of data, and then close
+    # drain the data waiting in it, and then close
     if $have_pico; then
         exec 5</dev/ttyACM0
         while read -t 0 -u 5 discard; do echo "Flushing serial port..."; done

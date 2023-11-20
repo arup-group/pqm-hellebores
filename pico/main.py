@@ -26,65 +26,67 @@ PAGE2_END            = const(BUFFER_SIZE * 8)       # bytearray index to end of 
 
 
 # pin setup
-pico_led     = machine.Pin(25, Pin.OUT)    # the led on the Pico
-buffer_led   = machine.Pin(15, Pin.OUT)    # the 'buffer' LED on the PCB
-cs_adc       = machine.Pin(1, Pin.OUT)     # chip select pin of the ADC
-sck_adc      = machine.Pin(2, Pin.OUT)     # serial clock for the SPI interface
-sdi_adc      = machine.Pin(3, Pin.OUT)     # serial input to ADC from Pico
-sdo_adc      = machine.Pin(0, Pin.IN)      # serial output from ADC to Pico
-reset_adc    = machine.Pin(5, Pin.OUT)     # hardware reset of ADC commanded from Pico (active low)
-dr_adc       = machine.Pin(4, Pin.IN)      # data ready from ADC to Pico (active low)
-reset_me     = machine.Pin(14, Pin.IN)     # hardware reset of Pico (active low, implemented with interrupt handler)
-mode_select  = machine.Pin(26, Pin.IN)     # switch between streaming (LOW) and command mode (HIGH)
-
-# SPI setup
-spi_adc = machine.SPI(0,
-                  baudrate   = SPI_CLOCK_RATE,
-                  polarity   = 0,
-                  phase      = 0,
-                  bits       = 8,
-                  firstbit   = machine.SPI.MSB,
-                  sck        = sck_adc,
-                  mosi       = sdi_adc,
-                  miso       = sdo_adc)
+pico_led_pin     = machine.Pin(25, Pin.OUT)    # the led on the Pico
+buffer_led_pin   = machine.Pin(15, Pin.OUT)    # the 'buffer' LED on the PCB
+cs_adc_pin       = machine.Pin(1, Pin.OUT)     # chip select pin of the ADC
+sck_adc_pin      = machine.Pin(2, Pin.OUT)     # serial clock for the SPI interface
+sdi_adc_pin      = machine.Pin(3, Pin.OUT)     # serial input to ADC from Pico
+ado_adc_pin      = machine.Pin(0, Pin.IN)      # serial output from ADC to Pico
+reset_adc_pin    = machine.Pin(5, Pin.OUT)     # hardware reset of ADC commanded from Pico (active low)
+dr_adc_pin       = machine.Pin(4, Pin.IN)      # data ready from ADC to Pico (active low)
+reset_me_pin     = machine.Pin(14, Pin.IN)     # hardware reset of Pico (active low, implemented with interrupt handler)
+mode_select_pin  = machine.Pin(26, Pin.IN)     # switch between streaming (LOW) and command mode (HIGH)
 
 
-def write_bytes(spi, cs, addr, bs):
-    cs.value(0)
-    spi.write(bytes([addr & 0b11111110]) + bs) # for writing, make sure lowest bit is cleared
-    cs.value(1)
+def configure_adc_spi_interface(sck_adc_pin, sdi_adc_pin, ado_adc_pin):
+    spi_adc_interface = machine.SPI(0,
+                        baudrate   = SPI_CLOCK_RATE,
+                        polarity   = 0,
+                        phase      = 0,
+                        bits       = 8,
+                        firstbit   = machine.SPI.MSB,
+                        sck        = sck_adc_pin,
+                        mosi       = sdi_adc_pin,
+                        miso       = ado_adc_pin)
+    return spi_adc_interface
+
+
+def write_bytes(spi_adc_interface, cs_adc_pin, addr, bs):
+    cs_adc_pin.value(0)
+    spi_adc_interface.write(bytes([addr & 0b11111110]) + bs) # for writing, make sure lowest bit is cleared
+    cs_adc_pin.value(1)
         
-def read_bytes(spi, cs, addr, n):
-    cs.value(0)
-    spi.write(bytes([addr | 0b00000001])) # for reading, make sure lowest bit is set
-    obs = spi.read(n)
-    cs.value(1)
+def read_bytes(spi_adc_interface, cs_adc_pin, addr, n):
+    cs_adc_pin.value(0)
+    spi_adc_interface.write(bytes([addr | 0b00000001])) # for reading, make sure lowest bit is set
+    obs = spi_adc_interface.read(n)
+    cs_adc_pin.value(1)
     return obs
 
 
-def set_and_verify_adc_register(spi, cs, reg, bs):
+def set_and_verify_adc_register(spi_adc_interface, cs_adc_pin, reg, bs):
     # The actual address byte leads with binary 01 and ends with the read/write bit (1 or 0).
     # The five bits in the middle are the 'register' address inside the ADC
     addr = 0x40 | (reg << 1)
-    write_bytes(spi, cs, addr, bs)
-    obs = read_bytes(spi, cs, addr, len(bs))
+    write_bytes(spi_adc_interface, cs_adc_pin, addr, bs)
+    obs = read_bytes(spi_adc_interface, cs_adc_pin, addr, len(bs))
     if DEBUG:
         print("Verify: " + " ".join(hex(b) for b in obs))
     
 
-def reset_adc_ic(reset_adc):
-    reset_adc.value(0)
+def reset_adc(reset_adc_pin):
+    reset_adc_pin.value(0)
     time.sleep(0.1)
-    reset_adc.value(1)
+    reset_adc_pin.value(1)
     time.sleep(0.1)
 
 
 # gains are in order of hardware channel: differential current, current 1, current 2, voltage
-def setup_adc(spi_adc, cs_adc, reset_adc, adc_settings):
+def setup_adc(spi_adc_interface, cs_adc_pin, reset_adc_pin, adc_settings):
     # Setup the MC3912 ADC
     # deselect the ADC
-    cs_adc.value(1)
-    reset_adc_ic(reset_adc)
+    cs_adc_pin.value(1)
+    reset_adc(reset_adc_pin)
     
     # Set the gain configuration register 0x0b
     # 3 bits per channel (12 LSB in all)
@@ -102,14 +104,14 @@ def setup_adc(spi_adc, cs_adc, reset_adc, adc_settings):
     if DEBUG:
         print('Setting gain register at 0b to 0x{:02x} 0x{:02x} 0x{:02x}'.format(*bs))
         time.sleep(1)
-    set_and_verify_adc_register(spi_adc, cs_adc, 0x0b, bytes(bs))
+    set_and_verify_adc_register(spi_adc_interface, cs_adc_pin, 0x0b, bytes(bs))
     
     # Set the status and communication register 0x0c
     bs = [0x88, 0x00, 0x0f]
     if DEBUG:
         print('Setting status and communication register STATUSCOM at 0c to 0x{:02x} 0x{:02x} 0x{:02x}'.format(*bs))
         time.sleep(1)
-    set_and_verify_adc_register(spi_adc, cs_adc, 0x0c, bytes(bs))
+    set_and_verify_adc_register(spi_adc_interface, cs_adc_pin, 0x0c, bytes(bs))
 
     # Set the configuration register CONFIG0 at 0x0d
     # 1st byte sets various ADC modes
@@ -132,23 +134,23 @@ def setup_adc(spi_adc, cs_adc, reset_adc, adc_settings):
         bs = [0x24, osr_table['976'], 0x50]   # SLOW DOWN sampling rate for debug mode
         print('Setting configuration register CONFIG0 at 0d to 0x{:02x} 0x{:02x} 0x{:02x}'.format(*bs))
         time.sleep(1)
-    set_and_verify_adc_register(spi_adc, cs_adc, 0x0d, bytes(bs))
+    set_and_verify_adc_register(spi_adc_interface, cs_adc_pin, 0x0d, bytes(bs))
 
     # Set the configuration register CONFIG1 at 0x0e
     bs = [0x00, 0x00, 0x00]
     if DEBUG:
         print('Setting configuration register CONFIG1 at 0e to 0x{:02x} 0x{:02x} 0x{:02x}'.format(*bs))
         time.sleep(1)
-    set_and_verify_adc_register(spi_adc, cs_adc, 0x0e, bytes(bs))
+    set_and_verify_adc_register(spi_adc_interface, cs_adc_pin, 0x0e, bytes(bs))
     
     
 # Interrupt handler for data ready pin (this pin is commanded from the ADC)
-def adc_read_handler(dr_adc):
-    global in_ptr
+def adc_read_handler(dr_adc_pin):
+    global cell_ptr
     # 'anding' the pointer with a bit mask that has binary '1' in the LSBs
     # makes the buffer pointer return to zero without needing an 'if' conditional
     # this means the instruction executes in constant time
-    in_ptr = (in_ptr + 1) & BUFFER_END_BIT_MASK
+    cell_ptr = (cell_ptr + 1) & BUFFER_END_BIT_MASK
  
   
 def set_mode(required_mode):
@@ -158,9 +160,9 @@ def set_mode(required_mode):
         print("Changed mode to " + mode)
 
 def configure_interrupts():
-    reset_me.irq(trigger = Pin.IRQ_FALLING, handler = lambda reset_me: machine.reset(), hard=True)
-    mode_select.irq(trigger = Pin.IRQ_FALLING, handler = lambda mode_select: set_mode(STREAMING), hard=False)
-    mode_select.irq(trigger = Pin.IRQ_RISING, handler = lambda mode_select: set_mode(COMMAND), hard=False)
+    reset_me_pin.irq(trigger = Pin.IRQ_FALLING, handler = lambda reset_me_pin: machine.reset(), hard=True)
+    mode_select_pin.irq(trigger = Pin.IRQ_FALLING, handler = lambda mode_select_pin: set_mode(STREAMING), hard=False)
+    mode_select_pin.irq(trigger = Pin.IRQ_RISING, handler = lambda mode_select_pin: set_mode(COMMAND), hard=False)
 
 
 def configure_buffer_memory():
@@ -180,53 +182,51 @@ def configure_buffer_memory():
         
 
 
-def start_adc():
+def start_adc(spi_adc_interface):
     if DEBUG:
         print('Starting the ADC...')
     # Bind the sampler handler to a falling edge transition on the DR pin
-    dr_adc.irq(trigger = Pin.IRQ_FALLING, handler = adc_read_handler, hard=True)
+    dr_adc_pin.irq(trigger = Pin.IRQ_FALLING, handler = adc_read_handler, hard=True)
     # Command ADC to repeatedly refresh ADC registers, by holding CS* low
     # Pico will successively read the SPI bus each time the DR* pin is activated
-    cs_adc.value(0)
-    spi_adc.write(bytes([0b01000001]))
+    cs_adc_pin.value(0)
+    spi_adc_interface.write(bytes([0b01000001]))
 
 def stop_adc():
     # Tell the ADC to stop sampling
     if DEBUG:
         print('Stopping the ADC...')
-    dr_adc.irq(handler=None)
-    cs_adc.value(1)
+    dr_adc_pin.irq(handler=None)
+    cs_adc_pin.value(1)
 
 
 def print_buffer(bs):
-    buffer_led.on()
+    buffer_led_pin.on()
     if DEBUG:
-        # write out the selected portion of buffer as hexadecimal text
-        sys.stdout.write(binascii.hexlify(bs))
         sys.stdout.write('\n')
         gc.collect()
     else:
         # write out the selected portion of buffer as bytes
         sys.stdout.buffer.write(bs)
-    buffer_led.off()
+    buffer_led_pin.off()
 
 ########################################################
 ######### STREAMING LOOP FOR CORE 0 STARTS HERE
 ########################################################
-def streaming_loop_core_0():
+def streaming_loop_core_0(spi_adc_interface):
     global print_flag
     # Local variable to help us detect when the ISR changes the value of
-    # the buffer index in_ptr
+    # the buffer index cell_ptr
     p = 0
-    start_adc()
+    start_adc(spi_adc_interface)
     while mode == STREAMING:
         # wait for the ISR to change the pointer value
-        while in_ptr == p:
+        while cell_ptr == p:
             continue
-        # in_ptr has changed value: immediately read the new data from ADC
-        spi_adc.readinto(mv_cells[in_ptr])
-        # in_ptr is volatile, so capture its value
-        p = in_ptr
+        # cell_ptr has changed value: immediately read the new data from ADC
+        spi_adc_interface.readinto(mv_cells[cell_ptr])
+        # cell_ptr is volatile, so capture its value
+        p = cell_ptr
         # see if we have reached a 'page boundary' in the buffer
         # if so, instruct Core 1 CPU to print it
         # 'anding' the pointer with a bit mask that has binary '1' in the MSB
@@ -274,7 +274,7 @@ def process_command():
 
 
 def main():
-    global mode, print_flag, in_ptr
+    global mode, print_flag, cell_ptr
 
     # Wait for 10 seconds, opportunity to return pico to REPL if it is crashing 
     if DEBUG:
@@ -283,14 +283,19 @@ def main():
     time.sleep(10)
 
     if DEBUG:
+        print('Configuring SPI interface to ADC.')
+    spi_adc_interface = configure_adc_spi_interface(sck_adc_pin, sdi_adc_pin, ado_adc_pin):
+
+    if DEBUG:
         print('Configuring buffer memory.')
     configure_buffer_memory()
+
     if DEBUG:
         print('Configuring interrupts.')
     configure_interrupts()
 
     adc_settings = { 'gains': ['1x', '1x', '1x', '1x'], 'sample_rate': '7.812k' }
-    in_ptr = 0               # buffer cell pointer (for DR* interrupt service routine)
+    cell_ptr = 0             # buffer cell pointer (for DR* interrupt service routine)
     print_flag = 0           # flag to indicate which chunk of the buffer to print
     mode = STREAMING
     
@@ -300,7 +305,7 @@ def main():
         if mode == STREAMING:
             if DEBUG:
                 print('Entering streaming mode...')
-            setup_adc(spi_adc, cs_adc, reset_adc, adc_settings)
+            setup_adc(spi_adc_interface, cs_adc_pin, reset_adc_pin, adc_settings)
             # we don't want GC pauses while streaming
             gc.disable()
             # Both 'streaming loops' will continue until mode variable
@@ -308,7 +313,7 @@ def main():
             # and will print half buffer to serial output each time
             _thread.start_new_thread(streaming_loop_core_1, ())
             # Core 0 acquires the samples and flips print_flag when required
-            streaming_loop_core_0()
+            streaming_loop_core_0(spi_adc_interface)
             gc.enable()
 
         elif mode == COMMAND:

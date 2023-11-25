@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Find Me
+Terminal=false
+Exec=/home/pi/autorun.sh
+

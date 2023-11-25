@@ -17,11 +17,12 @@ if [ "$_IP" ]; then
   printf "My IP address is %s\n" "$_IP"
 fi
 
-# Run script on /boot/pifinder, if it exists
-if [ -f "/boot/pifinder" ]; then
-  /bin/sh /boot/pifinder &
+# Run autorun script if it exists
+if [ -f "/home/pi/autorun.sh" ]; then
+  /bin/bash /home/pi/autorun.sh 
 fi
 
 exit 0
+
 
 

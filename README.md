@@ -15,6 +15,17 @@ Minimum hardware requirement is Raspberry Pi 3B+. Non-plus models do not have su
 Use Thonny on your desktop or laptop computer to install MicroPython and verify that you have local REPL access to the microcontroller via USB.
 
 ## Installation
+**Raspberry PI SD card**
+Prepare the SD card using Raspberry Pi Imager.
+Enable the option for remote SSH access.
+Set the wifi SSID and password to be used for initial access.
+Copy the files from ./pi-setup to the boot partition of the SD card.
+Edit the firstrun.sh script in the boot partition to copy the files as follows:
+This will enable the pi to report it's IP address for remote access on
+first boot.
+ cp /boot/autorun.sh /home/pi/autorun.sh
+ cp /boot/find-me.desktop /home/pi/.config/autostart
+
 **Pico**  
 Using Thonny, open `./pico/main.py` and save it to the root folder of the microcontroller.
 

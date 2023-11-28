@@ -9,7 +9,7 @@ import time
 import glob
 
 SETTINGS_FILE = 'settings.json'        # NB settings file is later cached in /tmp
-IDENTITIES_FILE = 'identities.json'
+IDENTITY_FILE = 'identity'
 CALIBRATIONS_FILE = 'calibrations.json'
 
 
@@ -28,12 +28,11 @@ class Settings():
 
     def get_identity(self, mac):
         try:
-            with open(IDENTITIES_FILE, 'r') as f:
-                js = json.loads(f.read())
-                identity = js[mac]
+            with open(IDENTITY_FILE, 'r') as f:
+                identity = f.read().rstrip()
         except:
             print('settings.py: using default identity', file=sys.stderr)
-            identity = 'PQM-9999'
+            identity = 'PQM-0'
         return identity
 
     def get_calibration(self, identity):

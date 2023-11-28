@@ -11,6 +11,7 @@ export MD5SUM=$(cat go.sh rain_bucket.py reader.py scaler.py trigger.py mapper.p
                 hellebores.py hellebores_constants.py hellebores_waveform.py \
                 hellebores_multimeter.py ../pico/spi-dual-core.py | md5sum | cut -d ' ' -f 1)
 export VERSION=$(cat ../VERSION)
+export GIT_HEAD=$(git rev-parse HEAD)
 
 # TEMP_DIR: settings.json, error.log and named pipes will be stored here
 # /run/shm is preferred, because it is mounted as RAM disk
@@ -57,6 +58,7 @@ fi
 echo "Working directory    : $PROGRAM_DIR"
 echo "Temporary files      : $TEMP_DIR"
 echo "Version              : $VERSION"
+echo "Git HEAD             : $GIT_HEAD"
 echo "MD5 checksum         : $MD5SUM"
 echo "Measurement source   : $READER"
 

@@ -15,18 +15,7 @@ CALIBRATIONS_FILE = 'calibrations.json'
 
 class Settings():
 
-    def get_mac_address(self):
-        try:
-            # note, we search for the mac address of the first wireless network
-            # interface (which begins with 'w').
-            with open(glob.glob('/sys/class/net/w*/address')[0], 'r') as f:
-                mac = f.readline().strip()
-        except:
-            print('settings.py: using default MAC address', file=sys.stderr)
-            mac = '00:00:00:00:00:00'
-        return mac
-
-    def get_identity(self, mac):
+    def get_identity(self):
         try:
             with open(IDENTITY_FILE, 'r') as f:
                 identity = f.read().rstrip()
@@ -204,8 +193,7 @@ class Settings():
 
     def __init__(self, callback_fn = lambda: None, other_programs=[]):
         # establish MAC address, identity and calibration factors
-        self.mac = self.get_mac_address()
-        self.identity = self.get_identity(self.mac)
+        self.identity = self.get_identity()
         self.cal = self.get_calibration(self.identity)
 
         # load initial settings

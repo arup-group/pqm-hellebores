@@ -56,11 +56,11 @@ class UI_groups:
 
         # waveform group
         self.instruments['waveform'] = waveform
-        self.elements['waveform'] = waveform.waveform_controls
+        self.elements['waveform'] = [ waveform.waveform_controls ]
 
         # multi-meter group
         self.instruments['multimeter'] = multimeter
-        self.elements['multimeter'] = multimeter.multimeter_controls
+        self.elements['multimeter'] = [ multimeter.multimeter_controls, multimeter.multimeter_readings ]
 
         # voltage harmonic group
 
@@ -93,21 +93,21 @@ class UI_groups:
             # if we picked a different display mode, store it in 'self.mode'.
             self.mode = elements_group
             selected_elements = [ 
-                self.elements[self.mode],
+                *self.elements[self.mode],
                 self.elements['datetime']
                 ]
             self.app_actions.post_clear_screen_event()
         elif elements_group == 'back':
             # if we picked 'back', then just use the pre-existing mode
             selected_elements = [
-                self.elements[self.mode],
+                *self.elements[self.mode],
                 self.elements['datetime']
                 ]
         else:
             # otherwise, use the pre-existing mode and add the selected overlay
             # elements to it.
             selected_elements = [
-                self.elements[self.mode],
+                *self.elements[self.mode],
                 self.elements[elements_group],
                 self.elements['datetime']
                 ]

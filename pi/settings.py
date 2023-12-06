@@ -12,6 +12,11 @@ SETTINGS_FILE = 'settings.json'        # NB settings file is later cached in /tm
 IDENTITY_FILE = 'identity'
 CALIBRATIONS_FILE = 'calibrations.json'
 
+if os.name == 'nt':
+    UPDATE_SIGNAL = signal.SIGILL
+else:
+    UPDATE_SIGNAL = signal.SIGUSR1
+
 
 class Settings():
 
@@ -170,7 +175,7 @@ class Settings():
         self.set_derived_settings()
         self.save_settings()
         for pid in self.pids:
-            os.kill(pid, signal.SIGUSR1)
+            os.kill(pid, UPDATE_SIGNAL)
  
 
     def get_program_pids(self, other_programs):
@@ -204,24 +209,18 @@ class Settings():
         # every time a signal is received just after settings have been updated
         self.callback_fn = callback_fn
 
-        # if we receive 'SIGUSR1' signal (on linux/unix) set things up so that updated settings will
+        # if we receive 'UPDATE_SIGNAL' signal set things up so that updated settings will
         # be read from settings.json via the signal_handler function
-        if os.name == 'posix':
-            # for faster update performance, and to reduce SD card wear, if TEMP_DIR is set to RAM disk,
-            # we'll save updates to the settings.json file there.
-            temp_dir = os.getenv('TEMP_DIR')
-            if temp_dir:
-                self.sfile = f'{temp_dir}/{self.sfile}'
-                self.save_settings()
-            self.pids = self.get_program_pids(other_programs)
-            # link to the send_to_all function and set up a signal handler
-            self.send_to_all = self._send_to_all
-            signal.signal(signal.SIGUSR1, self.signal_handler)
-        else: 
-            self.send_to_all = \
-                lambda: print(
-                    f"settings.py: send_to_all() function hasn't been implemented on {sys.platform}.",
-                    file=sys.stderr)
+        # for faster update performance, and to reduce SD card wear, if TEMP_DIR is set to RAM disk,
+        # we'll save updates to the settings.json file there.
+        temp_dir = os.getenv('TEMP_DIR')
+        if temp_dir:
+            self.sfile = f'{temp_dir}/{self.sfile}'
+            self.save_settings()
+        self.pids = self.get_program_pids(other_programs)
+        # link to the send_to_all function and set up a signal handler
+        self.send_to_all = self._send_to_all
+        signal.signal(UPDATE_SIGNAL, self.signal_handler)
 
 
 default_settings = '''

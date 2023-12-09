@@ -32,3 +32,19 @@ sudo raspi-config
 hexdump /dev/input/event0
 evtest
 
+
+
+Powershell commands to set up a named pipe on windows:
+
+
+$pipe = new-object system.io.pipes.namedpipeserverstream("waveform")
+$pipe.waitforconnection()
+$sr = new-object system.io.streamreader($pipe)
+
+while ($true) { write-output $sr.readline().tostring() }
+
+output redirection from another process is possible, but only after the pipe is created (above):
+
+> \\.\pipe\waveform
+
+

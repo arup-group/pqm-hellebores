@@ -1,6 +1,9 @@
 # install the pywin32 package via pip
 import time
 import sys
+import win32pipe
+import win32file
+
 
 def pipe_server():
     print("pipe server")

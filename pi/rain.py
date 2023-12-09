@@ -7,7 +7,7 @@ import sys
 import signal
 import settings
 
-
+FREQUENCY=50.2
 
 def get_sample(i, t, f):
     t = t/1000.0       # seconds
@@ -31,7 +31,7 @@ def main():
         tn = int(time.time()*1000.0/st.interval)
         if tn != tp:
             tp = tn
-            t, c0, c1, c2, c3 = get_sample(i, i*st.interval, st.frequency)
+            t, c0, c1, c2, c3 = get_sample(i, i*st.interval, FREQUENCY)
             print(f'{t :04x} {c0 :04x} {c1 :04x} {c2 :04x} {c3 :04x}')
             i = i + 1
 

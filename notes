@@ -47,4 +47,7 @@ output redirection from another process is possible, but only after the pipe is 
 
 > \\.\pipe\waveform
 
+Start a command shell without showing a command window
+start /b *command*
+
 

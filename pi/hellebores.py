@@ -20,19 +20,16 @@ from hellebores_constants import *
 from hellebores_controls import *
 from hellebores_waveform import Waveform
 from hellebores_multimeter import Multimeter
+if os.name == 'nt':
+    import win_pipes
 
 
 # More UI is needed for the following:
 #
 # Measurements-1 (summary)
 # Measurements-2 (harmonics)
-# Wifi setting USE DEFAULT UI AND BLUETOOTH OR ONSCREEN KEYBOARD
-# Shell prompt USE DEFAULT UI
-# Software update DONE
 # rollback NOT IMPLEMENTED
-# Raspberry Pi OS update USE DEFAULT UI PROMPT
 # About (including software version, kernel version, uuid of Pi and Pico)
-# Exit to desktop DONE
 
 # The instance of this class will hold all the user interface states or 'groups'
 # that can be displayed together with the currently active selection
@@ -158,18 +155,20 @@ def get_screen_hardware_size():
     return i.current_w, i.current_h
 
 
-# the version of is_data_available that we will use is determined
+# the version of is_data_available(f, t) that we will use is determined
 # once at runtime
 if os.name == 'posix':
     # f is file object to test for reading, t is time in seconds
     # wait at most 't' seconds for new data to appear
     # element 0 of tuple will be an empty list unless there is data ready to read
     is_data_available = lambda f, t: select.select( [f], [], [], t)[0] != []
+elif os.name == 'nt':
+    # simulated functionality for windows, which lacks the 'select' function 
+    is_data_available = lambda f, t: win_pipes.is_data_available(f, t)
 else:
-    # unfortunately this test isn't easy to implement on windows
-    # so we return a default 'True' response
-    is_data_available = lambda f, t: True
- 
+    # other scenarios, this is unlikely to work
+    is_data_available = lambda f, t: True 
+
 
 class Sample_Buffer:
 
@@ -199,7 +198,10 @@ class Sample_Buffer:
     def load_analysis(self, f, capturing):
         while is_data_available(f, 0.0):
             try:
-                cs = f.readline().split()
+                if os.name == 'nt':
+                    cs = win_pipes.read_from_pipe(f).split()
+                else:
+                    cs = f.readline().split()
                 print(cs)
             except:
                 print('hellebores.py: Sample_Buffer.load_analysis()'
@@ -217,7 +219,10 @@ class Sample_Buffer:
         sample_counter = 0
         while is_data_available(f, 0.05) and sample_counter < 1000: 
             try:
-                ws = f.readline().split()
+                if os.name == 'nt':
+                    ws = win_pipes.read_from_pipe(f).split()
+                else:
+                    ws = f.readline().split()
                 sample = [ int(w) for w in ws[:5] ]
                 if ws[-1] == '*END*':
                     # add current sample then end the frame
@@ -308,8 +313,14 @@ def main():
 
     # open the input stream fifos
     try:
-        waveform_stream = open(sys.argv[1], 'r') 
-        analysis_stream = open(sys.argv[2], 'r')
+        if os.name == 'nt':
+            # Windows
+            waveform_stream = win_pipes.open_pipe_for_input(sys.argv[1])
+            analysis_stream = win_pipes.open_pipe_for_input(sys.argv[2])
+        else:
+            # Pi, Ubuntu, WSL etc
+            waveform_stream = open(sys.argv[1], 'r') 
+            analysis_stream = open(sys.argv[2], 'r')
     except:
         print("hellebores.py: main() Couldn't open the input streams", file=sys.stderr)
         sys.exit(1)
@@ -360,7 +371,7 @@ def main():
         # pipeline flowing. If the read rate doesn't keep up with the pipe, then we will see 
         # artifacts on screen. Check if the BUFFER led on PCB is stalling if performance
         # problems are suspected here.
-        # The load_buffer() function also implicitly manages display refresh speed when not
+        # The load_waveform() function also implicitly manages display refresh speed when not
         # capturing, by waiting for a definite time for new data.
         got_new_frame = buffer.load_waveform(waveform_stream, app_actions.capturing, wfs)
         got_new_analysis = buffer.load_analysis(analysis_stream, app_actions.capturing)

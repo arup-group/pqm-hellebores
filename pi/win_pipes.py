@@ -53,6 +53,16 @@ def write_to_pipe(line, pipe):
     win32file.WriteFile(pipe, str.encode(line))
 
 
+def is_data_available(pipe, t):
+    t0 = time.time()
+    while True:
+        _, n, _ = win32pipe.PeekNamedPipe(pipe, 0)
+        if n > 0:
+            return True
+        if time.time() - t0 > t:
+            return False
+
+
 def main():
     command = sys.argv[1]
     if command == 'read':

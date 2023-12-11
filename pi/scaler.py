@@ -42,17 +42,18 @@ def main():
             leakage_current = ((from_twos_complement(cs[0]) + st.adc_offset_trim_c0)
                                * st.scale_c0
                                * st.adc_gain_trim_c0)
+            print(
+                f'{t :12.4f} '
+                f'{voltage :10.3f} '
+                f'{current :10.5f} '
+                f'{power :10.3f} '
+                f'{leakage_current :12.7f}')
+            i = i + 1
+
         except ValueError:
             print(
                 f'scaler.py, main(): Failed to read {line}.',
                 file=sys.stderr)
-        print(
-            f'{t :12.4f} '
-            f'{voltage :10.3f} '
-            f'{current :10.5f} '
-            f'{power :10.3f} '
-            f'{leakage_current :12.7f}')
-        i = i + 1
 
 
 if __name__ == '__main__':

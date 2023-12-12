@@ -7,7 +7,7 @@ import sys
 if os.name == 'posix':
     os.system("pkill --signal=SIGUSR1 -f 'python3 \./.*\.py'")
 else:
-    print(f"This doesn't work on {sys.platform}", file=sys.stderr)
+    print(f"This doesn't work on {os.name}", file=sys.stderr)
 
 
     

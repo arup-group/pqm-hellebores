@@ -21,7 +21,7 @@ from hellebores_controls import *
 from hellebores_waveform import Waveform
 from hellebores_multimeter import Multimeter
 if os.name == 'nt':
-    import win_pipes
+    import mswin_pipes
 
 
 # More UI is needed for the following:
@@ -164,7 +164,7 @@ if os.name == 'posix':
     is_data_available = lambda f, t: select.select( [f], [], [], t)[0] != []
 elif os.name == 'nt':
     # simulated functionality for windows, which lacks the 'select' function 
-    is_data_available = lambda f, t: win_pipes.is_data_available(f, t)
+    is_data_available = lambda f, t: mswin_pipes.is_data_available(f, t)
 else:
     # other scenarios, this is unlikely to work
     is_data_available = lambda f, t: True 
@@ -199,7 +199,7 @@ class Sample_Buffer:
         while is_data_available(f, 0.0):
             try:
                 if os.name == 'nt':
-                    cs = win_pipes.read_from_pipe(f).split()
+                    cs = mswin_pipes.read_from_pipe(f).split()
                 else:
                     cs = f.readline().split()
                 print(cs)
@@ -220,7 +220,7 @@ class Sample_Buffer:
         while is_data_available(f, 0.05) and sample_counter < 1000: 
             try:
                 if os.name == 'nt':
-                    ws = win_pipes.read_from_pipe(f).split()
+                    ws = mswin_pipes.read_from_pipe(f).split()
                 else:
                     ws = f.readline().split()
                 sample = [ int(w) for w in ws[:5] ]
@@ -258,12 +258,43 @@ class Sample_Buffer:
 
 class App_Actions:
 
-    def __init__(self, waveform_stream, analysis_stream):
-        self.streams = (waveform_stream, analysis_stream)
+    def __init__(self, waveform_stream_name, analysis_stream_name):
+        # open the streams (input data pipe files)
+        self.open_streams(waveform_stream_name, analysis_stream_name)
         # allow/stop update of the lines on the screen
         self.capturing = True
         # create a custom pygame event, which we'll use for clearing the screen
         self.clear_screen_event = pygame.event.custom_type()
+
+    def open_streams(self, waveform_stream_name, analysis_stream_name):
+        # open the input stream fifos
+        try:
+            if os.name == 'nt':
+                # Windows
+                self.waveform_stream = mswin_pipes.open_pipe_for_input(sys.argv[1])
+                self.analysis_stream = mswin_pipes.open_pipe_for_input(sys.argv[2])
+            else:
+                # Pi, Ubuntu, WSL etc
+                self.waveform_stream = open(sys.argv[1], 'r') 
+                self.analysis_stream = open(sys.argv[2], 'r')
+        except:
+            print(f"{sys.argv[0]}: App_Actions.open_streams() couldn't open the input streams "
+                  f"{waveform_stream_name} and {analysis_stream_name}", file=sys.stderr)
+            self.exit_application('error')
+
+    def close_streams(self):
+        try:
+            if os.name == 'nt':
+                # Windows
+                mswin_pipes.close_pipe(self.waveform_stream)
+                mswin_pipes.close_pipe(self.analysis_stream)
+            else:
+                # Pi, Ubuntu, WSL etc
+                self.waveform_stream.close()
+                self.analysis_stream.close() 
+        except:
+            print(f"{sys.argv[0]}: App_Actions.close_streams() couldn't close the input streams", file=sys.stderr)
+
 
     def post_clear_screen_event(self):
         status = pygame.event.post(pygame.event.Event(self.clear_screen_event, {}))
@@ -278,19 +309,29 @@ class App_Actions:
               'should be substituted prior to calling it.', file=sys.stderr)
 
     def exit_application(self, option='quit'):
-        exit_codes = { 'quit': 0, 'restart': 2, 'software_update': 3, 'shutdown': 4 }
+        exit_codes = { 'quit': 0, 'error': 1, 'restart': 2, 'software_update': 3, 'shutdown': 4 }
         try:
             code = exit_codes[option]
         except:
             print(f"hellebores.py: App_Actions.exit_application() exit option '{option}'"
                    " isn't implemented, exiting with error code 1.", file=sys.stderr)
             code = 1
-        self.streams[0].close()
-        self.streams[1].close() 
+        finally:
+            self.close_streams()
+
         pygame.quit()
         sys.exit(code)
 
+
+
 def main():
+    # set stream files
+    if len(sys.argv) == 3:
+        waveform_stream_name = sys.argv[1]
+        analysis_stream_name = sys.argv[2]
+    else:
+        print(f"Usage: {sys.argv[0]} waveform_stream_name analysis_stream_name.", file=sys.stderr)
+        sys.exit(1)
 
     # initialise pygame
     pygame.init()
@@ -311,29 +352,13 @@ def main():
     thorpy.set_default_font(FONT, FONT_SIZE)
     thorpy.init(screen, thorpy.theme_simple)
 
-    # open the input stream fifos
-    try:
-        if os.name == 'nt':
-            # Windows
-            waveform_stream = win_pipes.open_pipe_for_input(sys.argv[1])
-            analysis_stream = win_pipes.open_pipe_for_input(sys.argv[2])
-        else:
-            # Pi, Ubuntu, WSL etc
-            waveform_stream = open(sys.argv[1], 'r') 
-            analysis_stream = open(sys.argv[2], 'r')
-    except:
-        print("hellebores.py: main() Couldn't open the input streams", file=sys.stderr)
-        sys.exit(1)
-
     # load configuration settings from settings.json into a settings object 'st'.
     # the list of 'other programs' is used to send signals when we change
     # settings in this program. We call st.send_to_all() and then
     # these programs are each told to re-read the settings file.
-    # NB it's important that the programs are running and the stream files are 
-    # open before instantiating here, hence short pause:
-    time.sleep(1)
     st = settings.Settings(
         other_programs = [
+            'rain_bucket.py',
             'rain.py',
             'reader.py',
             'scaler.py',
@@ -341,8 +366,8 @@ def main():
             'mapper.py'
             ])
 
-    # create objects that hold the state of the UI
-    app_actions  = App_Actions(waveform_stream, analysis_stream)
+    # create objects that hold the state of the application and UI
+    app_actions  = App_Actions(waveform_stream_name, analysis_stream_name)
     wfs          = WFS_Counter()
     waveform     = Waveform(st, wfs, app_actions)
     multimeter   = Multimeter(st, app_actions)
@@ -373,8 +398,8 @@ def main():
         # problems are suspected here.
         # The load_waveform() function also implicitly manages display refresh speed when not
         # capturing, by waiting for a definite time for new data.
-        got_new_frame = buffer.load_waveform(waveform_stream, app_actions.capturing, wfs)
-        got_new_analysis = buffer.load_analysis(analysis_stream, app_actions.capturing)
+        got_new_frame = buffer.load_waveform(app_actions.waveform_stream, app_actions.capturing, wfs)
+        got_new_analysis = buffer.load_analysis(app_actions.analysis_stream, app_actions.capturing)
  
         # we don't use the event handler to schedule plotting updates, because it is not
         # efficient enough for high frame rates. Instead we plot explicitly when needed, every

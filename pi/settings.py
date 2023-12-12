@@ -13,10 +13,10 @@ IDENTITY_FILE = 'identity'
 CALIBRATIONS_FILE = 'calibrations.json'
 
 if os.name == 'nt':
+    # user defined signals aren't available on windows
     UPDATE_SIGNAL = signal.SIGILL
 else:
     UPDATE_SIGNAL = signal.SIGUSR1
-
 
 class Settings():
 
@@ -165,6 +165,7 @@ class Settings():
 
 
     def signal_handler(self, signum, frame):
+        print(f"{sys.argv[0]} received a signal.", file=sys.stderr)
         self.set_settings(self.load_settings(), self.cal)
         self.callback_fn()
 
@@ -172,6 +173,7 @@ class Settings():
     # The send_to_all function allows one program (hellebores.py) to inform all the others that settings
     # have been changed. When they receive this signal, they will re-load the settings from file.
     def _send_to_all(self):
+        self.pids = self.get_program_pids(self.other_programs)
         self.set_derived_settings()
         self.save_settings()
         for pid in self.pids:
@@ -197,6 +199,8 @@ class Settings():
 
 
     def __init__(self, callback_fn = lambda: None, other_programs=[]):
+        self.other_programs = other_programs
+
         # establish MAC address, identity and calibration factors
         self.identity = self.get_identity()
         self.cal = self.get_calibration(self.identity)
@@ -217,7 +221,7 @@ class Settings():
         if temp_dir:
             self.sfile = f'{temp_dir}/{self.sfile}'
             self.save_settings()
-        self.pids = self.get_program_pids(other_programs)
+
         # link to the send_to_all function and set up a signal handler
         self.send_to_all = self._send_to_all
         signal.signal(UPDATE_SIGNAL, self.signal_handler)

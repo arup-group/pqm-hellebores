@@ -22,20 +22,20 @@ def main():
         sys.exit(1)
 
     # we use system clock to figure out when to print out the next sample
-    tp = int(time.time()*1000.0/st.interval)
+    samples_previous = int(time.time()*1000.0/st.interval)
     i=0
-    imax = len(rain_bucket) - 1
+    imax = len(rain_bucket) - 2
     while True:
         # check the clock and see if it has increased by at least one sample period
         # since we last printed out some samples
-        tn = int(time.time()*1000.0/st.interval)
-        samples = tn - tp
+        samples_now = int(time.time()*1000.0/st.interval)
+        new_samples = samples_now - samples_previous
         # if it has, print out more samples
-        while samples > 0:
+        while new_samples > 0:
             print(rain_bucket[i % imax])
             i = i + 1
-            samples = samples - 1
-        tp = tn
+            new_samples = new_samples - 1
+        samples_previous = samples_now
 
 if __name__ == '__main__':
     main()

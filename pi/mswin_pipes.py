@@ -9,11 +9,12 @@ import time
 import sys
 import win32pipe
 import win32file
-
+import settings
 
 def open_pipe_for_input(pipe_name):
     pipe = None
-    while pipe == None:
+    retries = 6
+    while pipe == None and retries > 0:
         try:
             pipe = win32file.CreateFile(
                 pipe_name,
@@ -26,8 +27,12 @@ def open_pipe_for_input(pipe_name):
             )
             res = win32pipe.SetNamedPipeHandleState(pipe, win32pipe.PIPE_READMODE_MESSAGE, None, None)
         except:
-            print(f"win_pipes.open_pipe_for_input(): waiting for pipe {pipe_name} to become available.", file=sys.stderr) 
+            print(f"mswin_pipes.open_pipe_for_input(): waiting for pipe {pipe_name} to become available.", file=sys.stderr) 
             time.sleep(1.0)
+            retries = retries - 1
+    if pipe == None:
+        print(f"mswin_pipes.open_pipe_for_input(): couldn't open pipe {pipe_name}, quitting.", file=sys.stderr)
+        raise SystemExit
     return pipe
 
 
@@ -42,7 +47,8 @@ def open_pipe_for_output(pipe_name):
             None)
         win32pipe.ConnectNamedPipe(pipe, None)
     except:
-        print("Couldn't open the requested pipe for output.", sys.stderr)
+        print("Couldn't open the requested pipe for output, quitting.", sys.stderr)
+        raise SystemExit
     return pipe
 
 
@@ -70,6 +76,10 @@ def close_pipe(pipe):
 
 
 def main():
+    # trap incoming signals
+    # we don't use st object for any other purpose here
+    st=settings.Settings()
+
     try:
         command = sys.argv[1]
         if command == 'read':
@@ -77,7 +87,7 @@ def main():
             while True:
                 sys.stdout.write(read_from_pipe(pipe))
             close_pipe(pipe)
-
+    
         elif command == 'write':
             pipe = open_pipe_for_output(sys.argv[2])
             while True:
@@ -105,6 +115,7 @@ def main():
             pass
     except:
         print(f"{sys.argv[0]}: error processing the command {command}.", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == '__main__':

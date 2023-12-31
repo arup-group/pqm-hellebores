@@ -18,7 +18,7 @@ def main():
             print(line)
         i = (i + 1) % 7812
         sys.stdout.flush()
-    print('Finished calculations.')
+    print('Finished calculations.', file=sys.stderr)
 
 if __name__ == '__main__':
     main()

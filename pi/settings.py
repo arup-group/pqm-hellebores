@@ -12,12 +12,6 @@ SETTINGS_FILE = 'settings.json'        # NB settings file is later cached in /tm
 IDENTITY_FILE = 'identity'
 CALIBRATIONS_FILE = 'calibrations.json'
 
-if os.name == 'nt':
-    # user defined signals aren't available on windows
-    UPDATE_SIGNAL = signal.SIGILL
-else:
-    UPDATE_SIGNAL = signal.SIGUSR1
-
 class Settings():
 
     def get_identity(self):
@@ -164,21 +158,54 @@ class Settings():
                 file=sys.stderr)
 
 
-    def signal_handler(self, signum, frame):
-        print(f"{sys.argv[0]} received a signal.", file=sys.stderr)
-        self.set_settings(self.load_settings(), self.cal)
-        self.callback_fn()
-
     # settings objects are created in each running program.
     # The send_to_all function allows one program (hellebores.py) to inform all the others that settings
     # have been changed. When they receive this signal, they will re-load the settings from file.
-    def _send_to_all(self):
-        self.pids = self.get_program_pids(self.other_programs)
+
+    # On Raspberry Pi OS/ Ubuntu/ Mac (posix), we user defined signal SIGUSR1 is sent to only the
+    # processes we want to signal, so the handling of this case is simpler.
+
+    # On windows, signalling facilities are very limited:
+    # 1. We can't pick individual programs, we have to send the signal to the whole process
+    # group on the current console.
+    # 2. In python we can only trap CTRL_C_EVENT signals (which arrive as SIGINT), all other signals cause
+    # process termination. We use an environment variable to configure each program/instance
+    # to behave in the way we want, including ignoring the signal when we are de-bugging and hellebores
+    # is not running.
+
+    def signal_handler(self, signum, frame):
+        if os.name == 'posix':
+            self.set_settings(self.load_settings(), self.cal)
+            self.callback_fn()
+        elif os.name == 'nt':
+            # we want to re-read the settings.json file
+            if os.environ['CTRL_C_RESPONSE'] == 'read':
+                self.set_settings(self.load_settings(), self.cal)
+                self.callback_fn()
+            # we don't want the program to do anything
+            elif os.environ['CTRL_C_RESPONSE'] == 'ignore':
+                pass
+            # we want the program to quit (default CTRL-C behaviour in python is to raise KeyError)
+            else:
+                raise KeyError 
+        else:
+            print(f"Don't know how to process signals on {os.name} platform.", file=sys.stderr)
+
+
+    def send_to_all(self):
         self.set_derived_settings()
         self.save_settings()
-        for pid in self.pids:
-            os.kill(pid, UPDATE_SIGNAL)
- 
+        # On Posix, we send a signal to selected programs via process ID.
+        if os.name == 'posix':
+            for pid in self.get_program_pids(self.other_programs):
+                os.kill(pid, signal.SIGUSR1)
+        # On Windows, we have to send the signal to all programs in the current process group
+        # ie programs that are running within the current console.
+        elif os.name == 'nt':
+            os.kill(0, signal.CTRL_C_EVENT)
+        else:
+            print(f"Don't know how to send signals on {os.name} platform.", file=sys.stderr)
+
 
     def get_program_pids(self, other_programs):
         # we use a function in the psutil module to find the PIDs of the other programs
@@ -222,9 +249,14 @@ class Settings():
             self.sfile = f'{temp_dir}/{self.sfile}'
             self.save_settings()
 
-        # link to the send_to_all function and set up a signal handler
-        self.send_to_all = self._send_to_all
-        signal.signal(UPDATE_SIGNAL, self.signal_handler)
+        # configure the signal handler
+        if os.name == 'posix':
+            signal.signal(signal.SIGUSR1, self.signal_handler)
+        elif os.name == 'nt':
+            signal.signal(signal.SIGINT, self.signal_handler)
+        else:
+            print(f"Don't know how to set up signals on {os.name} platform.", file=sys.stderr)
+
 
 
 default_settings = '''

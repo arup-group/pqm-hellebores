@@ -35,11 +35,11 @@ Start a terminal session via SSH or use a local keyboard.
 Clone the repository:  
 `git clone https://github.com/arup-group/pqm-hellebores.git`
 
+Change to the working directory:  
+`cd pqm-hellebores`
+
 Install the dependencies  
 `python3 -m pip install -r requirements.txt`
-
-Change to the working directory:  
-`cd pqm-hellebores/pi`
 
 Set up the desktop shortcuts  
 [tbc]

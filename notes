@@ -16,7 +16,7 @@ sudo apt install libatlas-base-dev
 Documentation for Thorpy GUI library for pygame:
 http://www.thorpy.org/documentation
 
-# For development, if you want to graphical app on local display remotely via ssh
+# For development, if you want graphical app on local display from remote session
 export SDL_FBDEV=/dev/fb0
 # Disable mouse driver, including OS touch mouse emulation
 export SDL_MOUSEDRV=/dev/null
@@ -27,27 +27,17 @@ sudo ./app.py
 # Set it for 128Mb to allow 800x600 driver to work in framebuffer (non-X) mode
 sudo raspi-config
 
-
-# Checking touchscreen device on the commandline
+# Check touchscreen device on the commandline
 hexdump /dev/input/event0
 evtest
 
 
+# On Ubuntu/Mac/Windows WSL (development)
+Installation as per Raspberry Pi OS will work (MacOS will need XCode command line tools)
 
-Powershell commands to set up a named pipe on windows:
-
-
-$pipe = new-object system.io.pipes.namedpipeserverstream("waveform")
-$pipe.waitforconnection()
-$sr = new-object system.io.streamreader($pipe)
-
-while ($true) { write-output $sr.readline().tostring() }
-
-output redirection from another process is possible, but only after the pipe is created (above):
-
-> \\.\pipe\waveform
-
-Start a command shell without showing a command window
-start /b *command*
+# On MS Windows (without WSL)
+On native Windows, the go.sh run script will not work.
+However, code paths have been arranged so that principal parts of the simulator can run
+on Windows. Use go.bat, or python go.py, instead of go.sh.
 
 

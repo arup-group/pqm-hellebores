@@ -35,21 +35,23 @@ Start a terminal session via SSH or use a local keyboard.
 Clone the repository:  
 `git clone https://github.com/arup-group/pqm-hellebores.git`
 
-Change to the working directory:  
-`cd pqm-hellebores/pi`
-
 Install the dependencies  
 `python3 -m pip install -r requirements.txt`
+
+Change to the working directory:  
+`cd pqm-hellebores/pi`
 
 Set up the desktop shortcuts  
 [tbc]
 
 ## Running
-To use the interactive user interface, run "hellebores" from the Raspberry Pi desktop menu, or execute `./go.sh` from the terminal.
+To use the interactive user interface, run "hellebores" from the Raspberry Pi desktop menu.
 
 ## Development
 For performance and simplicity reasons, the software is designed as modular, independent programs that are connected in a pipeline with data sent as a text stream. Control settings are stored in a 'settings.json' file: the GUI sends programs a 'signal' whenever the settings file is updated, and this causes them to re-load the settings.
 
 The Pi code will run in WSL, Ubuntu, Mac or similar environments that have a modern python and can support the python dependencies, pipelines and signals. hellebores.py requires SDL. The GUI can run under X-Windows or in native Mac and MS-Windows if the SDL libraries are installed and are reachable from the python runtime environment. The run script will detect whether a serial interface to Pico is available and if not will use simulated (pre-recorded) data for the purpose of testing.
 
+On a Posix system (Raspberry Pi OS, WSL, Ubuntu, Mac etc) execute `./go.sh` from the terminal to run the full pipeline. This will access live measurements on real PQM hardware, and simulated measurements on a development computer.
 
+For Windows computers without WSL, use `go.bat` or `python go.py` from a cmd.exe shell. This implements the waveform and calculation pipelines but doesn't implement supporting features such as MD5 checking or github software update.

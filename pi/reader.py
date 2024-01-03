@@ -11,8 +11,8 @@ import settings
 
 def main():
     # load settings from settings.json
-    # settings aren't used yet, but will be added to adjust ADC
-    st = settings.Settings()
+    # settings aren't used yet, but could be added to adjust ADC
+    st = settings.Settings(reload_on_signal=False)
     
     try:
         ser = serial.Serial('/dev/ttyACM0')

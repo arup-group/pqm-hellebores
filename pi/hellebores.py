@@ -358,13 +358,11 @@ def main():
     # these programs are each told to re-read the settings file.
     st = settings.Settings(
         other_programs = [
-            'rain_bucket.py',
-            'rain.py',
-            'reader.py',
             'scaler.py',
             'trigger.py',
             'mapper.py'
-            ])
+            ],
+        reload_on_signal=False)
 
     # create objects that hold the state of the application and UI
     app_actions  = App_Actions(waveform_stream_name, analysis_stream_name)

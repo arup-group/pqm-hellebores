@@ -21,7 +21,7 @@ def get_sample(i, t, f):
 
 def main():
     # read settings from settings.json
-    st = settings.Settings()
+    st = settings.Settings(reload_on_signal=False)
 
     # we use system clock to figure out when to print out the next sample
     tp = int(time.time()*1000.0/st.interval)

@@ -4,5 +4,5 @@ thorpy
 pillow
 numpy
 psutil
-pywin32; sys_platform == 'nt'
+pywin32; sys_platform == 'win32'
 

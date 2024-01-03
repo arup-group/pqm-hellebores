@@ -78,7 +78,7 @@ def close_pipe(pipe):
 def main():
     # trap incoming signals
     # we don't use st object for any other purpose here
-    st=settings.Settings()
+    st=settings.Settings(reload_on_signal=False)
 
     try:
         command = sys.argv[1]

@@ -174,20 +174,14 @@ class Settings():
     # is not running.
 
     def signal_handler(self, signum, frame):
-        if os.name == 'posix':
-            self.set_settings(self.load_settings(), self.cal)
-            self.callback_fn()
-        elif os.name == 'nt':
-            # we want to re-read the settings.json file
-            if os.environ['CTRL_C_RESPONSE'] == 'read':
+        # for de-bugging on Windows, let the program quit if the environment variable hasn't been set
+        if os.name == 'nt' and not ('CATCH_SIGINT' in os.environ):
+            # default CTRL-C behaviour in python is to raise KeyError
+            raise KeyError 
+        if os.name == 'posix' or os.name == 'nt':
+            if self.reload_on_signal == True:
                 self.set_settings(self.load_settings(), self.cal)
                 self.callback_fn()
-            # we don't want the program to do anything
-            elif os.environ['CTRL_C_RESPONSE'] == 'ignore':
-                pass
-            # we want the program to quit (default CTRL-C behaviour in python is to raise KeyError)
-            else:
-                raise KeyError 
         else:
             print(f"Don't know how to process signals on {os.name} platform.", file=sys.stderr)
 
@@ -225,8 +219,9 @@ class Settings():
         return pids.keys()
 
 
-    def __init__(self, callback_fn = lambda: None, other_programs=[]):
+    def __init__(self, callback_fn = lambda: None, other_programs=[], reload_on_signal=True):
         self.other_programs = other_programs
+        self.reload_on_signal = reload_on_signal
 
         # establish MAC address, identity and calibration factors
         self.identity = self.get_identity()

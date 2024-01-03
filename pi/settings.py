@@ -178,12 +178,9 @@ class Settings():
         if os.name == 'nt' and not ('CATCH_SIGINT' in os.environ):
             # default CTRL-C behaviour in python is to raise KeyError
             raise KeyError 
-        if os.name == 'posix' or os.name == 'nt':
-            if self.reload_on_signal == True:
-                self.set_settings(self.load_settings(), self.cal)
-                self.callback_fn()
-        else:
-            print(f"Don't know how to process signals on {os.name} platform.", file=sys.stderr)
+        if self.reload_on_signal == True:
+            self.set_settings(self.load_settings(), self.cal)
+            self.callback_fn()
 
 
     def send_to_all(self):

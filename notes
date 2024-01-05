@@ -1,4 +1,6 @@
-INSTALLATION
+#######
+###  INSTALLATION
+#######
 
 On Pico
 Copy pico/main.py to the Pico storage, using Thonny.
@@ -10,14 +12,22 @@ python3 -m pip install -r requirements.txt --upgrade
 
 Raspberry Pi OS may also need SDL2 libraries:
 sudo apt install libsdl2-mixer-2.0-0 libsdl2-ttf-2.0-0 libsdl2-image-2.0-0
+
 Raspberry Pi OS may need maths libraries from this package for numpy to work
 sudo apt install libatlas-base-dev
+
+
+
+#######
+# ADDITIONAL TECHNICAL NOTES FOR TROUBLESHOOTING
+#######
 
 Documentation for Thorpy GUI library for pygame:
 http://www.thorpy.org/documentation
 
 # For development, if you want graphical app on local display from remote session
 export SDL_FBDEV=/dev/fb0
+
 # Disable mouse driver, including OS touch mouse emulation
 export SDL_MOUSEDRV=/dev/null
 # App may need to run with root permissions in order to access framebuffer
@@ -31,6 +41,10 @@ sudo raspi-config
 hexdump /dev/input/event0
 evtest
 
+
+#######
+# DESKTOP COMPUTERS
+#######
 
 # On Ubuntu/Mac/Windows WSL (development)
 Installation as per Raspberry Pi OS will work (MacOS will need XCode command line tools)

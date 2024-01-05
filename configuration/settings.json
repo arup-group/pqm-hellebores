@@ -72,10 +72,12 @@
     ],
     "earth_leakage_current_display_index": 7,
     "earth_leakage_current_display_status": false,
-    "scale_c0": 4.07e-07,
-    "scale_c1": 2.44e-05,
-    "scale_c2": 0.00122,
-    "scale_c3": 0.0489,
+    "scale_factors": [
+        4.07e-07,
+        2.44e-05,
+        0.00122,
+        0.0489
+    ],
     "trigger_channel": 0,
     "trigger_slope": "rising",
     "trigger_level": 0.0,

@@ -1,6 +1,5 @@
 #!/bin/bash
 
-if [ -e /home/pi/pqm-hellebores/pi ]; then
-    cd /home/pi/pqm-hellebores/pi
-fi    
-./get_identity.py | xcowsay
+# NB sudo apt install xcowsay
+SCRIPT_DIR=$(realpath $(dirname $0))
+$SCRIPT_DIR/get_identity.py | xcowsay

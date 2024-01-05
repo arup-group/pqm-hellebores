@@ -80,18 +80,9 @@ class Settings():
         self.earth_leakage_current_display_ranges      = js['earth_leakage_current_display_ranges']
         self.earth_leakage_current_display_index       = js['earth_leakage_current_display_index']
         self.earth_leakage_current_display_status      = js['earth_leakage_current_display_status']
-        self.adc_offset_trim_c0                        = cal['offsets'][0]
-        self.adc_offset_trim_c1                        = cal['offsets'][1]
-        self.adc_offset_trim_c2                        = cal['offsets'][2]
-        self.adc_offset_trim_c3                        = cal['offsets'][3]
-        self.adc_gain_trim_c0                          = cal['gains'][0]
-        self.adc_gain_trim_c1                          = cal['gains'][1]
-        self.adc_gain_trim_c2                          = cal['gains'][2]
-        self.adc_gain_trim_c3                          = cal['gains'][3]
-        self.scale_c0                                  = js['scale_c0']
-        self.scale_c1                                  = js['scale_c1']
-        self.scale_c2                                  = js['scale_c2']
-        self.scale_c3                                  = js['scale_c3']
+        self.adc_offset_trims                          = cal['offsets']
+        self.adc_gain_trims                            = cal['gains']
+        self.scale_factors                             = js['scale_factors']
         self.trigger_channel                           = js['trigger_channel']
         self.trigger_slope                             = js['trigger_slope']
         self.trigger_level                             = js['trigger_level']
@@ -123,10 +114,7 @@ class Settings():
         js['earth_leakage_current_display_ranges']     = self.earth_leakage_current_display_ranges
         js['earth_leakage_current_display_index']      = self.earth_leakage_current_display_index
         js['earth_leakage_current_display_status']     = self.earth_leakage_current_display_status
-        js['scale_c0']                                 = self.scale_c0
-        js['scale_c1']                                 = self.scale_c1
-        js['scale_c2']                                 = self.scale_c2
-        js['scale_c3']                                 = self.scale_c3
+        js['scale_factors']                            = self.scale_factors
         js['trigger_channel']                          = self.trigger_channel
         js['trigger_slope']                            = self.trigger_slope
         js['trigger_level']                            = self.trigger_level
@@ -251,6 +239,27 @@ class Settings():
             print(f"Don't know how to set up signals on {os.name} platform.", file=sys.stderr)
 
 
+    def show_settings(self):
+        print('Identity:')
+        print(f'  {s.identity}')
+        print('Calibration:')
+        for i in s.cal:
+            print(f'  {i:40s} {s.cal[i]}')
+        print('Working path:')
+        print(f'  {s.working_path}')
+        print('Settings:')
+        st = s.make_json()
+        for i in st:
+            print(f'  {i:40s} {st[i]}')
+
+
+ 
+
+if __name__ == '__main__':
+    s = Settings()
+    s.show_settings()
+
+
 
 default_settings = '''
 {
@@ -327,10 +336,12 @@ default_settings = '''
     ],
     "earth_leakage_current_display_index": 7,
     "earth_leakage_current_display_status": false,
-    "scale_c0": -4.07e-07,
-    "scale_c1": 2.44e-05,
-    "scale_c2": 0.00122,
-    "scale_c3": 0.0489,
+    "scale_factors": [
+        -4.07e-07,
+        2.44e-05,
+        0.00122,
+        0.0489
+    ],
     "trigger_channel": 0,
     "trigger_slope": "rising",
     "trigger_level": 0.0,

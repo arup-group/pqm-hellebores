@@ -9,7 +9,9 @@ import time
 import sys
 import win32pipe
 import win32file
-import settings
+
+# local
+from settings import Settings
 
 class Pipe:
     def __init__(self, pipe_name, mode):
@@ -98,7 +100,7 @@ class Pipe:
 def main():
     # trap incoming signals
     # we don't use st object for any other purpose here
-    st=settings.Settings(reload_on_signal=False)
+    st=Settings(reload_on_signal=False)
 
     try:
         command = sys.argv[1]

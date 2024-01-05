@@ -11,7 +11,7 @@ import settings
 
 def main():
     # read settings from settings.json
-    st = settings.Settings()
+    st = settings.Settings(reload_on_signal=False)
 
     # read in the whole of the sample file
     try:

@@ -1,4 +1,5 @@
-rem Simplified run script for MS-Windows
-call ..\venv-windows\scripts\activate
+rem Simplified run script for Windows cmd.exe
+pushd .
+cd %~dp0
 python go.py
-
+popd

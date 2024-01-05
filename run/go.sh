@@ -2,7 +2,7 @@
 
 # Find absolute paths of script and program file directories
 SCRIPT_DIR=$(realpath $(dirname $0))
-PROGRAM_DIR=$(realpath $SCRIPT_DIR/../common)
+PROGRAM_DIR=$(realpath $SCRIPT_DIR/../pqm)
 
 # Change to the program directory
 cd $PROGRAM_DIR
@@ -20,7 +20,7 @@ fi
 # Generate MD5 checksum of the program files and store it in environment variable
 # The environment variables are accessible from within the application
 # This allows us to reliably check if program versions on different PQMs are the same
-export MD5SUM=$(cat ../pi/go.sh rain_bucket.py reader.py scaler.py trigger.py mapper.py \
+export MD5SUM=$(cat ../run/go.sh rain_bucket.py reader.py scaler.py trigger.py mapper.py \
                 hellebores.py hellebores_constants.py hellebores_waveform.py \
                 hellebores_multimeter.py ../pico/main.py | md5sum | cut -d ' ' -f 1)
 export VERSION=$(cat ../VERSION)

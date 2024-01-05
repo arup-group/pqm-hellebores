@@ -10,7 +10,7 @@ def run_on_windows():
     # command shell.
 
     # Change working directory to the program directory
-    os.chdir('../common')
+    os.chdir('../pqm')
 
     # On Windows, SIGINT (CTRL_C events) are raised by hellebores.py when the user settings are changed.
     # all programs running within the console will receive this SIGINT signal.

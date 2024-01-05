@@ -8,6 +8,7 @@ import psutil
 import time
 import glob
 
+CONFIGURATION_PATH = '../configuration'
 SETTINGS_FILE = 'settings.json'        # NB settings file is later cached in /tmp
 IDENTITY_FILE = 'identity'
 CALIBRATIONS_FILE = 'calibrations.json'
@@ -16,7 +17,7 @@ class Settings():
 
     def get_identity(self):
         try:
-            with open(IDENTITY_FILE, 'r') as f:
+            with open(os.path.join(CONFIGURATION_PATH, IDENTITY_FILE), 'r') as f:
                 identity = f.read().rstrip()
         except:
             print('settings.py: using default identity', file=sys.stderr)
@@ -25,7 +26,7 @@ class Settings():
 
     def get_calibration(self, identity):
         try:
-            with open(CALIBRATIONS_FILE, 'r') as f:
+            with open(os.path.join(CONFIGURATION_PATH, CALIBRATIONS_FILE), 'r') as f:
                 js = json.loads(f.read())
                 cal = js[identity]
         except:
@@ -137,7 +138,7 @@ class Settings():
  
     def load_settings(self):
         try:
-            with open(self.sfile, 'r') as f:
+            with open(os.path.join(self.working_path, self.sfile), 'r') as f:
                 js = json.loads(f.read())
         except:
             print(
@@ -150,7 +151,7 @@ class Settings():
 
     def save_settings(self):
         try:
-            with open(self.sfile, 'w') as f:
+            with open(os.path.join(self.working_path, self.sfile), 'w') as f:
                 f.write(json.dumps(self.make_json(), indent=4))
         except:
             print(
@@ -226,6 +227,7 @@ class Settings():
 
         # load initial settings
         self.sfile = SETTINGS_FILE
+        self.working_path = CONFIGURATION_PATH
         self.set_settings(self.load_settings(), self.cal)
 
         # set a callback function if provided. This will be called
@@ -235,11 +237,10 @@ class Settings():
         # if we receive 'UPDATE_SIGNAL' signal set things up so that updated settings will
         # be read from settings.json via the signal_handler function
         # for faster update performance, and to reduce SD card wear, if TEMP_DIR is set to RAM disk,
-        # we'll save updates to the settings.json file there.
+        # we change our working path so that we save updates to the settings.json file there.
         temp_dir = os.getenv('TEMP_DIR')
-        if temp_dir:
-            self.sfile = f'{temp_dir}/{self.sfile}'
-            self.save_settings()
+        if temp_dir != None:
+            self.working_path = temp_dir
 
         # configure the signal handler
         if os.name == 'posix':

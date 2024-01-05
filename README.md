@@ -41,6 +41,8 @@ Change to the working directory:
 Install the dependencies  
 `python3 -m pip install -r requirements.txt`
 
+See notes file for additional system dependencies
+
 Set up the desktop shortcuts  
 [tbc]
 
@@ -52,6 +54,8 @@ For performance and simplicity reasons, the software is designed as modular, ind
 
 The Pi code will run in WSL, Ubuntu, Mac or similar environments that have a modern python and can support the python dependencies, pipelines and signals. hellebores.py requires SDL. The GUI can run under X-Windows or in native Mac and MS-Windows if the SDL libraries are installed and are reachable from the python runtime environment. The run script will detect whether a serial interface to Pico is available and if not will use simulated (pre-recorded) data for the purpose of testing.
 
-On a Posix system (Raspberry Pi OS, WSL, Ubuntu, Mac etc) execute `./go.sh` from the terminal to run the full pipeline. This will access live measurements on real PQM hardware, and simulated measurements on a development computer.
+On a Posix system (Raspberry Pi OS, WSL, Ubuntu, Mac etc) execute `run/go.sh` from the terminal to run the full pipeline. This will access live measurements on real PQM hardware, and simulated measurements on other computers.
 
-For Windows computers without WSL, use `go.bat` or `python go.py` from a cmd.exe shell. This implements the waveform and calculation pipelines but doesn't implement supporting features such as MD5 checking or github software update.
+For Windows computers without WSL, use `run\go.bat` or, from the 'run' directory, `python go.py` from a cmd.exe shell. This implements the waveform and calculation pipelines by setting them up as python sub-processes.
+
+

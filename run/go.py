@@ -3,12 +3,14 @@ import subprocess
 import signal
 import os
 import time
-import settings
 
 
 def run_on_windows():
     # This function (mostly) implements process-to-process pipeline code that can't be expressed completely in Windows
     # command shell.
+
+    # Change working directory to the program directory
+    os.chdir('../common')
 
     # On Windows, SIGINT (CTRL_C events) are raised by hellebores.py when the user settings are changed.
     # all programs running within the console will receive this SIGINT signal.
@@ -16,6 +18,7 @@ def run_on_windows():
     # when CATCH_SIGINT is set to 'yes', the signal handler in each program will catch SIGINT events
     # and treat them as a signal to re-load settings.json. If this environment variable is not set, then SIGINT events
     # will be handled as normal (ie the program will terminate).
+
     os.environ['CATCH_SIGINT'] = 'yes'
     p1 = subprocess.Popen([sys.executable, 'rain_bucket.py', r'..\sample_files\simulated.out'], stdout=subprocess.PIPE)
     p2 = subprocess.Popen([sys.executable, 'scaler.py'], stdin=p1.stdout, stdout=subprocess.PIPE)

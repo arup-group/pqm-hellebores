@@ -9,19 +9,22 @@
 #                                                 |_|    |___/ 
 #
 
+# library imports
 import thorpy
 import pygame
 import time
 import sys
 import os
 import select
-import settings
+
+# local imports
+from settings import Settings
 from hellebores_constants import *
 from hellebores_controls import *
 from hellebores_waveform import Waveform
 from hellebores_multimeter import Multimeter
 if os.name == 'nt':
-    import mswin_pipes
+    from mswin_pipes import Pipe
 
 
 # More UI is needed for the following:
@@ -164,7 +167,7 @@ if os.name == 'posix':
     is_data_available = lambda f, t: select.select( [f], [], [], t)[0] != []
 elif os.name == 'nt':
     # simulated functionality for windows, which lacks the 'select' function 
-    is_data_available = lambda f, t: mswin_pipes.is_data_available(f, t)
+    is_data_available = lambda p, t: p.is_data_available(t)
 else:
     # other scenarios, this is unlikely to work
     is_data_available = lambda f, t: True 
@@ -173,8 +176,9 @@ else:
 class Sample_Buffer:
 
     def __init__(self):
-        # working points buffer for four lines
+        # working points buffer for four lines, and calculation array
         self.ps = [ [],[],[],[] ] 
+        self.cs = []
 
     # sample buffer history
     # future extension is to use this buffer for electrical event history
@@ -198,11 +202,9 @@ class Sample_Buffer:
     def load_analysis(self, f, capturing):
         while is_data_available(f, 0.0):
             try:
-                if os.name == 'nt':
-                    cs = mswin_pipes.read_from_pipe(f).split()
-                else:
-                    cs = f.readline().split()
-                print(cs)
+                self.cs = f.readline().split()
+                sys.stdout.write('.')
+                sys.stdout.flush()
             except:
                 print('hellebores.py: Sample_Buffer.load_analysis()'
                       ' file error.', file=sys.stderr) 
@@ -219,10 +221,7 @@ class Sample_Buffer:
         sample_counter = 0
         while is_data_available(f, 0.05) and sample_counter < 1000: 
             try:
-                if os.name == 'nt':
-                    ws = mswin_pipes.read_from_pipe(f).split()
-                else:
-                    ws = f.readline().split()
+                ws = f.readline().split()
                 sample = [ int(w) for w in ws[:5] ]
                 if ws[-1] == '*END*':
                     # add current sample then end the frame
@@ -269,14 +268,18 @@ class App_Actions:
     def open_streams(self, waveform_stream_name, analysis_stream_name):
         # open the input stream fifos
         try:
-            if os.name == 'nt':
-                # Windows
-                self.waveform_stream = mswin_pipes.open_pipe_for_input(sys.argv[1])
-                self.analysis_stream = mswin_pipes.open_pipe_for_input(sys.argv[2])
-            else:
+            if os.name == 'posix':
                 # Pi, Ubuntu, WSL etc
                 self.waveform_stream = open(sys.argv[1], 'r') 
                 self.analysis_stream = open(sys.argv[2], 'r')
+            elif os.name == 'nt':
+                # Windows
+                self.waveform_stream = Pipe(sys.argv[1], 'r')
+                self.analysis_stream = Pipe(sys.argv[2], 'r')
+            else:
+                # Other
+                print(f"{sys.argv[0]}: Don't know how to open incoming pipes on {os.name} system.", file=sys.stderr)
+                raise NotImplementedError 
         except:
             print(f"{sys.argv[0]}: App_Actions.open_streams() couldn't open the input streams "
                   f"{waveform_stream_name} and {analysis_stream_name}", file=sys.stderr)
@@ -284,14 +287,8 @@ class App_Actions:
 
     def close_streams(self):
         try:
-            if os.name == 'nt':
-                # Windows
-                mswin_pipes.close_pipe(self.waveform_stream)
-                mswin_pipes.close_pipe(self.analysis_stream)
-            else:
-                # Pi, Ubuntu, WSL etc
-                self.waveform_stream.close()
-                self.analysis_stream.close() 
+            self.waveform_stream.close()
+            self.analysis_stream.close() 
         except:
             print(f"{sys.argv[0]}: App_Actions.close_streams() couldn't close the input streams", file=sys.stderr)
 
@@ -316,9 +313,8 @@ class App_Actions:
             print(f"hellebores.py: App_Actions.exit_application() exit option '{option}'"
                    " isn't implemented, exiting with error code 1.", file=sys.stderr)
             code = 1
-        finally:
-            self.close_streams()
-
+            
+        self.close_streams()
         pygame.quit()
         sys.exit(code)
 
@@ -356,7 +352,7 @@ def main():
     # the list of 'other programs' is used to send signals when we change
     # settings in this program. We call st.send_to_all() and then
     # these programs are each told to re-read the settings file.
-    st = settings.Settings(
+    st = Settings(
         other_programs = [
             'scaler.py',
             'trigger.py',

@@ -1,15 +1,28 @@
 #!/bin/bash
 
-# Change working directory to the directory of this script
-PROGRAM_DIR=$(realpath $(dirname $0))
+# Find absolute paths of script and program file directories
+SCRIPT_DIR=$(realpath $(dirname $0))
+PROGRAM_DIR=$(realpath $SCRIPT_DIR/../common)
+
+# Change to the program directory
 cd $PROGRAM_DIR
+
+# 
+# Figure out if we are running on real hardware or not
+if [[ -e /dev/ttyACM0 ]]; then
+    have_pico=true
+    READER="./reader.py"
+else
+    have_pico=false
+    READER="./rain_bucket.py ../sample_files/simulated.out"
+fi
 
 # Generate MD5 checksum of the program files and store it in environment variable
 # The environment variables are accessible from within the application
 # This allows us to reliably check if program versions on different PQMs are the same
-export MD5SUM=$(cat go.sh rain_bucket.py reader.py scaler.py trigger.py mapper.py \
+export MD5SUM=$(cat ../pi/go.sh rain_bucket.py reader.py scaler.py trigger.py mapper.py \
                 hellebores.py hellebores_constants.py hellebores_waveform.py \
-                hellebores_multimeter.py ../pico/spi-dual-core.py | md5sum | cut -d ' ' -f 1)
+                hellebores_multimeter.py ../pico/main.py | md5sum | cut -d ' ' -f 1)
 export VERSION=$(cat ../VERSION)
 export GIT_HEAD=$(git rev-parse HEAD)
 
@@ -46,15 +59,6 @@ for PIPE_FILE in $WAVEFORM_PIPE $ANALYSIS_PIPE; do
     fi
 done
 
-# Figure out if we are running on real hardware or not
-if [[ -e /dev/ttyACM0 ]]; then
-    have_pico=true
-    READER="./reader.py"
-else
-    have_pico=false
-    READER="./rain_bucket.py ../sample_files/simulated.out"
-fi
-
 echo "Working directory    : $PROGRAM_DIR"
 echo "Temporary files      : $TEMP_DIR"
 echo "Version              : $VERSION"
@@ -86,6 +90,9 @@ $READER \
 exit_code=$?
 
 echo "Finished processing."
+
+# Change to the script directory, so that we can re-launch if need be
+cd $SCRIPT_DIR
 
 # Restore stderr file descriptor 2 from saved state on 4
 exec 2>&4 4>&-

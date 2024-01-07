@@ -75,7 +75,7 @@ class Multimeter:
 
     def create_multimeter_readings(self):
         """Multimeter readings, on main part of screen"""
-        reading_texts = []
+        meter_texts = []
         for s in [ ('230.01 ', TEXT_METER_SIZE, FONT_METER_SIZE, YELLOW),
                    ('  0.534', TEXT_METER_SIZE, FONT_METER_SIZE, YELLOW),
                    (' 20.344', TEXT_METER_SIZE, FONT_METER_SIZE, YELLOW),
@@ -92,9 +92,17 @@ class Multimeter:
             t.set_size(s[1])
             t.set_font_size(s[2])
             t.set_font_color(s[3])
-            reading_texts.append(t)
-        multimeter_readings = thorpy.Group(reading_texts, mode='grid', gap=0, margins=(0,0), ny=6)
-        multimeter_readings.set_topleft(*METER_POSITION)
-        return multimeter_readings
+            meter_texts.append(t)
+        multimeter_readings = thorpy.Group(meter_texts[:6], mode='v', align='center',
+                                            gap=0, margins=(0,0))
+        pad = thorpy.Text('')
+        pad.set_size((0,20))
+        multimeter_reading_labels = thorpy.Group([pad] + meter_texts[6:], mode='v', align='center',
+                                                  gap=0, margins=(0,0))
+        multimeter = thorpy.Group([multimeter_readings, multimeter_reading_labels], mode='h',
+                                   gap=0, margins=(0,0))
+        multimeter.set_topleft(*METER_POSITION)
+        multimeter.set_size((200,200))
+        return multimeter
 
 

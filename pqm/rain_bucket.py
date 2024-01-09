@@ -6,16 +6,19 @@ import time
 import sys
 import signal
 import settings
+import os
+
+# NB path is relative to the location of this program file
+DEFAULT_SAMPLE_FILE = '../sample_files/simulated.out'
 
 
-
-def main():
+def generate(sample_file):
     # read settings from settings.json
     st = settings.Settings(reload_on_signal=False)
 
     # read in the whole of the sample file
     try:
-        with open(sys.argv[1]) as f:
+        with open(sample_file) as f:
             rain_bucket = f.read().split('\n')
     except:
         print('rain_bucket.py: error opening or reading sample data file', file=sys.stderr)
@@ -36,6 +39,20 @@ def main():
             i = i + 1
             new_samples = new_samples - 1
         samples_previous = samples_now
+
+
+def main():
+    # we use the sample file name on the command line, if provided
+    # otherwise a default one
+    if len(sys.argv) > 1:
+        sample_file = sys.argv[1]
+    else:
+        # figure out the actual path of the sample file, regardless of the current
+        # working directory
+        sample_file = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                        DEFAULT_SAMPLE_FILE))
+    generate(sample_file)
+
 
 if __name__ == '__main__':
     main()

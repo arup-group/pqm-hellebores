@@ -14,7 +14,7 @@ if [[ -e /dev/ttyACM0 ]]; then
     READER="./reader.py"
 else
     have_pico=false
-    READER="./rain_bucket.py ../sample_files/simulated.out"
+    READER="./rain_bucket.py"
 fi
 
 # Generate MD5 checksum of the program files and store it in environment variable
@@ -26,26 +26,26 @@ export MD5SUM=$(cat ../run/go.sh rain_bucket.py reader.py scaler.py trigger.py m
 export VERSION=$(cat ../VERSION)
 export GIT_HEAD=$(git rev-parse HEAD)
 
-# TEMP_DIR: settings.json, error.log and named pipes will be stored here
+# TEMP: settings.json, error.log and named pipes will be stored here
 # /run/shm is preferred, because it is mounted as RAM disk
 for TD in "/run/shm/pqm-hellebores" "/tmp/pqm-hellebores"; do
     [[ -e $TD ]] || mkdir $TD
     if [[ $? -eq 0 ]]; then
-        export TEMP_DIR=$TD
+        export TEMP=$TD
         break
     fi
 done
 # if both attempts failed, quit with an error
-if [[ -z $TEMP_DIR ]]; then
+if [[ -z $TEMP ]]; then
     echo "Check filesystem or write permissions, quitting."
     exit 1
 fi
 
 # set up the working files
-WAVEFORM_PIPE=$TEMP_DIR/waveform_pipe
-ANALYSIS_PIPE=$TEMP_DIR/analysis_pipe
-MEASUREMENT_LOG_FILE=$TEMP_DIR/pqm.$$.csv
-ERROR_LOG_FILE=$TEMP_DIR/error.log
+WAVEFORM_PIPE=$TEMP/waveform_pipe
+ANALYSIS_PIPE=$TEMP/analysis_pipe
+MEASUREMENT_LOG_FILE=$TEMP/pqm.$$.csv
+ERROR_LOG_FILE=$TEMP/error.log
 
 
 # If they don't already exist, create named pipes (fifos) to receive data from
@@ -59,12 +59,6 @@ for PIPE_FILE in $WAVEFORM_PIPE $ANALYSIS_PIPE; do
     fi
 done
 
-echo "Working directory    : $PROGRAM_DIR"
-echo "Temporary files      : $TEMP_DIR"
-echo "Version              : $VERSION"
-echo "Git HEAD             : $GIT_HEAD"
-echo "MD5 checksum         : $MD5SUM"
-echo "Measurement source   : $READER"
 
 # Start the data pipeline, output feeding the two named pipes
 # Clear old log file
@@ -73,9 +67,14 @@ echo "Measurement source   : $READER"
 # then redirect 2 to file
 exec 4>&2 2>$ERROR_LOG_FILE
 
+# Display the version infomation and settings that will be used initially
+./version.py
+./settings.py
+
 # Run the capture and analysis, feeding two pipe files,
 # then pass both pipes as parameters to the GUI
 echo "Starting processing..."
+echo "Measurement source: $READER"
 
 # Plumbing, pipe, pipe, pipe...
 $READER \

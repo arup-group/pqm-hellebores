@@ -6,14 +6,19 @@ import os
 import subprocess
 import re
 
-# location of files relative to the root directory of the project
+# location of files relative to the root directory of the project tree
 PROGRAM_DIR = './pqm'
 PICO_DIR = './pico'
 RUN_DIR = './run'
 VERSION_FILE = 'VERSION'
-TEMP_DIR_BACKSTOP = './temp'
 
 class Version:
+
+    def resolve_path(self, path, file):
+        # we resolve paths relative to the known location of this program file
+        file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', path, file)
+        resolved_path = os.path.abspath(file_path)
+        return resolved_path
 
     def readfiles(self, list_of_files):
         text = ''
@@ -34,13 +39,15 @@ class Version:
     def list_files(self, paths):
         file_names = [] 
         for path in paths:
-            file_names.extend([ f for f in os.listdir(path) if os.path.isfile(f) ])
+            resolved_path = self.resolve_path(path, '')
+            file_names.extend([ f for f in os.listdir(resolved_path) if os.path.isfile(f) ])
         return file_names
 
     def get_version(self):
         version_string = ''
         try:
-            with open(VERSION_FILE, 'r') as f:
+            version_file = self.resolve_path('.', VERSION_FILE)
+            with open(version_file, 'r') as f:
                 version_string = f.read().strip() 
         except:
             print(f"version.py: Version.get_version() couldn't read file {f}",
@@ -50,7 +57,8 @@ class Version:
     def set_version(self, new_version):
         if new_version != '':
             try:
-                with open(VERSION_FILE, 'w') as f:
+                version_file = self.resolve_path('.', VERSION_FILE)
+                with open(version_file, 'w') as f:
                     f.write(new_version)
                     f.close()
             except:
@@ -85,9 +93,9 @@ class Version:
     def get_temp_dir(self):
         temp_dir = ''
         try:
-            temp_from_env = os.getenv('TEMP_DIR')
+            temp_from_env = os.getenv('TEMP')
             if temp_from_env == None:
-                temp_dir = TEMP_DIR_BACKSTOP
+                temp_dir = ''
             else:
                 temp_dir = temp_from_env
         except:

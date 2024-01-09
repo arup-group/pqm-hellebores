@@ -26,24 +26,24 @@ def main():
             # get channel values as integer array, removing the index field
             cs = [ int(w.strip(), base=16) for w in line.split() ][1:]
             # calculate floating point values, using appropriate scaling factors
-            voltage = ((from_twos_complement(cs[3]) + st.adc_offset_trims[3]) 
+            voltage = ((from_twos_complement(cs[3]) + st.cal_offsets[3]) 
                        * st.scale_factors[3]
-                       * st.adc_gain_trims[3])
+                       * st.cal_gains[3])
             # if st.current_axis_per_division is less than or equal to 0.1 A/div,
             # we use channel 1 for current measurements. If it is more than 0.1 A/div,
             # we use channel 2.
             if st.current_axis_per_division <= 0.1:
-                current = ((from_twos_complement(cs[1]) + st.adc_offset_trims[1]) 
+                current = ((from_twos_complement(cs[1]) + st.cal_offsets[1]) 
                            * st.scale_factors[1]
-                           * st.adc_gain_trims[1])
+                           * st.cal_gains[1])
             else:
-                current = ((from_twos_complement(cs[2]) + st.adc_offset_trims[2]) 
+                current = ((from_twos_complement(cs[2]) + st.cal_offsets[2]) 
                            * st.scale_factors[2]
-                           * st.adc_gain_trims[2])
+                           * st.cal_gains[2])
             power = voltage * current
-            leakage_current = ((from_twos_complement(cs[0]) + st.adc_offset_trims[0])
+            leakage_current = ((from_twos_complement(cs[0]) + st.cal_offsets[0])
                                * st.scale_factors[0]
-                               * st.adc_gain_trims[0])
+                               * st.cal_gains[0])
             print(
                 f'{t :12.4f} '
                 f'{voltage :10.3f} '

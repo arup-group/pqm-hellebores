@@ -5,12 +5,23 @@ import os
 import time
 
 
+
+def resolve_path(path, file):
+    file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), path, file)
+    resolved_path = os.path.abspath(file_path)
+    return resolved_path
+
+
 def run_on_windows():
     # This function (mostly) implements process-to-process pipeline code that can't be expressed completely in Windows
     # command shell.
 
-    # Change working directory to the program directory
-    os.chdir('../pqm')
+    # Change working directory to the program directory (NB relative to the location of this file)
+    os.chdir(resolve_path('../pqm', ''))
+
+    # Display version and initial settings
+    os.system('python version.py')
+    os.system('python settings.py')
 
     # On Windows, SIGINT (CTRL_C events) are raised by hellebores.py when the user settings are changed.
     # all programs running within the console will receive this SIGINT signal.
@@ -20,7 +31,7 @@ def run_on_windows():
     # will be handled as normal (ie the program will terminate).
 
     os.environ['CATCH_SIGINT'] = 'yes'
-    p1 = subprocess.Popen([sys.executable, 'rain_bucket.py', r'..\sample_files\simulated.out'], stdout=subprocess.PIPE)
+    p1 = subprocess.Popen([sys.executable, 'rain_bucket.py'], stdout=subprocess.PIPE)
     p2 = subprocess.Popen([sys.executable, 'scaler.py'], stdin=p1.stdout, stdout=subprocess.PIPE)
     p3 = subprocess.Popen([sys.executable, 'mswin_pipes.py', 'tee', r'\\.\pipe\branch1', r'\\.\pipe\branch2'], stdin=p2.stdout)
 

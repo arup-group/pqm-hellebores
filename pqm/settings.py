@@ -8,6 +8,7 @@ import psutil
 import time
 import glob
 
+# NB configuration path is relative to location of this file
 CONFIGURATION_PATH = '../configuration'
 SETTINGS_FILE = 'settings.json'        # NB settings file is later cached in /tmp
 IDENTITY_FILE = 'identity'
@@ -15,10 +16,16 @@ CALIBRATIONS_FILE = 'calibrations.json'
 
 class Settings():
 
+    def resolve_path(self, path, file):
+        file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), path, file)
+        resolved_path = os.path.abspath(file_path)
+        return resolved_path
+
     def get_identity(self):
         try:
-            with open(os.path.join(CONFIGURATION_PATH, IDENTITY_FILE), 'r') as f:
-                identity = f.read().rstrip()
+            identity_file = self.resolve_path(CONFIGURATION_PATH, IDENTITY_FILE)
+            with open(identity_file, 'r') as f:
+                identity = f.read().strip()
         except:
             print('settings.py: using default identity', file=sys.stderr)
             identity = 'PQM-0'
@@ -26,14 +33,15 @@ class Settings():
 
     def get_calibration(self, identity):
         try:
-            with open(os.path.join(CONFIGURATION_PATH, CALIBRATIONS_FILE), 'r') as f:
+            calibrations_file = self.resolve_path(CONFIGURATION_PATH, CALIBRATIONS_FILE)
+            with open(calibrations_file, 'r') as f:
                 js = json.loads(f.read())
                 cal = js[identity]
         except:
             print('settings.py: using default calibration', file=sys.stderr)
             cal = { 'offsets': [0.0, 0.0, 0.0, 0.0], \
                       'gains': [1.0, 1.0, 1.0, 1.0] }          
-        return cal
+        return (cal['offsets'], cal['gains'])
  
 
     def set_derived_settings(self):
@@ -59,7 +67,7 @@ class Settings():
         self.half_y_pixels              = self.y_pixels // 2
  
 
-    def set_settings(self, js, cal):
+    def set_settings(self, js):
         self.sample_rate                               = js['sample_rate']
         self.time_axis_divisions                       = js['time_axis_divisions']
         self.time_axis_pre_trigger_divisions           = js['time_axis_pre_trigger_divisions']
@@ -80,8 +88,6 @@ class Settings():
         self.earth_leakage_current_display_ranges      = js['earth_leakage_current_display_ranges']
         self.earth_leakage_current_display_index       = js['earth_leakage_current_display_index']
         self.earth_leakage_current_display_status      = js['earth_leakage_current_display_status']
-        self.adc_offset_trims                          = cal['offsets']
-        self.adc_gain_trims                            = cal['gains']
         self.scale_factors                             = js['scale_factors']
         self.trigger_channel                           = js['trigger_channel']
         self.trigger_slope                             = js['trigger_slope']
@@ -126,20 +132,19 @@ class Settings():
  
     def load_settings(self):
         try:
-            with open(os.path.join(self.working_path, self.sfile), 'r') as f:
+            with open(self.sfile, 'r') as f:
                 js = json.loads(f.read())
         except:
             print(
                 "settings.py, get_settings(): couldn't read settings.json, regenerating...",
                 file=sys.stderr)
             js = json.loads(default_settings)
-            self.save_settings()
         return js
 
 
     def save_settings(self):
         try:
-            with open(os.path.join(self.working_path, self.sfile), 'w') as f:
+            with open(self.sfile, 'w') as f:
                 f.write(json.dumps(self.make_json(), indent=4))
         except:
             print(
@@ -168,7 +173,7 @@ class Settings():
             # default CTRL-C behaviour in python is to raise KeyError
             raise KeyError 
         if self.reload_on_signal == True:
-            self.set_settings(self.load_settings(), self.cal)
+            self.set_settings(self.load_settings())
             self.callback_fn()
 
 
@@ -209,14 +214,13 @@ class Settings():
         self.other_programs = other_programs
         self.reload_on_signal = reload_on_signal
 
-        # establish MAC address, identity and calibration factors
+        # establish identity and calibration factors
         self.identity = self.get_identity()
-        self.cal = self.get_calibration(self.identity)
+        (self.cal_offsets, self.cal_gains) = self.get_calibration(self.identity)
 
         # load initial settings
-        self.sfile = SETTINGS_FILE
-        self.working_path = CONFIGURATION_PATH
-        self.set_settings(self.load_settings(), self.cal)
+        self.sfile = self.resolve_path(CONFIGURATION_PATH, SETTINGS_FILE)
+        self.set_settings(self.load_settings())
 
         # set a callback function if provided. This will be called
         # every time a signal is received just after settings have been updated
@@ -224,11 +228,11 @@ class Settings():
 
         # if we receive 'UPDATE_SIGNAL' signal set things up so that updated settings will
         # be read from settings.json via the signal_handler function
-        # for faster update performance, and to reduce SD card wear, if TEMP_DIR is set to RAM disk,
+        # for faster update performance, and to reduce SD card wear, if TEMP is set to RAM disk,
         # we change our working path so that we save updates to the settings.json file there.
-        temp_dir = os.getenv('TEMP_DIR')
+        temp_dir = os.getenv('TEMP')
         if temp_dir != None:
-            self.working_path = temp_dir
+            self.sfile = self.resolve_path(temp_dir, SETTINGS_FILE)
 
         # configure the signal handler
         if os.name == 'posix':
@@ -241,16 +245,16 @@ class Settings():
 
     def show_settings(self):
         print('Identity:')
-        print(f'  {s.identity}')
+        print(f'  {self.identity}')
         print('Calibration:')
-        for i in s.cal:
-            print(f'  {i:40s} {s.cal[i]}')
-        print('Working path:')
-        print(f'  {s.working_path}')
+        print(f"  {'offsets':40s} {self.cal_offsets}")
+        print(f"  {'gains':40s} {self.cal_gains}")
+        print('Working copy of settings.json:')
+        print(f'  {self.sfile}')
         print('Settings:')
-        st = s.make_json()
-        for i in st:
-            print(f'  {i:40s} {st[i]}')
+        items = self.make_json()
+        for i in items:
+            print(f'  {i:40s} {items[i]}')
 
 
  

@@ -46,12 +46,48 @@ evtest
 # DESKTOP COMPUTERS
 #######
 
+# All computers
+Retrieve the software via the command line.
+git clone https://github.com/arup-group/pqm-hellebores.git
+Or download software from Github website by searching for pqm-hellebores project.
+
+Once downloaded, unzipped etc, change to the project home folder:
+cd pqm-hellebores
+
+
 # On Ubuntu/Mac/Windows WSL (development)
 Installation as per Raspberry Pi OS will work (MacOS will need XCode command line tools)
 
+Create a new virtual environment:
+python -m venv create pqm-env
+. pqm-env/bin/activate
+
+Install the dependencies
+python -m pip install -r requirements.txt
+
+Test the software
+run/go.sh
+
+
 # On MS Windows (without WSL)
-On native Windows, the go.sh run script will not work.
-However, code paths have been arranged so that principal parts of the simulator can run
-on Windows. Use go.bat, or python go.py, instead of go.sh.
+On native Windows, the go.sh run script for Raspberry Pi will not work.
+However, code paths have been arranged so that the simulator can run on Windows.
+Use go.bat, or python go.py, instead of go.sh.
+
+Create a new virtual environment, either venv or conda style, and install the dependencies:
+python -m venv create pqm-env
+pqm-env\scripts\activate
+ OR
+conda create -n pqm-env
+conda activate pqm-env
+
+Install the dependencies
+python -m pip install -r requirements.txt
+
+Test the software
+run\go.bat
+
+
+
 
 

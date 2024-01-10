@@ -17,15 +17,6 @@ else
     READER="./rain_bucket.py"
 fi
 
-# Generate MD5 checksum of the program files and store it in environment variable
-# The environment variables are accessible from within the application
-# This allows us to reliably check if program versions on different PQMs are the same
-export MD5SUM=$(cat ../run/go.sh rain_bucket.py reader.py scaler.py trigger.py mapper.py \
-                hellebores.py hellebores_constants.py hellebores_waveform.py \
-                hellebores_multimeter.py ../pico/main.py | md5sum | cut -d ' ' -f 1)
-export VERSION=$(cat ../VERSION)
-export GIT_HEAD=$(git rev-parse HEAD)
-
 # TEMP: settings.json, error.log and named pipes will be stored here
 # /run/shm is preferred, because it is mounted as RAM disk
 for TD in "/run/shm/pqm-hellebores" "/tmp/pqm-hellebores"; do
@@ -42,6 +33,7 @@ if [[ -z $TEMP ]]; then
 fi
 
 # set up the working files
+# NB the special variable $$ contains the PID of the current process
 WAVEFORM_PIPE=$TEMP/waveform_pipe
 ANALYSIS_PIPE=$TEMP/analysis_pipe
 MEASUREMENT_LOG_FILE=$TEMP/pqm.$$.csv
@@ -76,6 +68,15 @@ exec 4>&2 2>$ERROR_LOG_FILE
 echo "Starting processing..."
 echo "Measurement source: $READER"
 
+####
+# This is where we actually start the programs
+# The incoming data is split (using 'tee') into two pipelines that
+# feed analysis and waveform processes simultaneously
+# Note that the analysis pipeline is further split by another instance of tee so that analysis results
+# are stored in a file as well as sent onwards, via $ANALYSIS_PIPE, to hellebores.py
+# hellebores.py reads both $WAVEFORM_PIPE and $ANALYSIS_PIPE all the time, to keep the pipelines moving
+####
+
 # Plumbing, pipe, pipe, pipe...
 $READER \
     | ./scaler.py \
@@ -83,6 +84,9 @@ $READER \
             | ./trigger.py | ./mapper.py > $WAVEFORM_PIPE &
 
 ./hellebores.py $WAVEFORM_PIPE $ANALYSIS_PIPE
+# Because hellebores.py is running in the foreground, this script blocks (waits) until it finishes.
+# The reader, scaler, analysis and waveform programs also terminate at that point because their pipeline
+# connections are broken/closed.
 
 # Capture the exit code from hellebores.py
 # We'll check it's status shortly
@@ -90,17 +94,17 @@ exit_code=$?
 
 echo "Finished processing."
 
-# Change to the script directory, so that we can re-launch if need be
+# Change back to the script directory, so that we can re-launch if need be
 cd $SCRIPT_DIR
 
-# Restore stderr file descriptor 2 from saved state on 4
+# Restore stderr file descriptor 2 from saved state on 4, and delete fd 4
 exec 2>&4 4>&-
 
 # Now check the exit code
 # 2: Restart
 if [[ $exit_code -eq 2 ]]; then
     # Flush serial interface
-    # open the serial port for reading on a new file descriptor,
+    # open the serial port for reading on a new file descriptor 5,
     # drain the data waiting in it, and then close
     if $have_pico; then
         exec 5</dev/ttyACM0

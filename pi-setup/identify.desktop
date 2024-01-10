@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Identify
+Exec=/home/pi/pqm-hellebores/tools/show_identity.sh
+Comment=Identify device name, IP address etc
+Terminal=false
+Icon=image-missing
+Type=Application

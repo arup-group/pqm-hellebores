@@ -152,35 +152,41 @@ class Settings():
                 file=sys.stderr)
 
 
-    # settings objects are created in each running program.
+    # Separate copies of a settings object are created in each running program.
     # The send_to_all function allows one program (hellebores.py) to inform all the others that settings
-    # have been changed. When they receive this signal, they will re-load the settings from file.
+    # have been changed. When the other programs receive this signal, they each re-load the settings
+    # from file.
 
-    # On Raspberry Pi OS/ Ubuntu/ Mac (posix), we user defined signal SIGUSR1 is sent to only the
-    # processes we want to signal, so the handling of this case is simpler.
+    # On Raspberry Pi OS/ Ubuntu/ WSL/ Mac (posix), user defined signal SIGUSR1 is sent to only the
+    # processes we want to receive the signal. They react accordingly.
 
-    # On windows, signalling facilities are very limited:
+    # On Windows, signalling facilities are very constrained:
     # 1. We can't pick individual programs, we have to send the signal to the whole process
     # group on the current console.
     # 2. In python we can only trap CTRL_C_EVENT signals (which arrive as SIGINT), all other signals cause
-    # process termination. We use an environment variable to configure each program/instance
-    # to behave in the way we want, including ignoring the signal when we are de-bugging and hellebores
-    # is not running.
+    # process termination. We use a flag and an environment variable to control when we want the signal
+    # handler to take effect.
+    # 3. The interception of CTRL_C_EVENT signals can cause a nuisance during debugging, because you can't
+    # use it any longer to stop programs from the keyboard. As an alternative, use the CTRL+BREAK key
+    # combination to send a termination signal which is not intercepted. On a laptop without a BREAK key,
+    # try fn+R.
 
     def signal_handler(self, signum, frame):
-        # for de-bugging on Windows, let the program quit if the environment variable hasn't been set
+        # on Windows, let the program quit if the environment variable hasn't been set
         if os.name == 'nt' and not ('CATCH_SIGINT' in os.environ):
             # default CTRL-C behaviour in python is to raise KeyError
             raise KeyError 
+        # for all other cases, we check the flag and reload the settings file if True
         if self.reload_on_signal == True:
             self.set_settings(self.load_settings())
             self.callback_fn()
 
 
     def send_to_all(self):
+        # Make sure all locally made changes are written to file
         self.set_derived_settings()
         self.save_settings()
-        # On Posix, we send a signal to selected programs via process ID.
+        # On Posix, we send a signal to pre-selected programs via process ID.
         if os.name == 'posix':
             for pid in self.get_program_pids(self.other_programs):
                 os.kill(pid, signal.SIGUSR1)
@@ -214,7 +220,7 @@ class Settings():
         self.other_programs = other_programs
         self.reload_on_signal = reload_on_signal
 
-        # establish identity and calibration factors
+        # establish identity and retrieve calibration constants
         self.identity = self.get_identity()
         (self.cal_offsets, self.cal_gains) = self.get_calibration(self.identity)
 
@@ -222,19 +228,17 @@ class Settings():
         self.sfile = self.resolve_path(CONFIGURATION_PATH, SETTINGS_FILE)
         self.set_settings(self.load_settings())
 
-        # set a callback function if provided. This will be called
-        # every time a signal is received just after settings have been updated
+        # set a callback function. This will be called every time a signal is received,
+        # just after settings have been updated
         self.callback_fn = callback_fn
 
-        # if we receive 'UPDATE_SIGNAL' signal set things up so that updated settings will
-        # be read from settings.json via the signal_handler function
-        # for faster update performance, and to reduce SD card wear, if TEMP is set to RAM disk,
+        # For faster update performance, and to reduce SD card wear, if TEMP is set to RAM disk,
         # we change our working path so that we save updates to the settings.json file there.
         temp_dir = os.getenv('TEMP')
         if temp_dir != None:
             self.sfile = self.resolve_path(temp_dir, SETTINGS_FILE)
-
-        # configure the signal handler
+ 
+        # set things up so that our signal handler is called when the relevant signal is received
         if os.name == 'posix':
             signal.signal(signal.SIGUSR1, self.signal_handler)
         elif os.name == 'nt':

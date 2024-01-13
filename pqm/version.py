@@ -40,7 +40,9 @@ class Version:
         file_names = [] 
         for path in paths:
             resolved_path = self.resolve_path(path, '')
-            file_names.extend([ f for f in os.listdir(resolved_path) if os.path.isfile(f) ])
+            # only accept files, not directories, that do not start with '.'
+            file_names.extend([ f for f in os.listdir(resolved_path) if os.path.isfile(f)
+                                             and f[0] != '.'])
         return file_names
 
     def get_version(self):

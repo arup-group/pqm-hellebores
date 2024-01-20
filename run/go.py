@@ -31,7 +31,7 @@ def run_on_windows():
     # will be handled as normal (ie the program will terminate).
 
     os.environ['CATCH_SIGINT'] = 'yes'
-    p1 = subprocess.Popen([sys.executable, 'rain_bucket.py'], stdout=subprocess.PIPE)
+    p1 = subprocess.Popen([sys.executable, 'rain_chooser.py'], stdout=subprocess.PIPE)
     p2 = subprocess.Popen([sys.executable, 'scaler.py'], stdin=p1.stdout, stdout=subprocess.PIPE)
     p3 = subprocess.Popen([sys.executable, 'mswin_pipes.py', 'tee', r'\\.\pipe\branch1', r'\\.\pipe\branch2'], stdin=p2.stdout)
 

@@ -14,7 +14,7 @@ if [[ -e /dev/ttyACM0 ]]; then
     READER="./reader.py"
 else
     have_pico=false
-    READER="./rain_bucket.py"
+    READER="./rain_chooser.py"
 fi
 
 # TEMP: settings.json, error.log and named pipes will be stored here

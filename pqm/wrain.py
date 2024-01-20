@@ -29,17 +29,6 @@ def get_sample(i, t, f):
     return (i & 0xffff, c0 & 0xffff, c1 & 0xffff, c2 & 0xffff, c3 & 0xffff)
 
 
-#def get_sample(i, t, f):
-#    """integer sample number, time, frequency, magnitude and phase tuples"""
-#    t = t/1000.0       # seconds
-#    c0 = int(25000.0*math.sin(2.0*math.pi*f*t) + 1.0*(random.random()-0.5))
-#    c1 = int(8000.0*math.sin(2.0*math.pi*f*t) + 2.0*(random.random()-0.5))
-#    c2 = int(200.0*math.sin(2.0*math.pi*f*t) + 5.0*(random.random()-0.5))
-#    c3 = int(5000.0*math.sin(2.0*math.pi*f*t) + 1.0*(random.random()-0.5))
-#    # the '& 0xffff' truncates negative numbers to fit in 16 bits
-#    return (i & 0xffff, c0 & 0xffff, c1 & 0xffff, c2 & 0xffff, c3 & 0xffff)
-#
-
 def main():
     # read settings from settings.json
     st = settings.Settings(reload_on_signal=False)

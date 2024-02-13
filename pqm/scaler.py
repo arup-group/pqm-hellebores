@@ -17,6 +17,7 @@ def from_twos_complement(v):
 def main():
     st = Settings()
 
+    print(st.scale_factors)
     i = 0   # sample index
     for line in sys.stdin:
         line = line.rstrip()
@@ -44,18 +45,11 @@ def main():
             leakage_current = ((from_twos_complement(cs[0]) + st.cal_offsets[0])
                                * st.scale_factors[0]
                                * st.cal_gains[0])
-            print(
-                f'{t :12.4f} '
-                f'{voltage :10.3f} '
-                f'{current :10.5f} '
-                f'{power :10.3f} '
-                f'{leakage_current :12.7f}')
+            print(f'{t:12.4f} {voltage:10.3f} {current:10.5f} {power:10.3f} {leakage_current:12.7f}')
             i = i + 1
 
         except ValueError:
-            print(
-                f'scaler.py, main(): Failed to read {line}.',
-                file=sys.stderr)
+            print(f'scaler.py, main(): Failed to read {line}.', file=sys.stderr)
 
 
 if __name__ == '__main__':

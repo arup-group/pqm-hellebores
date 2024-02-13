@@ -176,9 +176,11 @@ else:
 class Sample_Buffer:
 
     def __init__(self):
-        # working points buffer for four lines, and calculation array
+        # working points buffer for four lines, calculation array
+        # flag for detecting when pipes are closed (end of file)
         self.ps = [ [],[],[],[] ] 
         self.cs = []
+        self.pipes_ok = True
 
     # sample buffer history
     # future extension is to use this buffer for electrical event history
@@ -200,15 +202,24 @@ class Sample_Buffer:
         self.ps[3].append((sample[0], sample[4]))
 
     def load_analysis(self, f, capturing):
-        while is_data_available(f, 0.0):
+        if is_data_available(f, 0.0):
             try:
-                self.cs = f.readline().split()
-                sys.stdout.write('.')
-                sys.stdout.flush()
+                l = f.readline()
+                # read() and readline() return empty strings if the source of the pipe is closed
+                # so we immediately test for that
+                if l == '':
+                    print('Analysis pipe was closed.', file=sys.stderr)
+                    self.pipes_ok = False
+                # then break the analysis into tokens
+                analysis_items = l.split()
+                if len(analysis_items) > 0:
+                    self.cs = analysis_items
+                    sys.stdout.write('.')
+                    sys.stdout.flush()
             except:
                 print('hellebores.py: Sample_Buffer.load_analysis()'
-                      ' file error.', file=sys.stderr) 
-        return True
+                      ' file reading error.', file=sys.stderr) 
+
 
     def load_waveform(self, f, capturing, wfs):
         # the loop will exit if:
@@ -221,29 +232,35 @@ class Sample_Buffer:
         sample_counter = 0
         while is_data_available(f, 0.05) and sample_counter < 1000: 
             try:
-                ws = f.readline().split()
+                l = f.readline()
+                if l == '':
+                    print('Waveform pipe was closed.', file=sys.stderr)
+                    self.pipes_ok = False
+                    break
+                ws = l.split()
                 sample = [ int(w) for w in ws[:5] ]
                 if ws[-1] == '*END*':
                     # add current sample then end the frame
                     self.add_sample(sample)
                     self.end_frame(capturing, wfs)
                     self.xp = -1
-                    return True
+                    break
                 elif sample[0] < self.xp:
                     # x coordinate has reset to indicate start of new frame...
                     # end the frame before adding current sample to a new one
                     self.end_frame(capturing, wfs)    
                     self.add_sample(sample)
                     self.xp = -1
-                    return True
+                    break
                 else:
                     # an ordinary, non-special, sample
                     self.add_sample(sample)
                 self.xp = sample[0]
                 sample_counter = sample_counter + 1
             except:
-                break   # break if we have any type of error with the input data
-        return False
+                print('hellebores.py: Sample_Buffer.load_analysis()'
+                      ' file reading error.', file=sys.stderr) 
+                break
 
     def save_waveform(self):
         self.sample_waveform_history = self.sample_waveform_history[1:]
@@ -306,7 +323,11 @@ class App_Actions:
               'should be substituted prior to calling it.', file=sys.stderr)
 
     def exit_application(self, option='quit'):
-        exit_codes = { 'quit': 0, 'error': 1, 'restart': 2, 'software_update': 3, 'shutdown': 4 }
+        exit_codes = { 'quit': 0,
+                       'error': 1,
+                       'restart': 2,
+                       'software_update': 3,
+                       'shutdown': 4 }
         try:
             code = exit_codes[option]
         except:
@@ -316,12 +337,12 @@ class App_Actions:
             
         self.close_streams()
         pygame.quit()
-        sys.exit(code)
+        sys.exit(code)   # quit application with the selected exit code
 
 
 
 def main():
-    # set stream files
+    # get names of stream files from the command line
     if len(sys.argv) == 3:
         waveform_stream_name = sys.argv[1]
         analysis_stream_name = sys.argv[2]
@@ -367,7 +388,7 @@ def main():
     multimeter   = Multimeter(st, app_actions)
     ui           = UI_groups(st, waveform, multimeter, app_actions)
 
-    # start with the waveform mode enabled
+    # start up in the waveform mode
     ui.app_actions.set_updater('waveform')
 
     # set up a sample buffer object
@@ -392,9 +413,15 @@ def main():
         # problems are suspected here.
         # The load_waveform() function also implicitly manages display refresh speed when not
         # capturing, by waiting for a definite time for new data.
-        got_new_frame = buffer.load_waveform(app_actions.waveform_stream, app_actions.capturing, wfs)
-        got_new_analysis = buffer.load_analysis(app_actions.analysis_stream, app_actions.capturing)
- 
+
+        buffer.load_waveform(app_actions.waveform_stream, app_actions.capturing, wfs)
+        buffer.load_analysis(app_actions.analysis_stream, app_actions.capturing)
+
+        if buffer.pipes_ok == False:
+            # one or both incoming data pipes were closed, quit the application
+            app_actions.exit_application('quit')
+
+
         # we don't use the event handler to schedule plotting updates, because it is not
         # efficient enough for high frame rates. Instead we plot explicitly when needed, every
         # time round the loop. 
@@ -405,13 +432,13 @@ def main():
         for e in events:
             if (e.type == pygame.QUIT) or (e.type == pygame.KEYDOWN and e.key == pygame.K_q):
                 app_actions.exit_application('quit')
-            elif e.type == pygame.KEYDOWN and e.key == pygame.K_d:
+            elif e.type == pygame.KEYDOWN and e.key == pygame.K_d:     # dots
                 waveform.plot_mode('dots')
-            elif e.type == pygame.KEYDOWN and e.key == pygame.K_l:
+            elif e.type == pygame.KEYDOWN and e.key == pygame.K_l:     # lines
                 waveform.plot_mode('lines')
-            elif e.type == pygame.KEYDOWN and e.key == pygame.K_r:
+            elif e.type == pygame.KEYDOWN and e.key == pygame.K_r:     # run
                 app_actions.capturing = True
-            elif e.type == pygame.KEYDOWN and e.key == pygame.K_s:
+            elif e.type == pygame.KEYDOWN and e.key == pygame.K_s:     # stop
                 app_actions.capturing = False
             elif e.type == app_actions.clear_screen_event:
                 screen.fill(LIGHT_GREY)

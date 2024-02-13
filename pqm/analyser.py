@@ -16,8 +16,8 @@ def main():
         # print only one line in 7812 (1 per second, approx)
         if i == 0:
             print(line)
+            sys.stdout.flush()
         i = (i + 1) % 7812
-        sys.stdout.flush()
     print('Finished calculations.', file=sys.stderr)
 
 if __name__ == '__main__':

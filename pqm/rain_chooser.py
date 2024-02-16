@@ -19,23 +19,15 @@ import math
 import random
 import copy
 
-
 # local import
 from settings import Settings
 
 
-
-WINDOW_SIZE = (550, 450)
+WINDOW_SIZE = (560, 450)
 FONT = 'font/RobotoMono-Medium.ttf'
 FONT_SIZE = 12
 BACKGROUND_COLOUR = (250, 150, 150)
 ROOT2 = math.sqrt(2)
-
-# default settings
-# within a particular list, the elements are harmonic order, amplitude, phase shift
-# can repeat any number of times to build up harmonic contributions
-
-
 
 
 def sample(i, fs):
@@ -184,30 +176,33 @@ def setup_ui(screen, parameters):
                              mode=parameters.directions_lookup[ref],
                              show_value_on_right_side=False, edit=False)
 
-    supply        = thorpy.TitleBox('Supply',
-                      [ sliders['freq'],
-                        thorpy.Group([sliders['v1'], sliders['v3'], sliders['v5']], mode='h'),
-                        thorpy.Group([sliders['v_ph3'], sliders['v_ph5']], mode='v') ])
+    supply = thorpy.TitleBox('Supply',
+                [ sliders['freq'],
+                  thorpy.Group([sliders['v1'], sliders['v3'], sliders['v5']], mode='h'),
+                  thorpy.Group([sliders['v_ph3'], sliders['v_ph5']], mode='v') ])
 
-    load          = thorpy.TitleBox('Load',
-                      [ thorpy.Group([sliders['i1'], sliders['i3'], sliders['i5']], mode='h'),
-                        thorpy.Group([sliders['i_ph1'], sliders['i_ph3'], sliders['i_ph5']], mode='v') ])
-
+    load  = thorpy.TitleBox('Load',
+               [ thorpy.Group([sliders['i1'], sliders['i3'], sliders['i5']], mode='h'),
+                 thorpy.Group([sliders['i_ph1'], sliders['i_ph3'], sliders['i_ph5']], mode='v') ])
 
     earth_leakage = thorpy.TitleBox('Earth Leakage',
                       [ thorpy.Group([sliders['el'], sliders['el_ph']], mode='v') ])
 
-
-    text          = thorpy.Text('')
+    # the dummy text forces the size of the object and therefore its centre position on screen
+    text = thorpy.Text(' '*48 + '\n\n\n\n')
 
     def set_text(text, parameters):
         p = parameters
-        new_text = ''
-        new_text = new_text + f"freq    : {p.get('freq')}\n"
-        new_text = new_text + f"voltage : {p.get('v1')} (0), {p.get('v3')} ({p.get('v_ph3')}), {p.get('v5')} ({p.get('v_ph5')})\n"
-        new_text = new_text + f"current : {p.get('i1')} ({p.get('i_ph1')}), {p.get('i3')} ({p.get('i_ph3')}), {p.get('i5')} ({p.get('i_ph5')})\n"
-        new_text = new_text + f"leakage : {p.get('el')} ({p.get('el_ph')})"
-        text.set_value(new_text) 
+        new_text = f"freq    : {p.get('freq')}\n"
+        new_text = new_text + f"voltage : {p.get('v1')} (0)," \
+                            + f" {p.get('v3')} ({p.get('v_ph3')})," \
+                            + f" {p.get('v5')} ({p.get('v_ph5')})\n"
+        new_text = new_text + f"current : {p.get('i1')} ({p.get('i_ph1')})," \
+                            + f" {p.get('i3')} ({p.get('i_ph3')})," \
+                            + f" {p.get('i5')} ({p.get('i_ph5')})\n"
+        new_text = new_text + f"leakage : {p.get('el')} ({p.get('el_ph')})\n"
+        new_text = new_text + ' '*48         # include a long line so that the dimensions never change
+        text.set_value(new_text)
 
     def load_presets(preset_name, parameters):
         """This callback function is called when a preset button is pressed."""
@@ -228,15 +223,15 @@ def setup_ui(screen, parameters):
             parameters.set_from_slider_position(ref, sliders[ref].get_value())
             set_text(text, parameters)
 
-    presets_ui = thorpy.Group([ thorpy.Button('One'),
+    buttons_ui = thorpy.Group([ thorpy.Button('One'),
                                 thorpy.Button('Two'),
                                 thorpy.Button('Three'),
                                 thorpy.Button('Four') ], mode='h')
    
-    for button in presets_ui.get_children():
+    for button in buttons_ui.get_children():
         button.set_size((50, 30))
-        preset_name = button.get_value()
-        button.at_unclick = lambda preset_name=preset_name: load_presets(preset_name, parameters) 
+        button_name = button.get_value()
+        button.at_unclick = lambda button_name=button_name: load_presets(button_name, parameters) 
 
     for ref in parameters.labels:
         slider = sliders[ref].children[1]  # child 1 is the actual slider object
@@ -244,13 +239,7 @@ def setup_ui(screen, parameters):
         slider.function_to_call(lambda a, b, ref=ref: slider_to_parameters(ref, parameters))  # ref = 'v1', 'v3', etc
 
     sliders_ui = thorpy.Group([supply,load,earth_leakage], mode='h')
-    text_ui = thorpy.Group([text], mode='h')
-  
-    presets_ui.stick_to(other=screen, self_side='left', other_side='left', delta=(0,-200)) 
-    sliders_ui.stick_to(other=screen, self_side='left', other_side='left', delta=(0,-20))
-    text_ui.stick_to(other=screen, self_side='left', other_side='left', delta=(0,170))
-
-    all_ui = thorpy.Group([presets_ui, sliders_ui, text_ui], mode=None)
+    all_ui = thorpy.Group([buttons_ui, sliders_ui, text], mode='v')
 
     # load default parameters
     load_presets('One', parameters) 

@@ -278,9 +278,6 @@ default_settings = '''
     "horizontal_pixels_per_division": 70,
     "vertical_pixels_per_division": 60,
     "time_display_ranges": [
-        0.1,
-        0.2,
-        0.4,
         1,
         2,
         4,
@@ -289,7 +286,7 @@ default_settings = '''
         40,
         100
     ],
-    "time_display_index": 6,
+    "time_display_index": 3,
     "voltage_display_ranges": [
         50,
         100,

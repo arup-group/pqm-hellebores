@@ -23,7 +23,7 @@ import copy
 from settings import Settings
 
 
-WINDOW_SIZE = (560, 450)
+WINDOW_SIZE = (600, 450)
 FONT = 'font/RobotoMono-Medium.ttf'
 FONT_SIZE = 12
 BACKGROUND_COLOUR = (250, 150, 150)
@@ -57,29 +57,30 @@ def generate_samples(parameters):
     # than 1000 samples in one go: drop them and return early instead
     if n > 1000:
         sample_index = sample_index + n 
-        return
 
-    # retrieve the sample generating coefficients from the current parameters
-    f = parameters.get('freq')
-    v = [(f, parameters.get('v1'), 0.0), (f*3, parameters.get('v3'), parameters.get('v_ph3')), (f*5, parameters.get('v5'), parameters.get('v_ph5'))]
-    i = [(f, parameters.get('i1'), parameters.get('i_ph1')), (f*3, parameters.get('i3'), parameters.get('i_ph3')), (f*5, parameters.get('i5'), parameters.get('i_ph5'))]
-    el = [(f, parameters.get('el'), parameters.get('el_ph'))] 
+    else:
+        # retrieve the sample generating coefficients from the current parameters
+        f = parameters.get('freq')
+        v = [(f, parameters.get('v1'), 0.0), (f*3, parameters.get('v3'), parameters.get('v_ph3')), (f*5, parameters.get('v5'), parameters.get('v_ph5'))]
+        i = [(f, parameters.get('i1'), parameters.get('i_ph1')), (f*3, parameters.get('i3'), parameters.get('i_ph3')), (f*5, parameters.get('i5'), parameters.get('i_ph5'))]
+        el = [(f, parameters.get('el'), parameters.get('el_ph'))] 
+    
+        # generate new samples to bring us up-to-date with the clock
+        for _ in range(n):
+            # scaling factors for each channel as per below
+            # [4.07e-07, 2.44e-05, 0.00122, 0.0489]
+            # to simulate the hardware, we scale the signals by the reciprocal of the scaling factor
+            c3 = scale(1./0.0489, sample(sample_index, v))
+            c2 = scale(1./0.00122, sample(sample_index, i))
+            c1 = scale(1./2.44e-05, sample(sample_index, i))
+            c0 = scale(1./4.07e-07, sample(sample_index, el))
+            # update the running total
+            sample_index = sample_index + 1
+            # we output samples in order of leakage current, low range current, full range current, voltage
+            print(f"{sample_index & 0xffff:04x} {c0:04x} {c1:04x} {c2:04x} {c3:04x}")
 
-    # generate new samples to bring us up-to-date with the clock
-    while n > 0:
-        # scaling factors for each channel as per below
-        # [4.07e-07, 2.44e-05, 0.00122, 0.0489]
-        # to simulate the hardware, we scale the signals by the reciprocal of the scaling factor
-        c3 = scale(1./0.0489, sample(sample_index, v))
-        c2 = scale(1./0.00122, sample(sample_index, i))
-        c1 = scale(1./2.44e-05, sample(sample_index, i))
-        c0 = scale(1./4.07e-07, sample(sample_index, el))
-        # update the running total
-        sample_index = sample_index + 1
-        n = n - 1
-        # we output samples in order of leakage current, low range current, full range current, voltage
-        print(f"{sample_index & 0xffff:04x} {c0:04x} {c1:04x} {c2:04x} {c3:04x}")
-    return
+    # return the number of samples processed or incremented
+    return n
 
 
 
@@ -289,7 +290,14 @@ def main():
             pygame.display.flip()
 
         # Push out up to 1000 samples
-        generate_samples(parameters)
+        n = generate_samples(parameters)
+
+        # gentle optimisation -- n is the number of samples that we generated in this
+        # cycle. If we are managing decent performance, then no need to tear around
+        # the loop immediately, instead sleep a little and do a bigger block next time
+        # round
+        if n < 500:
+            time.sleep(0.02)  # equivalent to about 156 samples
 
     pygame.quit()
     

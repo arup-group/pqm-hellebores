@@ -22,9 +22,17 @@ Set the wifi SSID and password to be used for initial access.
 Copy the files from ./pi-setup to the boot partition of the SD card.
 Edit the firstrun.sh script in the boot partition to copy the files as follows:
 This will enable the pi to report it's IP address for remote access on
-first boot.
- cp /boot/autorun.sh /home/pi/autorun.sh
- cp /boot/find-me.desktop /home/pi/.config/autostart
+first boot. Insert the lines just before the command to delete the script at the end.
+
+if [ -f /boot/autorun.sh ]; then
+  cp /boot/autorun.sh /home/pi
+fi
+if [ -f /boot/find-me.desktop ]; then
+  cp /boot/find-me.desktop /home/pi/.config/autostart
+fi
+
+rm -f /boot/firstrun.sh  ####### NB JUST ABOVE THIS EXISTING LINE ######
+
 
 **Pico**  
 Using Thonny, open `./pico/main.py` and save it to the root folder of the microcontroller.

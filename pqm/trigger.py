@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-# Reset time t=0 in response to signal event eg voltage crossing zero
-# Time offset other sample readings with respect to the trigger
+# Monitors signal and detects signal event eg voltage crossing zero
+# Offsets time axis with respect to the trigger (trigger time is t=0)
 
 import sys
 import signal
@@ -12,15 +12,18 @@ BUFFER_SIZE = 65535          # size of circular sample buffer
 
 
 class Buffer:
-    buf = None           # numpy array, BUFFER_SIZE * 5 (of float)
+    buf = None           # array of 5*floats, ie BUFFER_SIZE * 5
     fp = 0               # front pointer of frame
     tp = 0               # trigger pointer (somewhere between front and rear)
     rp = 0               # rear pointer of frame
     sp = 0               # storage pointer (new samples)
     triggered = False    # trigger flag
-    # when there is a successful trigger, the trigger_test_fn will return an estimate
+    # When there is a successful trigger, the trigger_test_fn will return an estimate
     # of the fractional time offset between samples when the trigger took place.
+    # The interpolation fraction is used to create the time offset.
     interpolation_fraction = 0.0
+    # trigger_test_ch defines the input channel that will be used for triggering
+    # normally left on the voltage channel 3, but could be changed.
     # trigger_test_fn when defined takes two arguments, current and previous samples
     # returns True or False depending on whether a trigger criterion (defined inside
     # the function) is met
@@ -29,16 +32,20 @@ class Buffer:
 
 
     def __init__(self):
+        """buffer memory initialised with empty data"""
+        # performance optimisation: could consider memoryview object here
         self.buf = [ [0.0, 0.0, 0.0, 0.0, 0.0] for i in range(BUFFER_SIZE) ]
 
     def reset(self, test_fn, test_ch):
+        """sets updated trigger test function and trigger channel"""
         self.trigger_test_fn = test_fn
         self.trigger_test_ch = test_ch
      
 
-    # the storage location is determined by the input pointer sp, which is not intended
-    # to be manipulated other than here.
     def store_line(self, line):
+        """store a line of new data into the next buffer location"""
+        # the storage location is determined by the input pointer sp, which is not intended
+        # to be manipulated other than here.
         try:
             self.buf[self.sp % BUFFER_SIZE] = [ float(w) for w in line.split() ]
         except:
@@ -48,8 +55,8 @@ class Buffer:
         self.sp = self.sp + 1 
 
 
-    # call this to check if recent samples from tp pointer onwards cause a trigger
     def trigger_test(self):
+        """call this to check if recent samples from tp pointer onwards cause a trigger"""
         while self.tp < self.sp:
             self.triggered, self.interpolation_fraction = (
                 self.trigger_test_fn(
@@ -63,21 +70,22 @@ class Buffer:
             self.tp = self.tp + 1
         return False
 
-    # see if we have stored enough post-trigger samples to commence output
     def output_ready(self):
+        """see if we have stored enough post-trigger samples to commence output"""
         if self.triggered and self.sp >= self.fp:
             return True
         else:
             return False
 
     def generate_output(self):
-        # output the correct array slice with a time shift
+        """output the correct array slice with a time shift"""
         shift = 1.0 - self.rp - st.pre_trigger_samples - self.interpolation_fraction
         em = ''
         for s in range(self.rp, self.fp):
             sample = self.buf[s % BUFFER_SIZE]
             # modify the time stamps
             timestamp = st.interval * (s + shift)
+            # if it's the last sample in the frame, add an 'END' marker
             if s == self.fp - 1:
                 em = '*END*'
             print(f'{timestamp:12.4f} {sample[1]:10.3f} '
@@ -86,15 +94,20 @@ class Buffer:
  
 
 def via_trigger(line, buf):
+    # store the incoming data
     buf.store_line(line)
+    # if we haven't triggered yet, test if we can now
     if buf.triggered == False:
         buf.trigger_test()
+    # otherwise test to see if we have a full buffer yet
+    # if we have, then print out the data and re-arm the trigger
     elif buf.output_ready():
         buf.generate_output()
         buf.triggered = False
 
 
 def pass_through(line, buf):
+    # pretty simple, no triggering at all, just copy the input to the output
     print(line)
 
 
@@ -123,7 +136,9 @@ def receive_new_settings(buf):
                        else (False, 0.0))
         else:
             return None
- 
+
+    # we define the signal processing function 'process_fn' to point to different
+    # behaviours depending on the mode of triggering that is specified
     if st.trigger_mode == 'freerun':
         process_fn = pass_through
     elif st.trigger_mode == 'sync':
@@ -142,10 +157,12 @@ def receive_new_settings(buf):
 def main():
     global st, process_fn
     # we make a buffer to temporarily hold a history of samples -- this allows us to output
-    # a frame of waveform that includes samples 'before the trigger'
+    # a frame of waveform that includes samples 'before and after the trigger'
     buf = Buffer()
 
     # load settings into st object
+    # new settings can alter the trigger behaviour, so the receive_new_settings() function
+    # deals with that
     st = settings.Settings(lambda: receive_new_settings(buf))
     
     # setup process_fn and set correct trigger condition

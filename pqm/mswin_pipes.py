@@ -1,7 +1,7 @@
 ######
 ### Utility functions to assist cmd.exe shell on windows systems
 ### Supports pipe in, pipe out and tee functionality, using APIs supported
-### on MS Windows, but not available natively in the shell.
+### on MS Windows, but not available natively in the cmd.exe shell.
 ######
 
 # install the pywin32 package via pip
@@ -32,6 +32,7 @@ class Pipe:
         self.close()
 
     def open_existing_pipe(self, pipe_name):
+        """open a pipe for reading using Windows file API"""
         pipe = None
         retries = 6
         while pipe == None and retries > 0:
@@ -58,6 +59,7 @@ class Pipe:
 
 
     def open_new_pipe(self, pipe_name):
+        """open a pipe for writing using Windows named pipe API"""
         pipe = None
         try:
             pipe = win32pipe.CreateNamedPipe(
@@ -85,12 +87,15 @@ class Pipe:
 
 
     def is_data_available(self, t):
+        """boolean predicate to check if there is data waiting in the pipe"""
         t0 = time.time()
         while True:
             _, n, _ = win32pipe.PeekNamedPipe(self.pfh, 0)
             if n > 0:
+                # true if there are bytes available in the pipe
                 return True
             if time.time() - t0 > t:
+                # false if we timeout
                 return False
 
     def close(self):
@@ -98,30 +103,31 @@ class Pipe:
 
 
 def main():
-    # trap incoming signals
-    # we don't use st object for any other purpose here
+    # The only purpose we create st object is to to trap CTRL-C (SIGINT) signal.
+    # This signal is used to control reload of settings in other programs 
+    # in the project but unavoidably also received by this program.
     st=Settings(reload_on_signal=False)
 
     try:
         command = sys.argv[1]
         if command == 'read':
+            # open an existing pipe for reading then copy to stdout
             with Pipe(sys.argv[2], 'r') as p:
                 while True:
                     sys.stdout.write(p.readline())
     
         elif command == 'write':
+            # open a new pipe for writing then copy data from stdin
             with Pipe(sys.argv[2], 'w') as p:
                 for line in sys.stdin:
                     p.writeline(line)
                     
         elif command == 'tee':
+            # open two pipes for writing then copy from stdin to both
             with Pipe(sys.argv[2], 'w') as p1, Pipe(sys.argv[3], 'w') as p2:
                 for line in sys.stdin:
                     p1.writeline(line)
                     p2.writeline(line)
-
-        else:
-            pass
 
     except:
         print(f"{sys.argv[0]}: error processing the command {command}.", file=sys.stderr)
@@ -129,7 +135,7 @@ def main():
 
 
 if __name__ == '__main__':
-    # pipe names need to be in the form \\.\pipe\foo
+    # on windows, pipe names need to be in the form \\.\pipe\foo
     if len(sys.argv) < 3:
         print(f"Usage: {sys.argv[0]} read [pipe], or {sys.argv[0]} write [pipe], or {sys.argv[0]} tee [pipe1] [pipe2]")
         sys.exit(1)

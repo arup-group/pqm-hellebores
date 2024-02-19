@@ -26,6 +26,7 @@ from settings import Settings
 WINDOW_SIZE = (600, 450)
 FONT = 'font/RobotoMono-Medium.ttf'
 FONT_SIZE = 12
+SLIDER_SIZE = 60
 BACKGROUND_COLOUR = (250, 150, 150)
 ROOT2 = math.sqrt(2)
 
@@ -61,13 +62,17 @@ def generate_samples(parameters):
     else:
         # retrieve the sample generating coefficients from the current parameters
         f = parameters.get('freq')
-        v = [(f, parameters.get('v1'), 0.0), (f*3, parameters.get('v3'), parameters.get('v_ph3')), (f*5, parameters.get('v5'), parameters.get('v_ph5'))]
-        i = [(f, parameters.get('i1'), parameters.get('i_ph1')), (f*3, parameters.get('i3'), parameters.get('i_ph3')), (f*5, parameters.get('i5'), parameters.get('i_ph5'))]
+        v = [(f, parameters.get('v1'), 0.0),
+             (f*3, parameters.get('v3'), parameters.get('v_ph3')),
+             (f*5, parameters.get('v5'), parameters.get('v_ph5'))]
+        i = [(f, parameters.get('i1'), parameters.get('i_ph1')),
+             (f*3, parameters.get('i3'), parameters.get('i_ph3')),
+             (f*5, parameters.get('i5'), parameters.get('i_ph5'))]
         el = [(f, parameters.get('el'), parameters.get('el_ph'))] 
     
         # generate new samples to bring us up-to-date with the clock
         for _ in range(n):
-            # scaling factors for each channel as per below
+            # hardware scaling factors for each channel as per below
             # [4.07e-07, 2.44e-05, 0.00122, 0.0489]
             # to simulate the hardware, we scale the signals by the reciprocal of the scaling factor
             c3 = scale(1./0.0489, sample(sample_index, v))
@@ -76,7 +81,7 @@ def generate_samples(parameters):
             c0 = scale(1./4.07e-07, sample(sample_index, el))
             # update the running total
             sample_index = sample_index + 1
-            # we output samples in order of leakage current, low range current, full range current, voltage
+            # output samples in order of leakage current, low range current, full range current, voltage
             print(f"{sample_index & 0xffff:04x} {c0:04x} {c1:04x} {c2:04x} {c3:04x}")
 
     # return the number of samples processed or incremented
@@ -113,7 +118,7 @@ class Parameters:
                   'v','v','v','h','h','h',
                   'v','h']
 
-    # the minimum and maximum values that correspond to a slider range of 0 to 60
+    # the minimum and maximum values that correspond to a slider range
     ranges     = [ (30,70), (100,300), (0,100), (0,100), (-180,180), (-180,180),
                    (0,5), (0,5), (0,5), (-180,180), (-180,180), (-180,180),
                    (0,0.010), (-180,180) ]
@@ -149,9 +154,9 @@ class Parameters:
         low, high = self.ranges_lookup[ref]
         slider_direction = self.directions_lookup[ref]
         if slider_direction == 'h':        
-            slider_position = 60.0 * (v - low)/(high - low)
+            slider_position = SLIDER_SIZE * (v - low)/(high - low)
         elif slider_direction == 'v':
-            slider_position = 60.0 * (high - v)/(high - low)
+            slider_position = SLIDER_SIZE * (high - v)/(high - low)
         return slider_position
  
     def set_from_slider_position(self, ref, slider_position):
@@ -160,9 +165,9 @@ class Parameters:
         low, high = self.ranges_lookup[ref]
         slider_direction = self.directions_lookup[ref]
         if slider_direction == 'h':        
-            value = low + (high - low) * slider_position/60.0
+            value = low + (high - low) * slider_position/SLIDER_SIZE
         elif slider_direction == 'v':
-            value = high - (high - low) * slider_position/60.0
+            value = high - (high - low) * slider_position/SLIDER_SIZE
         self.settings_lookup[ref] = round(value, self.rounding_lookup[ref])
 
 
@@ -173,7 +178,7 @@ def setup_ui(screen, parameters):
     sliders = {}
     for ref in parameters.labels:
         sliders[ref] = thorpy.SliderWithText(
-                             ref, 0, 60, 10, 60, thickness=8,
+                             ref, 0, SLIDER_SIZE, 0, SLIDER_SIZE, thickness=8,
                              mode=parameters.directions_lookup[ref],
                              show_value_on_right_side=False, edit=False)
 
@@ -235,11 +240,12 @@ def setup_ui(screen, parameters):
         button.at_unclick = lambda button_name=button_name: load_presets(button_name, parameters) 
 
     for ref in parameters.labels:
+        # ref = 'v1', 'v3', etc
         slider = sliders[ref].children[1]  # child 1 is the actual slider object
         position = slider.get_value()
-        slider.function_to_call(lambda a, b, ref=ref: slider_to_parameters(ref, parameters))  # ref = 'v1', 'v3', etc
+        slider.function_to_call(lambda a, b, ref=ref: slider_to_parameters(ref, parameters))
 
-    sliders_ui = thorpy.Group([supply,load,earth_leakage], mode='h')
+    sliders_ui = thorpy.Group([supply, load, earth_leakage], mode='h')
     all_ui = thorpy.Group([buttons_ui, sliders_ui, text], mode='v')
 
     # load default parameters

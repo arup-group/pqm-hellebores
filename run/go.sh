@@ -7,7 +7,11 @@ PROGRAM_DIR=$(realpath $SCRIPT_DIR/../pqm)
 # Change to the program directory
 cd $PROGRAM_DIR
 
-# 
+# Activate the virtual environment, if we have one
+if [[ -e $SCRIPT_DIR/../venv ]]; then
+    source $SCRIPT_DIR/../venv/bin/activate
+fi
+
 # Figure out if we are running on real hardware or not
 if [[ -e /dev/ttyACM0 ]]; then
     have_pico=true

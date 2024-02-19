@@ -46,13 +46,18 @@ Clone the repository:
 Change to the working directory:  
 `cd pqm-hellebores`
 
+Create a virtual environment, and activate it
+`python -m venv create venv`
+`source venv/bin/activate`
+
 Install the dependencies  
-`python3 -m pip install -r requirements.txt`
+`python -m pip install -r requirements.txt`
 
 See notes file for additional system dependencies
 
 Set up the desktop shortcuts  
-[tbc]
+cp /boot/find-me.desktop /home/pi/.local/share/applications
+cp /boot/hellebores.desktop /home/pi/.local/share/applications
 
 ## Running
 To use the interactive user interface, run "hellebores" from the Raspberry Pi desktop menu.

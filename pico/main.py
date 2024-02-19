@@ -22,7 +22,7 @@ BUFFER_END_BIT_MASK  = const(BUFFER_SIZE - 1)       # bit mask to circulate the 
 PAGE_FLIP_BIT_MASK   = const(BUFFER_SIZE // 2)      # bit mask to flip the print flag
 PAGE1_END            = const(BUFFER_SIZE * 8 // 2)  # bytearray index to end of page 1 (first half of buffer)
 PAGE2_END            = const(BUFFER_SIZE * 8)       # bytearray index to end of page 2 (second half of buffer)
-
+SYNC_BYTES           = b'\xff\xff\xff\xff'          # bytes that are added to the end of each block of output data
 
 
 # pin setup
@@ -40,14 +40,14 @@ mode_select_pin  = machine.Pin(26, Pin.IN)     # switch between streaming (LOW) 
 
 def configure_adc_spi_interface(sck_adc_pin, sdi_adc_pin, ado_adc_pin):
     spi_adc_interface = machine.SPI(0,
-                        baudrate   = SPI_CLOCK_RATE,
-                        polarity   = 0,
-                        phase      = 0,
-                        bits       = 8,
-                        firstbit   = machine.SPI.MSB,
-                        sck        = sck_adc_pin,
-                        mosi       = sdi_adc_pin,
-                        miso       = ado_adc_pin)
+                                    baudrate   = SPI_CLOCK_RATE,
+                                    polarity   = 0,
+                                    phase      = 0,
+                                    bits       = 8,
+                                    firstbit   = machine.SPI.MSB,
+                                    sck        = sck_adc_pin,
+                                    mosi       = sdi_adc_pin,
+                                    miso       = ado_adc_pin)
     return spi_adc_interface
 
 
@@ -207,7 +207,12 @@ def print_buffer(bs):
         gc.collect()
     else:
         # write out the selected portion of buffer as bytes
+        # followed by sync bytes. These assist the reader program
+        # on the Pi, and works around a race condition in the Pico
+        # that means the value of the final byte in the block
+        # is sometimes corrupted.
         sys.stdout.buffer.write(bs)
+        sys.stdout.buffer.write(SYNC_BYTES)
     buffer_led_pin.off()
 
 ########################################################
@@ -276,11 +281,13 @@ def process_command():
 def main():
     global mode, print_flag, cell_ptr
 
-    # Wait for 10 seconds, opportunity to return pico to REPL if it is crashing 
+    # Wait for 60 seconds, opportunity to return pico to REPL if it is crashing 
     if DEBUG:
         print('PICO starting up.')
-        print('Waiting for 10 seconds...')
-    time.sleep(10)
+        print('Waiting for 60 seconds...')
+    pico_led_pin.on()
+    time.sleep(60)
+    pico_led_pin.off()
 
     if DEBUG:
         print('Configuring SPI interface to ADC.')

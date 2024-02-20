@@ -15,14 +15,12 @@ COMMAND         = const(2)
 
 # Buffer memory
 # Advantage if the buffer size is a power of two, to allow divide by two and bit masks to work easily
-# The buffer size is measured in 'samples' or number of cells. However note the underlying memory size in bytes
+# The buffer size is measured in 'samples' or number of cells.
+# However note the underlying memory size in bytes
 # is BUFFER_SIZE * 8 because we have 4 measurement channels and 2 bytes per channel.
-BUFFER_SIZE          = const(128)                   # number of samples in a buffer
-BUFFER_END_BIT_MASK  = const(BUFFER_SIZE - 1)       # bit mask to circulate the buffer pointer
-PAGE_FLIP_BIT_MASK   = const(BUFFER_SIZE // 2)      # bit mask to flip the print flag
-PAGE1_END            = const(BUFFER_SIZE * 8 // 2)  # bytearray index to end of page 1 (first half of buffer)
-PAGE2_END            = const(BUFFER_SIZE * 8)       # bytearray index to end of page 2 (second half of buffer)
-SYNC_BYTES           = b'\xff\xff\xff\xff'          # bytes that are added to the end of each block of output data
+BUFFER_SIZE          = const(128)                # number of samples in a buffer
+BUFFER_END_BIT_MASK  = const(BUFFER_SIZE - 1)    # 0b1111111 bit mask to circulate the buffer pointer
+PAGE_FLIP_BIT_MASK   = const(BUFFER_SIZE // 2)   # 0b1000000 bit mask to flip the print flag
 
 
 # pin setup
@@ -208,11 +206,10 @@ def print_buffer(bs):
     else:
         # write out the selected portion of buffer as bytes
         # followed by sync bytes. These assist the reader program
-        # on the Pi, and works around a race condition in the Pico
-        # that means the value of the final byte in the block
-        # is sometimes corrupted.
+        # on the Pi, and mitigates a race condition in the Pico
+        # that means the value of the final byte in the serial interface
+        # buffer is sometimes corrupted.
         sys.stdout.buffer.write(bs)
-        sys.stdout.buffer.write(SYNC_BYTES)
     buffer_led_pin.off()
 
 ########################################################
@@ -254,8 +251,9 @@ def streaming_loop_core_1():
     # Create memoryview objects that point to each half of the buffer.
     # This avoids having to make a copy of a portion of the buffer every
     # time we print, which would waste time and leak memory that would need GC.
-    mv_p1 = memoryview(mv_acq[0:PAGE1_END])
-    mv_p2 = memoryview(mv_acq[PAGE1_END:PAGE2_END])
+    page_break = BUFFER_SIZE * 8 // 2    # the buffer is divided into two pages
+    mv_p1 = memoryview(mv_acq[:page_break])
+    mv_p2 = memoryview(mv_acq[page_break:])
    
     while mode == STREAMING:
         # wait while Core 0 is writing to page 1

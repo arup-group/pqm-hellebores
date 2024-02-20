@@ -7,31 +7,27 @@ import sys
 import serial
 import settings
 
-BUFFER_SIZE = 128
-# 8 bytes per sample in buffer,
-# NB 4 bytes 0xff, 0xff, 0xff, 0xff are added to the end of each block
-# by the microcontroller for stream synchronisation and to resolve race condition
-# that can corrupt final byte
+BUFFER_SIZE = 32
 BLOCK_SIZE = BUFFER_SIZE * 8
 
 
-def synchronise(ser):
-    # detect synchronisation bytes
-    # looking for 0xff, 0xff, don't care, don't care
-    try:
-        # try for a decent length of data
-        for _ in range (10000):
-            b = ser.read(1)
-            if b == 0xff:
-                b = ser.read(1)
-                if b == 0xff:
-                    b = ser.read(2)
-                    return True
-        raise ValueError
-    except:
-        return False
-
-
+#def synchronise(ser):
+#    # detect synchronisation bytes
+#    # looking for 0xff, 0xff, don't care, don't care
+#    try:
+#        # try for a decent length of data
+#        for _ in range (10000):
+#            b = ser.read(1)
+#            if b == 0xff:
+#                b = ser.read(1)
+#                if b == 0xff:
+#                    b = ser.read(2)
+#                    return True
+#        raise ValueError
+#    except:
+#        return False
+ 
+ 
 def read_and_print(ser):
     try:
         # sometimes (rarely) there is a serial read error.
@@ -40,7 +36,7 @@ def read_and_print(ser):
         retries = 5
         while True:    
             # read the entire block including the synchronisation bytes
-            bs = (ser.read(BLOCK_SIZE + 4).hex())
+            bs = (ser.read(BLOCK_SIZE).hex())
             # process data as lines of 8 bytes, or 16 hex digits
             for i in range(0, BLOCK_SIZE, 16):
                 print(f'{i//16 :04x} {bs[i:i+4]} {bs[i+4:i+8]} {bs[i+8:i+12]} {bs[i+12:i+16]}')
@@ -67,10 +63,10 @@ def main():
         print("reader.py: Couldn't open serial port.", file=sys.stderr)
         sys.exit(1)
 
-    if not synchronise(ser):
-        print('reader.py: Failed to synchronise with incoming data.', file=sys.stderr)
-        ser.close()
-        sys.exit(1)
+    #if not synchronise(ser):
+    #    print('reader.py: Failed to synchronise with incoming data.', file=sys.stderr)
+    #    ser.close()
+    #    sys.exit(1)
 
     # enter the main loop, each read block corresponds with a block
     # written by the microcontroller.

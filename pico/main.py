@@ -73,10 +73,11 @@ def set_and_verify_adc_register(spi_adc_interface, cs_adc_pin, reg, bs):
     
 
 def reset_adc(reset_adc_pin):
+    time.sleep(1)
     reset_adc_pin.value(0)
-    time.sleep(0.1)
+    time.sleep(1)
     reset_adc_pin.value(1)
-    time.sleep(0.1)
+    time.sleep(1)
 
 
 # gains are in order of hardware channel: differential current, current 1, current 2, voltage
@@ -205,10 +206,6 @@ def print_buffer(bs):
         gc.collect()
     else:
         # write out the selected portion of buffer as bytes
-        # followed by sync bytes. These assist the reader program
-        # on the Pi, and mitigates a race condition in the Pico
-        # that means the value of the final byte in the serial interface
-        # buffer is sometimes corrupted.
         sys.stdout.buffer.write(bs)
     buffer_led_pin.off()
 
@@ -216,7 +213,7 @@ def print_buffer(bs):
 ######### STREAMING LOOP FOR CORE 0 STARTS HERE
 ########################################################
 def streaming_loop_core_0(spi_adc_interface):
-    global print_flag
+    global print_flag, cell_ptr
     # Local variable to help us detect when the ISR changes the value of
     # the buffer index cell_ptr
     p = 0
@@ -225,10 +222,10 @@ def streaming_loop_core_0(spi_adc_interface):
         # wait for the ISR to change the pointer value
         while cell_ptr == p:
             continue
+        # immediately read the new data from ADC
+        spi_adc_interface.readinto(mv_cells[cell_ptr])
         # cell_ptr is volatile, so capture its value
         p = cell_ptr
-        # read the new data from ADC
-        spi_adc_interface.readinto(mv_cells[p])
         # see if we have reached a 'page boundary' in the buffer
         # if so, instruct Core 1 CPU to print it
         # 'anding' the pointer with a bit mask that has binary '1' in the MSB
@@ -279,12 +276,12 @@ def process_command():
 def main():
     global mode, print_flag, cell_ptr
 
-    # Wait for 60 seconds, opportunity to return pico to REPL if it is crashing 
+    # Wait for 30 seconds, opportunity to return pico to REPL if it is crashing 
     if DEBUG:
         print('PICO starting up.')
-        print('Waiting for 60 seconds...')
+        print('Waiting for 30 seconds...')
     pico_led_pin.on()
-    time.sleep(60)
+    time.sleep(30)
     pico_led_pin.off()
 
     if DEBUG:

@@ -12,6 +12,7 @@ DEBUG           = const(False)
 QUIT            = const(0)
 STREAMING       = const(1)
 COMMAND         = const(2)
+SYNC_BYTES      = const(b'\x00\x00\x00\x00\x00\x00\x00\x00')
 
 # Buffer memory
 # Advantage if the buffer size is a power of two, to allow divide by two and bit masks to work easily
@@ -207,6 +208,7 @@ def print_buffer(bs):
     else:
         # write out the selected portion of buffer as bytes
         sys.stdout.buffer.write(bs)
+        sys.stdout.buffer.write(SYNC_BYTES)
     buffer_led_pin.off()
 
 ########################################################

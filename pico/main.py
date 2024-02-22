@@ -225,10 +225,10 @@ def streaming_loop_core_0(spi_adc_interface):
         # wait for the ISR to change the pointer value
         while cell_ptr == p:
             continue
-        # cell_ptr has changed value: immediately read the new data from ADC
-        spi_adc_interface.readinto(mv_cells[cell_ptr])
         # cell_ptr is volatile, so capture its value
         p = cell_ptr
+        # read the new data from ADC
+        spi_adc_interface.readinto(mv_cells[p])
         # see if we have reached a 'page boundary' in the buffer
         # if so, instruct Core 1 CPU to print it
         # 'anding' the pointer with a bit mask that has binary '1' in the MSB

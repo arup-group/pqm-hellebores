@@ -202,7 +202,8 @@ class Sample_Buffer:
         self.ps[3].append((sample[0], sample[4]))
 
     def load_analysis(self, f, capturing):
-        if is_data_available(f, 0.0):
+        # incoming analysis data is optional
+        if f and is_data_available(f, 0.0):
             try:
                 l = f.readline()
                 # read() and readline() return empty strings if the source of the pipe is closed
@@ -282,21 +283,30 @@ class App_Actions:
         # create a custom pygame event, which we'll use for clearing the screen
         self.clear_screen_event = pygame.event.custom_type()
 
+    def open_pipe(self, file_name):
+        if os.name == 'posix':
+            # Pi, Ubuntu, WSL etc
+            p = open(file_name, 'r')
+        elif os.name == 'nt':
+            # Windows
+            p = Pipe(file_name, 'r')
+        else:
+            # Other
+            print(f"{sys.argv[0]}: Don't know how to open incoming pipe on {os.name} system.", file=sys.stderr)
+            raise NotImplementedError 
+        return p
+ 
     def open_streams(self, waveform_stream_name, analysis_stream_name):
         # open the input stream fifos
         try:
-            if os.name == 'posix':
-                # Pi, Ubuntu, WSL etc
-                self.waveform_stream = open(sys.argv[1], 'r') 
-                self.analysis_stream = open(sys.argv[2], 'r')
-            elif os.name == 'nt':
-                # Windows
-                self.waveform_stream = Pipe(sys.argv[1], 'r')
-                self.analysis_stream = Pipe(sys.argv[2], 'r')
+            if waveform_stream_name != None:
+                self.waveform_stream = self.open_pipe(waveform_stream_name) 
             else:
-                # Other
-                print(f"{sys.argv[0]}: Don't know how to open incoming pipes on {os.name} system.", file=sys.stderr)
-                raise NotImplementedError 
+                self.waveform_stream = sys.stdin
+            if analysis_stream_name != None:
+                self.analysis_stream = self.open_pipe(analysis_stream_name)
+            else:
+                self.analysis_stream = None
         except:
             print(f"{sys.argv[0]}: App_Actions.open_streams() couldn't open the input streams "
                   f"{waveform_stream_name} and {analysis_stream_name}", file=sys.stderr)
@@ -342,12 +352,17 @@ class App_Actions:
 
 
 def main():
-    # get names of stream files from the command line
+    # get names of stream files from the command line, or use stdin
     if len(sys.argv) == 3:
+        # read incoming data from named pipes
         waveform_stream_name = sys.argv[1]
         analysis_stream_name = sys.argv[2]
+    elif len(sys.argv) == 1:
+        # read incoming data from stdin (waveform only)
+        waveform_stream_name = None
+        analysis_stream_name = None
     else:
-        print(f"Usage: {sys.argv[0]} waveform_stream_name analysis_stream_name.", file=sys.stderr)
+        print(f"Usage: {sys.argv[0]} [waveform_stream_name] [analysis_stream_name].", file=sys.stderr)
         sys.exit(1)
 
     # initialise pygame

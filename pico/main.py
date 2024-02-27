@@ -13,11 +13,22 @@ SPI_CLOCK_RATE  = const(8000000)
 DEBUG           = const(False)
 SYNC_BYTES      = const(b'\x00\x00\x00\x00\x00\x00\x00\x00')
 DEFAULT_ADC_SETTINGS = { 'gains': ['1x', '1x', '1x', '1x'], 'sample_rate': '7.812k' }
-# operation modes
-QUIT            = const(0)
-STREAMING       = const(1)
-COMMAND         = const(2)
-RESET           = const(3)
+
+# for performance optimisation, we hold shared information between the two
+# CPU cores in a 'state' variable that is 12 bits wide
+# 'state' is a bit field that holds the sample pointer and some mode flags
+# MSB 0000xxxx:  mode flags 0001=QUIT, 0010=RESET, 0100=COMMAND, 1000=STREAMING
+# LSB 0yyyyyyy:  sample pointer 0 to 127
+# The following mask definitions enable us to perform certain assignments and tests
+# on the state variable
+QUIT          = const(0b000100000000)
+RESET         = const(0b001000000000)
+COMMAND       = const(0b010000000000)
+STREAMING     = const(0b100000000000)
+SAMPLE_MASK   = const(0b000001111111)
+PAGE1         = const(0b100000000000)
+PAGE2         = const(0b100001000000)
+WRAP_MASK     = const(0b111101111111)
 
 # Buffer memory
 # Advantage if the buffer size is a power of two, to allow divide by two and bit masks to work easily
@@ -114,8 +125,8 @@ def setup_adc(spi_adc_interface, cs_adc_pin, reset_adc_pin, adc_settings):
     # Set the status and communication register 0x0c
     # required bytes are:
     # ******* 0x98 = 0b10011000: 10 READ address increments on TYPES, 0 WRITE address does not increment ******,
-    # 0x88 = 0b10001000: 10 READ address increments on TYPES, 0 WRITE address does not increment,
     # ******* 1 DR_HIZ* DR is logic high when idle, 1 DR_LINK only 1 DR pulse is generated *******,
+    # 0x88 = 0b10001000: 10 READ address increments on TYPES, 0 WRITE address does not increment,
     # 0 DR_HIZ* DR is high impedance when idle, 1 DR_LINK only 1 DR pulse is generated,
     # 0 WIDTH_CRC is 16 bit, 00 WIDTH_DATA is 16 bits
     # 0x00 = 0b00000000: 0 EN_CRCCOM CRC is disabled, 0 EN_INT CRC interrupt is disabled
@@ -157,21 +168,13 @@ def setup_adc(spi_adc_interface, cs_adc_pin, reset_adc_pin, adc_settings):
     set_and_verify_adc_register(spi_adc_interface, cs_adc_pin, 0x0e, bytes(bs))
     
     
-# Interrupt handler for data ready pin (this pin is commanded from the ADC)
-def adc_read_handler(_):
-    global cell_ptr
-    # 'anding' the pointer with a bit mask that has binary '1' in the LSBs
-    # makes the buffer pointer circulate to zero without needing an 'if' conditional
-    # this means the instruction executes in constant time
-    cell_ptr = (cell_ptr + 1) & BUFFER_END_BIT_MASK
-
  
 def configure_interrupts(reset_me_pin, mode_select_pin):
     # we need this helper function, because we can't easily assign to global variable
     # within a lambda expression
     def set_mode(required_mode):
-        global mode
-        mode = required_mode
+        global state
+        state = required_mode
     # we use hard interrupt for the DR* pin in STREAMING mode for timing reasons (configured elsewhere)
     # for these other interrupts, timing is less critical so we use soft interrupts
     reset_me_pin.irq(trigger = Pin.IRQ_FALLING, handler = lambda reset_me_pin: set_mode(RESET), hard=False)
@@ -193,7 +196,15 @@ def configure_buffer_memory():
     mv_cells = []
     for i in range(0, BUFFER_SIZE):
         mv_cells.append(memoryview(mv_acq[i*8 : i*8+8]))
+
         
+# Interrupt handler for data ready pin (this pin is commanded from the ADC)
+def adc_read_handler(_):
+    global state
+    # 'anding' the pointer with a bit mask that has binary '1' in the LSBs
+    # makes the buffer pointer circulate to zero without needing an 'if' conditional
+    # this means the instruction executes in constant time
+    state = (state + 1) & WRAP_MASK
 
 
 def start_adc(spi_adc_interface):
@@ -231,36 +242,19 @@ def print_buffer(bs):
 ######### STREAMING LOOP FOR CORE 1 STARTS HERE
 ########################################################
 def streaming_loop_core_1():
-    global print_flag, cell_ptr
-    # Local variable to help us detect when the ISR changes the value of
-    # the buffer index cell_ptr
-    p = 0
-    while mode == STREAMING:
-        # wait for the ISR to change the pointer value
-        while cell_ptr == p:
-            continue
-        # immediately read the new data from ADC
-        spi_adc_interface.readinto(mv_cells[cell_ptr])
-        # cell_ptr is volatile, so capture its value
-        p = cell_ptr
-        # see if we have reached a 'page boundary' in the buffer
-        # if so, instruct Core 1 CPU to print it
-        # 'anding' the pointer with a bit mask that has binary '1' in the MSB
-        # makes the print_flag value 'flip flop' between zero and non-zero 
-        # without needing an 'if' conditional
-        # this means the instruction will execute in constant time
-        print_flag = p & PAGE_FLIP_BIT_MASK
+    global state
+    while state & STREAMING:
+        if state != p_state:
+            spi_adc_interface.readinto(mv_cells[state & SAMPLE_MASK])
+            p_state = state
     if DEBUG:
-        print('streaming_loop_core_0() exited')
+        print('streaming_loop_core_1() exited')
 
-########################################################
+#########################################################
 ######### STREAMING LOOP FOR CORE 0 STARTS HERE
 ########################################################
-# It works by detecting the 'print_flag' shared from Core 1 changing value.
-# This allows the print operation to synchronise to what is happening on Core 1,
-# so that it only tries to print the portion of buffer that is not currently 
-# being overwritten.
 def streaming_loop_core_0():    
+    global state
     # Create memoryview objects that point to each half of the buffer.
     # This avoids having to make a copy of a portion of the buffer every
     # time we print -- this would waste time and leak memory that would need GC.
@@ -268,20 +262,18 @@ def streaming_loop_core_0():
     # divide the circular buffer into two pages
     mv_p1 = memoryview(mv_acq[:page_break])
     mv_p2 = memoryview(mv_acq[page_break:])
-   
-    while mode == STREAMING:
+ 
+    while state & STREAMING:
         # wait while Core 1 is writing to page 1
-        while (mode == STREAMING) and (print_flag == 0):
+        while state & PAGE1 == PAGE1:
             continue
-        # now print page 1
         print_buffer(mv_p1)
         # wait while Core 1 is writing to page 2
-        while (mode == STREAMING) and (print_flag == PAGE_FLIP_BIT_MASK):
+        while state & PAGE2 == PAGE2:
             continue
-        # now print page 2
         print_buffer(mv_p2)
     if DEBUG:
-        print('streaming_loop_core_1() exited')
+        print('streaming_loop_core_0() exited')
 
 
 def process_command():
@@ -293,16 +285,11 @@ def process_command():
 
 
 def main():
-    global mode, print_flag, cell_ptr
+    global state
 
     # adc_settings can be changed in COMMAND mode
     adc_settings = DEFAULT_ADC_SETTINGS
 
-    # global variables that control processing in both cores
-    cell_ptr = 0             # buffer cell pointer (for DR* interrupt service routine)
-    print_flag = 0           # flag to indicate which page of the buffer to print
-    mode = STREAMING         # current operation mode: STREAMING, COMMAND, RESET or QUIT
- 
     # Wait for 30 seconds, provides debug opportunity to return pico to REPL if it is crashing 
     if DEBUG:
         print('PICO starting up.')
@@ -326,34 +313,37 @@ def main():
     # streaming mode
     configure_interrupts(reset_me_pin, mode_select_pin)
 
+    # start with streaming mode and buffer pointer zero
+    state = STREAMING
+ 
     if DEBUG:
-        print('Entering mode selection loop.')
-    while mode != QUIT:
-        if mode == STREAMING:
+        print('Entering mode switch loop.')
+
+    # test all of the mode flags in turn
+    while not state & QUIT:
+        if state & STREAMING:
             if DEBUG:
                 print('Entering streaming mode...')
             setup_adc(spi_adc_interface, cs_adc_pin, reset_adc_pin, adc_settings)
             # we don't want GC pauses while streaming
             gc.disable()
-            # Both 'streaming loops' will continue until mode variable
-            # changes value.
-            # Core 1 acquires the samples and flips print_flag when required
+            # start the ADC hardware interrupt (data ready pin DR*)
             start_adc(spi_adc_interface)
+            # start the steaming loops on the two CPU cores
             _thread.start_new_thread(streaming_loop_core_1, ())
-            stop_adc()
-            # Core 0 watches for print_flag to change value
-            # and will print half buffer to serial output each time
             streaming_loop_core_0()
+            # after streaming ends, disable the sampling and enable the GC
+            stop_adc()
             gc.enable()
 
-        elif mode == COMMAND:
+        elif state & COMMAND:
             if DEBUG:
                 print('Entering command mode...')
             # Receive new ADC settings, they will be applied to the ADC when we
             # resume STREAMING mode
             adc_settings = process_command()
         
-        elif mode == RESET:
+        elif state & RESET:
             # The ISR has detected that the reset pin went low
             # Ensure the CS* pin on ADC is deselected
             cs_adc_pin.value(1)
@@ -374,7 +364,8 @@ if __name__ == '__main__':
         if DEBUG:
             print('Interrupted.')
         # tell core 1 to stop
-        mode = QUIT
+        state = QUIT
         # return system to idle state with GC enabled
-        gc.enable()
         stop_adc()
+        gc.enable()
+

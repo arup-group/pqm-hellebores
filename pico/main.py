@@ -243,6 +243,8 @@ def print_buffer(bs):
 ########################################################
 def streaming_loop_core_1():
     global state
+    # make a local variable to track the previous value of state
+    p_state = state
     while state & STREAMING:
         if state != p_state:
             spi_adc_interface.readinto(mv_cells[state & SAMPLE_MASK])

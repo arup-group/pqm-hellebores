@@ -112,6 +112,14 @@ def setup_adc(spi_adc_interface, cs_adc_pin, reset_adc_pin, adc_settings):
     set_and_verify_adc_register(spi_adc_interface, cs_adc_pin, 0x0b, bytes(bs))
     
     # Set the status and communication register 0x0c
+    # required bytes are:
+    # ******* 0x98 = 0b10011000: 10 READ address increments on TYPES, 0 WRITE address does not increment ******,
+    # 0x88 = 0b10001000: 10 READ address increments on TYPES, 0 WRITE address does not increment,
+    # ******* 1 DR_HIZ* DR is logic high when idle, 1 DR_LINK only 1 DR pulse is generated *******,
+    # 0 DR_HIZ* DR is high impedance when idle, 1 DR_LINK only 1 DR pulse is generated,
+    # 0 WIDTH_CRC is 16 bit, 00 WIDTH_DATA is 16 bits
+    # 0x00 = 0b00000000: 0 EN_CRCCOM CRC is disabled, 0 EN_INT CRC interrupt is disabled
+    # 0x0f = 0b00001111: 1111 DRSTATUS data ready status bits for individual channels  
     bs = [0x88, 0x00, 0x0f]
     if DEBUG:
         print('Setting status and communication register STATUSCOM at 0c to 0x{:02x} 0x{:02x} 0x{:02x}'.format(*bs))
@@ -220,14 +228,13 @@ def print_buffer(bs):
     buffer_led_pin.off()
 
 ########################################################
-######### STREAMING LOOP FOR CORE 0 STARTS HERE
+######### STREAMING LOOP FOR CORE 1 STARTS HERE
 ########################################################
-def streaming_loop_core_0(spi_adc_interface):
+def streaming_loop_core_1():
     global print_flag, cell_ptr
     # Local variable to help us detect when the ISR changes the value of
     # the buffer index cell_ptr
     p = 0
-    start_adc(spi_adc_interface)
     while mode == STREAMING:
         # wait for the ISR to change the pointer value
         while cell_ptr == p:
@@ -243,18 +250,17 @@ def streaming_loop_core_0(spi_adc_interface):
         # without needing an 'if' conditional
         # this means the instruction will execute in constant time
         print_flag = p & PAGE_FLIP_BIT_MASK
-    stop_adc()
     if DEBUG:
         print('streaming_loop_core_0() exited')
 
 ########################################################
-######### STREAMING LOOP FOR CORE 1 STARTS HERE
+######### STREAMING LOOP FOR CORE 0 STARTS HERE
 ########################################################
-# It works by detecting the 'print_flag' shared from Core 0 changing value.
-# This allows the print operation to synchronise to what is happening on Core 0,
+# It works by detecting the 'print_flag' shared from Core 1 changing value.
+# This allows the print operation to synchronise to what is happening on Core 1,
 # so that it only tries to print the portion of buffer that is not currently 
 # being overwritten.
-def streaming_loop_core_1():    
+def streaming_loop_core_0():    
     # Create memoryview objects that point to each half of the buffer.
     # This avoids having to make a copy of a portion of the buffer every
     # time we print -- this would waste time and leak memory that would need GC.
@@ -264,12 +270,12 @@ def streaming_loop_core_1():
     mv_p2 = memoryview(mv_acq[page_break:])
    
     while mode == STREAMING:
-        # wait while Core 0 is writing to page 1
+        # wait while Core 1 is writing to page 1
         while (mode == STREAMING) and (print_flag == 0):
             continue
         # now print page 1
         print_buffer(mv_p1)
-        # wait while Core 0 is writing to page 2
+        # wait while Core 1 is writing to page 2
         while (mode == STREAMING) and (print_flag == PAGE_FLIP_BIT_MASK):
             continue
         # now print page 2
@@ -330,11 +336,14 @@ def main():
             # we don't want GC pauses while streaming
             gc.disable()
             # Both 'streaming loops' will continue until mode variable
-            # changes value. Core 1 watches for print_flag to change value
-            # and will print half buffer to serial output each time
+            # changes value.
+            # Core 1 acquires the samples and flips print_flag when required
+            start_adc(spi_adc_interface)
             _thread.start_new_thread(streaming_loop_core_1, ())
-            # Core 0 acquires the samples and flips print_flag when required
-            streaming_loop_core_0(spi_adc_interface)
+            stop_adc()
+            # Core 0 watches for print_flag to change value
+            # and will print half buffer to serial output each time
+            streaming_loop_core_0()
             gc.enable()
 
         elif mode == COMMAND:

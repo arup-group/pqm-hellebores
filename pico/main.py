@@ -54,6 +54,7 @@ mode_select_pin  = machine.Pin(26, Pin.IN)     # switch between streaming (LOW) 
 
 
 def configure_adc_spi_interface(sck_adc_pin, sdi_adc_pin, ado_adc_pin):
+    global spi_adc_interface
     spi_adc_interface = machine.SPI(0,
                                     baudrate   = SPI_CLOCK_RATE,
                                     polarity   = 0,
@@ -63,15 +64,15 @@ def configure_adc_spi_interface(sck_adc_pin, sdi_adc_pin, ado_adc_pin):
                                     sck        = sck_adc_pin,
                                     mosi       = sdi_adc_pin,
                                     miso       = ado_adc_pin)
-    return spi_adc_interface
 
-
-def write_bytes(spi_adc_interface, cs_adc_pin, addr, bs):
+def write_bytes(cs_adc_pin, addr, bs):
+    global spi_adc_interface
     cs_adc_pin.value(0)
     spi_adc_interface.write(bytes([addr & 0b11111110]) + bs) # for writing, make sure lowest bit is cleared
     cs_adc_pin.value(1)
         
-def read_bytes(spi_adc_interface, cs_adc_pin, addr, n):
+def read_bytes(cs_adc_pin, addr, n):
+    global spi_adc_interface
     cs_adc_pin.value(0)
     spi_adc_interface.write(bytes([addr | 0b00000001])) # for reading, make sure lowest bit is set
     obs = spi_adc_interface.read(n)
@@ -79,12 +80,13 @@ def read_bytes(spi_adc_interface, cs_adc_pin, addr, n):
     return obs
 
 
-def set_and_verify_adc_register(spi_adc_interface, cs_adc_pin, reg, bs):
+def set_and_verify_adc_register(cs_adc_pin, reg, bs):
+    global spi_adc_interface
     # The actual address byte leads with binary 01 and ends with the read/write bit (1 or 0).
     # The five bits in the middle are the 'register' address inside the ADC
     addr = 0x40 | (reg << 1)
-    write_bytes(spi_adc_interface, cs_adc_pin, addr, bs)
-    obs = read_bytes(spi_adc_interface, cs_adc_pin, addr, len(bs))
+    write_bytes(cs_adc_pin, addr, bs)
+    obs = read_bytes(cs_adc_pin, addr, len(bs))
     if DEBUG:
         print("Verify: " + " ".join(hex(b) for b in obs))
     
@@ -100,7 +102,8 @@ def reset_adc(cs_adc_pin, reset_adc_pin):
 
 # gains are in order of hardware channel: differential current, low range current, full range current, voltage
 # refer to MCP3912 datasheet for behaviour of all the settings configured here
-def setup_adc(spi_adc_interface, cs_adc_pin, reset_adc_pin, adc_settings):
+def setup_adc(cs_adc_pin, reset_adc_pin, adc_settings):
+    global spi_adc_interface
     # Setup the MCP3912 ADC
     reset_adc(cs_adc_pin, reset_adc_pin)
     
@@ -108,8 +111,6 @@ def setup_adc(spi_adc_interface, cs_adc_pin, reset_adc_pin, adc_settings):
     # 3 bits per channel (12 LSB in all)
     # XXXXXXXX XXXX---- --------
     # channel ->   3332 22111000
-    G = { '32x':0b101, '16x':0b100, '8x':0b011, '4x':0b010, '2x':0b001, '1x':0b000 } 
-    try:
         gain_bits = (G[adc_settings['gains'][3]] << 9) \
                   + (G[adc_settings['gains'][2]] << 6) \
                   + (G[adc_settings['gains'][1]] << 3) \
@@ -120,7 +121,7 @@ def setup_adc(spi_adc_interface, cs_adc_pin, reset_adc_pin, adc_settings):
     if DEBUG:
         print('Setting gain register at 0b to 0x{:02x} 0x{:02x} 0x{:02x}'.format(*bs))
         time.sleep(1)
-    set_and_verify_adc_register(spi_adc_interface, cs_adc_pin, 0x0b, bytes(bs))
+    set_and_verify_adc_register(cs_adc_pin, 0x0b, bytes(bs))
     
     # Set the status and communication register 0x0c
     # required bytes are:
@@ -135,7 +136,7 @@ def setup_adc(spi_adc_interface, cs_adc_pin, reset_adc_pin, adc_settings):
     if DEBUG:
         print('Setting status and communication register STATUSCOM at 0c to 0x{:02x} 0x{:02x} 0x{:02x}'.format(*bs))
         time.sleep(1)
-    set_and_verify_adc_register(spi_adc_interface, cs_adc_pin, 0x0c, bytes(bs))
+    set_and_verify_adc_register(cs_adc_pin, 0x0c, bytes(bs))
 
     # Set the configuration register CONFIG0 at 0x0d
     # 1st byte sets various ADC modes
@@ -158,14 +159,14 @@ def setup_adc(spi_adc_interface, cs_adc_pin, reset_adc_pin, adc_settings):
         bs = [0x24, osr_table['976'], 0x50]   # SLOW DOWN sampling rate for debug mode
         print('Setting configuration register CONFIG0 at 0d to 0x{:02x} 0x{:02x} 0x{:02x}'.format(*bs))
         time.sleep(1)
-    set_and_verify_adc_register(spi_adc_interface, cs_adc_pin, 0x0d, bytes(bs))
+    set_and_verify_adc_register(cs_adc_pin, 0x0d, bytes(bs))
 
     # Set the configuration register CONFIG1 at 0x0e
     bs = [0x00, 0x00, 0x00]
     if DEBUG:
         print('Setting configuration register CONFIG1 at 0e to 0x{:02x} 0x{:02x} 0x{:02x}'.format(*bs))
         time.sleep(1)
-    set_and_verify_adc_register(spi_adc_interface, cs_adc_pin, 0x0e, bytes(bs))
+    set_and_verify_adc_register(cs_adc_pin, 0x0e, bytes(bs))
     
     
  
@@ -207,7 +208,8 @@ def adc_read_handler(_):
     state = (state + 1) & WRAP_MASK
 
 
-def start_adc(spi_adc_interface):
+def start_adc():
+    global spi_adc_interface
     if DEBUG:
         print('Starting the ADC...')
     # Bind the sampler handler to a falling edge transition on the DR pin
@@ -242,7 +244,7 @@ def print_buffer(bs):
 ######### STREAMING LOOP FOR CORE 1 STARTS HERE
 ########################################################
 def streaming_loop_core_1():
-    global state
+    global state, spi_adc_interface, mv_cells
     # make a local variable to track the previous value of state
     p_state = state
     while state & STREAMING:
@@ -256,7 +258,7 @@ def streaming_loop_core_1():
 ######### STREAMING LOOP FOR CORE 0 STARTS HERE
 ########################################################
 def streaming_loop_core_0():    
-    global state
+    global state, mv_acq
     # Create memoryview objects that point to each half of the buffer.
     # This avoids having to make a copy of a portion of the buffer every
     # time we print -- this would waste time and leak memory that would need GC.
@@ -287,7 +289,7 @@ def process_command():
 
 
 def main():
-    global state
+    global state, spi_adc_interface
 
     # adc_settings can be changed in COMMAND mode
     adc_settings = DEFAULT_ADC_SETTINGS
@@ -303,7 +305,7 @@ def main():
 
     if DEBUG:
         print('Configuring SPI interface to ADC.')
-    spi_adc_interface = configure_adc_spi_interface(sck_adc_pin, sdi_adc_pin, ado_adc_pin)
+    configure_adc_spi_interface(sck_adc_pin, sdi_adc_pin, ado_adc_pin)
 
     if DEBUG:
         print('Configuring buffer memory.')
@@ -326,7 +328,7 @@ def main():
         if state & STREAMING:
             if DEBUG:
                 print('Entering streaming mode...')
-            setup_adc(spi_adc_interface, cs_adc_pin, reset_adc_pin, adc_settings)
+            setup_adc(cs_adc_pin, reset_adc_pin, adc_settings)
             # we don't want GC pauses while streaming
             gc.disable()
             # start the ADC hardware interrupt (data ready pin DR*)

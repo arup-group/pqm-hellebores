@@ -26,6 +26,7 @@ RESET         = const(0b001000000000)
 COMMAND       = const(0b010000000000)
 STREAMING     = const(0b100000000000)
 SAMPLE_MASK   = const(0b000001111111)
+PAGE_TEST     = const(0b100001000000)
 PAGE1         = const(0b100000000000)
 PAGE2         = const(0b100001000000)
 WRAP_MASK     = const(0b111101111111)
@@ -111,6 +112,8 @@ def setup_adc(cs_adc_pin, reset_adc_pin, adc_settings):
     # 3 bits per channel (12 LSB in all)
     # XXXXXXXX XXXX---- --------
     # channel ->   3332 22111000
+    G = { '32x':0b101, '16x':0b100, '8x':0b011, '4x':0b010, '2x':0b001, '1x':0b000 }
+    try:
         gain_bits = (G[adc_settings['gains'][3]] << 9) \
                   + (G[adc_settings['gains'][2]] << 6) \
                   + (G[adc_settings['gains'][1]] << 3) \
@@ -229,15 +232,14 @@ def stop_adc():
 
 def print_buffer(bs):
     buffer_led_pin.on()
+    # write out the selected portion of buffer as bytes
+    sys.stdout.buffer.write(bs)
+    # the synchronisation string can possibly be used if the Pi is having trouble
+    # with byte alignment
+    #sys.stdout.buffer.write(SYNC_BYTES)
     if DEBUG:
         sys.stdout.write('\n')
         gc.collect()
-    else:
-        # write out the selected portion of buffer as bytes
-        sys.stdout.buffer.write(bs)
-        # the synchronisation string can possibly be used if the Pi is having trouble
-        # with byte alignment
-        #sys.stdout.buffer.write(SYNC_BYTES)
     buffer_led_pin.off()
 
 ########################################################
@@ -269,11 +271,11 @@ def streaming_loop_core_0():
  
     while state & STREAMING:
         # wait while Core 1 is writing to page 1
-        while state & PAGE1 == PAGE1:
+        while (state & PAGE_TEST) == PAGE1:
             continue
         print_buffer(mv_p1)
         # wait while Core 1 is writing to page 2
-        while state & PAGE2 == PAGE2:
+        while (state & PAGE_TEST) == PAGE2:
             continue
         print_buffer(mv_p2)
     if DEBUG:
@@ -324,7 +326,7 @@ def main():
         print('Entering mode switch loop.')
 
     # test all of the mode flags in turn
-    while not state & QUIT:
+    while not (state & QUIT):
         if state & STREAMING:
             if DEBUG:
                 print('Entering streaming mode...')
@@ -332,7 +334,7 @@ def main():
             # we don't want GC pauses while streaming
             gc.disable()
             # start the ADC hardware interrupt (data ready pin DR*)
-            start_adc(spi_adc_interface)
+            start_adc()
             # start the steaming loops on the two CPU cores
             _thread.start_new_thread(streaming_loop_core_1, ())
             streaming_loop_core_0()
@@ -361,15 +363,10 @@ def main():
     
 # Run from here
 if __name__ == '__main__':
-    try:
-        main()
-    except:
-        # an interrupt is received, or we set 'QUIT' mode
-        if DEBUG:
-            print('Interrupted.')
-        # tell core 1 to stop
-        state = QUIT
-        # return system to idle state with GC enabled
-        stop_adc()
-        gc.enable()
-
+    main()
+    if DEBUG:
+        print('Interrupted.')
+    # stop core 1 if it's still running
+    state = QUIT
+    stop_adc()
+    gc.enable()

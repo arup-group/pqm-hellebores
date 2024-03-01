@@ -10,7 +10,7 @@ from micropython import const
 
 # constants are defined with the const() compilation hint to optimise performance
 SPI_CLOCK_RATE  = const(8000000) 
-DEBUG           = const(True)
+DEBUG           = const(False)
 SYNC_BYTES      = const(b'\x00\x00\x00\x00\x00\x00\x00\x00')
 DEFAULT_ADC_SETTINGS = { 'gains': ['1x', '1x', '1x', '1x'], 'sample_rate': '7.812k' }
 
@@ -211,6 +211,14 @@ def configure_interrupts(dr_adc_pin, reset_me_pin, mode_select_pin):
     mode_select_pin.irq(trigger = Pin.IRQ_RISING, handler = lambda mode_select_pin: set_mode(COMMAND), hard=False)
 
 
+def disable_interrupts(dr_adc_pin, reset_me_pin, mode_select_pin):
+    dr_adc_pin.irq(trigger = Pin.IRQ_FALLING, handler = None)
+    # leave the reset interrupt running
+    # reset_me_pin.irq(trigger = Pin.IRQ_FALLING, handler = None)
+    mode_select_pin.irq(trigger = Pin.IRQ_FALLING, handler = None)
+    mode_select_pin.irq(trigger = Pin.IRQ_RISING, handler = None)
+
+
 def configure_buffer_memory():
     global mv_acq, mv_cells
     # Make an array of memoryview objects that point into an acquire_buffer.
@@ -272,10 +280,10 @@ def streaming_loop_core_0(buffer_led_pin):
         buffer_led_pin.on()
         if DEBUG:
             # when debugging, just print out a few of the samples as a byte string
-            print(bs[:24])
+            print(bytes(bs[:24]))
             gc.collect()
         else:
-            # write out the selected portion of buffer as bytes
+            # write out the selected portion of buffer as raw bytes
             sys.stdout.buffer.write(bs)
             # the synchronisation string could be used if the Pi is having trouble
             # with byte alignment, otherwise, omit it
@@ -319,9 +327,9 @@ def main():
         print('PICO starting up.')
         print('Waiting for 30 seconds...')
     # Illuminate the green LED on Pico, while we're waiting
-    pico_led_pin.on()
+    pins['pico_led'].on()
     time.sleep(30)
-    pico_led_pin.off()
+    pins['pico_led'].off()
 
     if DEBUG:
         print('Configuring SPI interface to ADC.')
@@ -380,10 +388,14 @@ def main():
     
 # Run from here
 if __name__ == '__main__':
-    main()
-    if DEBUG:
-        print('Interrupted.')
+    try:
+        main()
+    except KeyError:
+        if DEBUG:
+            print('Interrupted.')
     # stop core 1 if it's still running
     state = QUIT
     stop_adc(pins['cs_adc'])
+    # disable interrupts
+    disable_interrupts(pins['dr_adc'], pins['reset_me'], pins['mode_select'])
     gc.enable()

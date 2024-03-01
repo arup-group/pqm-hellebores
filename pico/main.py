@@ -9,19 +9,19 @@ from micropython import const
 
 
 # constants are defined with the const() compilation hint to optimise performance
-# This is configurable clock speed for comms on the SPI bus between Pico and ADC
+# This is a configurable clock speed for comms on the SPI bus between Pico and ADC
 SPI_CLOCK_RATE  = const(8000000) 
  
 # NB set the DEBUG flag to True when testing the code inside the Thonny REPL.
 # this reduces the sample rate and the amount of data that is output to screen, and
-# it prints some diagnostic info as the code progresses
+# it prints some diagnostic progress info as the code proceeds
 DEBUG           = const(False)
 
 # A synchronisation string that can be transmitted at the beginning or end of each
 # page of buffer data.
 SYNC_BYTES      = const(b'\x00\x00\x00\x00\x00\x00\x00\x00')
 
-# These defaults can be adjusted via comms from the Pi when in COMMAND mode
+# These adc settings can be adjusted via comms from the Pi when in COMMAND mode
 DEFAULT_ADC_SETTINGS = { 'gains': ['1x', '1x', '1x', '1x'], 'sample_rate': '7.812k' }
 
 # Buffer memory -- number of samples cached in Pico memory.
@@ -33,7 +33,7 @@ BUFFER_SIZE       = const(128)
 
 
 # For performance optimisation, we hold synchronisation information shared between
-# the two CPU cores in a 'state' variable that is 12 bits wide
+# the two CPU cores in a single 'state' variable that is 12 bits wide
 # The following mask definitions enable us to perform certain assignments and tests
 # on the state variable efficiently.
 # MSB 0000xxxx:  mode flags 0001=QUIT, 0010=RESET, 0100=COMMAND, 1000=STREAMING
@@ -42,6 +42,8 @@ RESET             = const(0b001000000000)      # initiate a machine reset
 COMMAND           = const(0b010000000000)      # receive commands to modify settings
 STREAMING         = const(0b100000000000)      # fast ADC streaming using both cores
 # LSB 0yyyyyyy:  sample pointer 0 to 127
+# bit-and the state variable with SAMPLE_MASK to remove the mode bits
+# bit-and the state variable with WRAP_MASK after incrementing it, to make the pointer circular
 SAMPLE_MASK       = const(0b000001111111)      # mask to return just the cell pointer
 WRAP_MASK         = const(0b111101111111)      # pointer increment from 127 wraps round to 0
 # The following three constants are used to test whether a page boundary has been crossed, and therefore
@@ -49,8 +51,8 @@ WRAP_MASK         = const(0b111101111111)      # pointer increment from 127 wrap
 # mask and the result checked against STREAMING_PAGE1 and STREAMING_PAGE2 respectively. The test
 # also breaks the waiting loop if a mode other than STREAMING is selected.
 PAGE_TEST         = const(0b100001000000)      # test page number and streaming flag
-STREAMING_PAGE1   = const(0b100000000000)      # bit6=0: cell pointer is in range 0-63, ie page 1
-STREAMING_PAGE2   = const(0b100001000000)      # bit6=1: cell pointer is in range 64-127, ie page 2
+STREAMING_PAGE1   = const(0b100000000000)      # bit6==0: cell pointer is in range 0-63, ie page 1
+STREAMING_PAGE2   = const(0b100001000000)      # bit6==1: cell pointer is in range 64-127, ie page 2
 
 
 # Pico pin setup
@@ -80,31 +82,24 @@ def configure_adc_spi_interface():
                                     mosi       = pins['sdi_adc'],
                                     miso       = pins['ado_adc'])
 
-def write_bytes(addr, bs):
-    global spi_adc_interface
-    pins['cs_adc'].value(0)
-    spi_adc_interface.write(bytes([addr & 0b11111110]) + bs) # for writing, make sure lowest bit is cleared
-    pins['cs_adc'].value(1)
-        
-def read_bytes(addr, n):
-    global spi_adc_interface
-    pins['cs_adc'].value(0)
-    spi_adc_interface.write(bytes([addr | 0b00000001])) # for reading, make sure lowest bit is set
-    obs = spi_adc_interface.read(n)
-    pins['cs_adc'].value(1)
-    return obs
 
-
-def set_and_verify_adc_register(reg, bs):
+def set_adc_register(reg, bs):
     global spi_adc_interface
     # The actual address byte leads with binary 01 and ends with the read/write bit (1 or 0).
     # The five bits in the middle are the 'register' address inside the ADC
     addr = 0x40 | (reg << 1)
-    write_bytes(addr, bs)
-    obs = read_bytes(addr, len(bs))
+
+    # Activate the CS* pin to communicate with the ADC
+    pins['cs_adc'].value(0)
+    # for writing, make sure lowest bit is cleared, hence & 0b11111110
+    spi_adc_interface.write(bytes([addr & 0b11111110]) + bs) 
     if DEBUG:
+        # for reading, make sure lowest bit is set, hence | 0b00000001
+        spi_adc_interface.write(bytes([addr | 0b00000001])) 
+        obs = spi_adc_interface.read(len(bs))
         print("Verify: " + " ".join(hex(b) for b in obs))
-    
+    pins['cs_adc'].value(1)
+
 
 def reset_adc():
     # deselect the ADC
@@ -129,17 +124,15 @@ def setup_adc(adc_settings):
     # channel ->   3332 22111000
     G = { '32x':0b101, '16x':0b100, '8x':0b011, '4x':0b010, '2x':0b001, '1x':0b000 }
     try:
-        gain_bits = (G[adc_settings['gains'][3]] << 9) \
-                  + (G[adc_settings['gains'][2]] << 6) \
-                  + (G[adc_settings['gains'][1]] << 3) \
-                  + G[adc_settings['gains'][0]] 
+        g3, g2, g1, g0 = [ G[k] for k in adc_settings['gains'] ]
     except KeyError:
-        gain_bits = (G['1x'] << 9) + (G['1x'] << 6) + (G['1x'] << 3) + G['1x']
+        g3, g2, g1, g0 = [ G[k] for k in ['1x', '1x', '1x', '1x'] ]
+    gain_bits = (g3 << 9) + (g2 << 6) + (g1 << 3) + g0
     bs = [0x00, gain_bits >> 8, gain_bits & 0b11111111]
     if DEBUG:
         print('Setting gain register at 0b to 0x{:02x} 0x{:02x} 0x{:02x}'.format(*bs))
         time.sleep(1)
-    set_and_verify_adc_register(0x0b, bytes(bs))
+    set_adc_register(0x0b, bytes(bs))
     
     # Set the status and communication register 0x0c
     # required bytes are:
@@ -152,7 +145,7 @@ def setup_adc(adc_settings):
     if DEBUG:
         print('Setting status and communication register STATUSCOM at 0c to 0x{:02x} 0x{:02x} 0x{:02x}'.format(*bs))
         time.sleep(1)
-    set_and_verify_adc_register(0x0c, bytes(bs))
+    set_adc_register(0x0c, bytes(bs))
 
     # Set the configuration register CONFIG0 at 0x0d
     # 1st byte sets various ADC modes
@@ -175,14 +168,14 @@ def setup_adc(adc_settings):
         bs = [0x24, osr_table['976'], 0x50]   # SLOW DOWN sampling rate for debug mode
         print('Setting configuration register CONFIG0 at 0d to 0x{:02x} 0x{:02x} 0x{:02x}'.format(*bs))
         time.sleep(1)
-    set_and_verify_adc_register(0x0d, bytes(bs))
+    set_adc_register(0x0d, bytes(bs))
 
     # Set the configuration register CONFIG1 at 0x0e
     bs = [0x00, 0x00, 0x00]
     if DEBUG:
         print('Setting configuration register CONFIG1 at 0e to 0x{:02x} 0x{:02x} 0x{:02x}'.format(*bs))
         time.sleep(1)
-    set_and_verify_adc_register(0x0e, bytes(bs))
+    set_adc_register(0x0e, bytes(bs))
     
     
  
@@ -306,12 +299,45 @@ def streaming_loop_core_0(mv_p1, mv_p2):
     if DEBUG:
         print('streaming_loop_core_0() exited')
 
+def reset_microcontroller():
+    # The ISR has detected that the reset pin went low
+    # Ensure the CS* pin on ADC is deselected
+    pins['cs_adc'].value(1)
+    # Wait for the reset pin to return to inactive (high), then reset Pico
+    while pins['reset_me'].value() == 0:
+        continue
+    machine.reset()
 
-def process_command():
-    # can insert code here to read commands from stdin, to receive new settings
-    # assemble into the dictionary structure as below
-    adc_settings = DEFAULT_ADC_SETTINGS
-    time.sleep(0.2)
+
+def process_command(adc_settings):
+    global state
+    # adc_settings are assembled into the dictionary structure as below
+    #  { 'gains': ['1x', '1x', '1x', '1x'], 'sample_rate': '7.812k' }
+    while state & COMMAND:
+        command_string = sys.stdin.readline()
+        words = command_string.split(' ')
+        if len(words) == 0:
+            continue
+        elif len(words) == 1:
+            token = words[0]
+            if token == 'RESET':
+                print('OK')
+                reset_microcontroller()
+            continue
+        elif len(words) == 2:
+            token, value = words
+            if token == 'SAMPLERATE':
+                print('OK')
+                adc_settings['sample_rate'] = value
+            continue
+        elif len(words) == 5:
+            token, g3, g2, g1, g0 = words
+            if token == 'GAINS':
+                print('OK')
+                adc_settings['gains'] = [g3, g2, g1, g0] 
+            continue
+        else:
+            print('Error')
     return adc_settings
 
 
@@ -374,16 +400,10 @@ def main():
                 print('Entering command mode...')
             # Receive new ADC settings, they will be transferred to the ADC when we
             # resume STREAMING mode
-            adc_settings = process_command()
+            adc_settings = process_command(adc_settings)
         
         elif state & RESET:
-            # The ISR has detected that the reset pin went low
-            # Ensure the CS* pin on ADC is deselected
-            pins['cs_adc'].value(1)
-            # Wait for the reset pin to return to inactive (high), then reset Pico
-            while pins['reset_me'].value() == 0:
-                continue
-            machine.reset()
+            reset_microcontroller()
 
     if DEBUG:
         print('Main function exited.')
@@ -395,8 +415,11 @@ if __name__ == '__main__':
     except KeyError:
         if DEBUG:
             print('Interrupted.')
-    # stop core 1 if it's still running
-    state = QUIT
-    stop_adc()
-    disable_interrupts()
-    gc.enable()
+    finally:
+        # stop core 1 if it's still running
+        state = QUIT
+        stop_adc()
+        disable_interrupts()
+        gc.enable()
+
+

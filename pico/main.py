@@ -214,6 +214,7 @@ def disable_interrupts():
 
 
 def configure_buffer_memory():
+    global mv_acq
     # 2 bytes per channel, 4 channels
     # we use a memoryview to allow this to be sub-divided into cells and
     # pages in the streaming loops
@@ -239,8 +240,8 @@ def stop_adc():
 ########################################################
 ######### STREAMING LOOP FOR CORE 1 STARTS HERE
 ########################################################
-def streaming_loop_core_1(mv_acq):
-    global state, spi_adc_interface
+def streaming_loop_core_1():
+    global state, spi_adc_interface, mv_acq
 
     # Create a memoryview reference into each sample or slice of the buffer.
     # The SPI read instruction will write into these memory slices directly.
@@ -264,8 +265,8 @@ def streaming_loop_core_1(mv_acq):
 #########################################################
 ######### STREAMING LOOP FOR CORE 0 STARTS HERE
 ########################################################
-def streaming_loop_core_0(mv_acq): 
-    global state
+def streaming_loop_core_0(): 
+    global state, mv_acq
 
     # Create memoryviews of each half of the circular buffer (ie two pages)
     half_mem = BUFFER_SIZE * 8 // 2
@@ -362,7 +363,9 @@ def main():
 
     if DEBUG:
         print('Configuring buffer memory.')
-    mv_acq = configure_buffer_memory()
+    # buffer memory is set up in a memoryview called mv_acq
+    # this has to be a global variable so it can be accessed in both cores
+    configure_buffer_memory()
 
     if DEBUG:
         print('Set streaming mode and configuring interrupts.')
@@ -386,8 +389,8 @@ def main():
             # the same buffer memory
             # core 1 captures samples from the ADC, triggered by the DR* pin
             # core 0 prints blocks of samples from the capture buffer in two pages
-            _thread.start_new_thread(streaming_loop_core_1, (mv_acq))
-            streaming_loop_core_0(mv_acq)
+            _thread.start_new_thread(streaming_loop_core_1, ())
+            streaming_loop_core_0()
             # after streaming ends, stop the ADC capture and enable the GC
             stop_adc()
             gc.enable()

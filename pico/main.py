@@ -214,25 +214,11 @@ def disable_interrupts():
 
 
 def configure_buffer_memory():
-    # Make an array of memoryview objects that point into an acquire_buffer.
-    # this makes it possible to access slices of the buffer without creating new objects
-    # or allocating new memory when the main loop is running. In turn this allows us 
-    # to switch off the garbage collector, allowing the program to continuously
-    # sample without interruptions.
     # 2 bytes per channel, 4 channels
+    # we use a memoryview to allow this to be sub-divided into cells and
+    # pages in the streaming loops
     mv_acq = memoryview(bytearray(BUFFER_SIZE * 8))
 
-    # Create a memoryview reference into each sample or slice of the buffer.
-    # Later, the SPI read instruction will write into these memory slices directly.
-    mv_cells = []
-    for i in range(0, BUFFER_SIZE):
-        mv_cells.append(memoryview(mv_acq[i*8 : i*8+8]))
-
-    # Also create memoryviews of each half of the circular buffer (ie two pages)
-    half_mem = BUFFER_SIZE * 8 // 2
-    mv_p1 = memoryview(mv_acq[:half_mem])
-    mv_p2 = memoryview(mv_acq[half_mem:])
-    return (mv_cells, mv_p1, mv_p2) 
 
 def start_adc():
     global spi_adc_interface
@@ -253,8 +239,14 @@ def stop_adc():
 ########################################################
 ######### STREAMING LOOP FOR CORE 1 STARTS HERE
 ########################################################
-def streaming_loop_core_1(mv_cells):
+def streaming_loop_core_1(mv_acq):
     global state, spi_adc_interface
+
+    # Create a memoryview reference into each sample or slice of the buffer.
+    # The SPI read instruction will write into these memory slices directly.
+    mv_cells = []
+    for i in range(0, BUFFER_SIZE):
+        mv_cells.append(memoryview(mv_acq[i*8 : i*8+8]))
 
     # make a local variable to track the previous value of state
     p_state = state
@@ -272,8 +264,13 @@ def streaming_loop_core_1(mv_cells):
 #########################################################
 ######### STREAMING LOOP FOR CORE 0 STARTS HERE
 ########################################################
-def streaming_loop_core_0(mv_p1, mv_p2): 
+def streaming_loop_core_0(mv_acq): 
     global state
+
+    # Create memoryviews of each half of the circular buffer (ie two pages)
+    half_mem = BUFFER_SIZE * 8 // 2
+    mv_p1 = memoryview(mv_acq[:half_mem])
+    mv_p2 = memoryview(mv_acq[half_mem:])
 
     def print_buffer(bs):
         pins['buffer_led'].on()
@@ -300,6 +297,7 @@ def streaming_loop_core_0(mv_p1, mv_p2):
         print_buffer(mv_p2)
     if DEBUG:
         print('streaming_loop_core_0() exited')
+
 
 def reset_microcontroller():
     # The ISR has detected that the reset pin went low
@@ -364,9 +362,7 @@ def main():
 
     if DEBUG:
         print('Configuring buffer memory.')
-    # mv_cells contains an array of memoryviews to individual samples in the buffer
-    # mv_p1 and mv_p2 contain memoryviews to half of the buffer each
-    mv_cells, mv_p1, mv_p2 = configure_buffer_memory()
+    mv_acq = configure_buffer_memory()
 
     if DEBUG:
         print('Set streaming mode and configuring interrupts.')
@@ -386,11 +382,12 @@ def main():
             gc.disable()
             # start the ADC continuous capture mode
             start_adc()
-            # start the streaming loops on the two CPU cores
+            # start the streaming loops on the two CPU cores, both accessing
+            # the same buffer memory
             # core 1 captures samples from the ADC, triggered by the DR* pin
             # core 0 prints blocks of samples from the capture buffer in two pages
-            _thread.start_new_thread(streaming_loop_core_1, (mv_cells))
-            streaming_loop_core_0(mv_p1, mv_p2)
+            _thread.start_new_thread(streaming_loop_core_1, (mv_acq))
+            streaming_loop_core_0(mv_acq)
             # after streaming ends, stop the ADC capture and enable the GC
             stop_adc()
             gc.enable()

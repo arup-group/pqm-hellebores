@@ -9,17 +9,18 @@ from micropython import const
 
 
 # constants are defined with the const() compilation hint to optimise performance
-# This is a configurable clock speed for comms on the SPI bus between Pico and ADC
-SPI_CLOCK_RATE  = const(8000000) 
+# SPI_CLOCK_RATE is a configurable clock speed for comms on the SPI bus between
+# Pico and ADC
+SPI_CLOCK_RATE = const(8000000) 
  
 # NB set the DEBUG flag to True when testing the code inside the Thonny REPL.
 # this reduces the sample rate and the amount of data that is output to screen, and
 # it prints some diagnostic progress info as the code proceeds
-DEBUG           = const(False)
+DEBUG = const(False)
 
 # A synchronisation string that can be transmitted at the beginning or end of each
 # page of buffer data.
-SYNC_BYTES      = const(b'\x00\x00\x00\x00\x00\x00\x00\x00')
+SYNC_BYTES = const(b'\x00\x00\x00\x00\x00\x00\x00\x00')
 
 # These adc settings can be adjusted via comms from the Pi when in COMMAND mode
 DEFAULT_ADC_SETTINGS = { 'gains': ['1x', '1x', '1x', '1x'], 'sample_rate': '7.812k' }
@@ -29,7 +30,7 @@ DEFAULT_ADC_SETTINGS = { 'gains': ['1x', '1x', '1x', '1x'], 'sample_rate': '7.81
 # The buffer size is measured in 'samples' or number of cells.
 # However note the underlying memory size in bytes
 # is BUFFER_SIZE * 8 because we have 4 measurement channels and 2 bytes per channel.
-BUFFER_SIZE       = const(128)
+BUFFER_SIZE = const(128)
 
 
 # For performance optimisation, we hold synchronisation information shared between
@@ -42,7 +43,8 @@ RESET             = const(0b001000000000)      # initiate a machine reset
 COMMAND           = const(0b010000000000)      # receive commands to modify settings
 STREAMING         = const(0b100000000000)      # fast ADC streaming using both cores
 # LSB 0yyyyyyy:  sample pointer 0 to 127
-# bit-and the state variable with SAMPLE_MASK to remove the mode bits
+# bit-and the state variable with SAMPLE_MASK to remove the mode bits, to access 
+# just the buffer pointer
 # bit-and the state variable with WRAP_MASK after incrementing it, to make the pointer circular
 SAMPLE_MASK       = const(0b000001111111)      # mask to return just the cell pointer
 WRAP_MASK         = const(0b111101111111)      # pointer increment from 127 wraps round to 0

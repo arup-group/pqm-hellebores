@@ -369,12 +369,10 @@ def main():
     mv_cells, mv_p1, mv_p2 = configure_buffer_memory()
 
     if DEBUG:
-        print('Configuring interrupts.')
+        print('Set streaming mode and configuring interrupts.')
+    state = STREAMING       # buffer pointer is zero at this point
     configure_interrupts()
 
-    # start with streaming mode and buffer pointer zero
-    state = STREAMING
- 
     if DEBUG:
         print('Entering mode switch loop.')
 

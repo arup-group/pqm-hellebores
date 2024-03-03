@@ -57,7 +57,7 @@ STREAMING_PAGE2   = const(0b100001000000)      # bit6==1: cell pointer is in ran
 
 
 # Pico pin setup
-# We initialise with the RESET* and CS* pins high, since they are active low and we don't need
+# We initialise with the RESET* and CS* pins high, since they are active low and we don't want
 # them to operate at this point
 pins = {
     'pico_led'    : machine.Pin(25, Pin.OUT),           # the led on the Pico
@@ -306,10 +306,11 @@ def reset_microcontroller():
     # The ISR has detected that the reset pin went low
     # Ensure the CS* pin on ADC is deselected
     pins['cs_adc'].value(1)
-    # Wait for the reset pin to return to inactive (high), then reset Pico
+    # Wait for the reset pin to return to inactive (high)
     while pins['reset_me'].value() == 0:
         continue
-    disable_interrupts()
+    # now reset Pico
+    machine.disable_irq()
     machine.reset()
 
 

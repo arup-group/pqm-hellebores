@@ -57,19 +57,20 @@ STREAMING_PAGE2   = const(0b100001000000)      # bit6==1: cell pointer is in ran
 
 
 # Pico pin setup
+# We initialise with the RESET* and CS* pins high, since they are active low and we don't need
+# them to operate at this point
 pins = {
-    'pico_led'    : machine.Pin(25, Pin.OUT),  # the led on the Pico
-    'buffer_led'  : machine.Pin(15, Pin.OUT),  # the 'buffer' LED on the PCB
-    'cs_adc'      : machine.Pin(1, Pin.OUT),   # chip select pin of the ADC
-    'sck_adc'     : machine.Pin(2, Pin.OUT),   # serial clock for the SPI interface
-    'sdi_adc'     : machine.Pin(3, Pin.OUT),   # serial input to ADC from Pico
-    'ado_adc'     : machine.Pin(0, Pin.IN),    # serial output from ADC to Pico
-    'reset_adc'   : machine.Pin(5, Pin.OUT),   # hardware reset of ADC commanded from Pico (active low)
-    'dr_adc'      : machine.Pin(4, Pin.IN),    # data ready from ADC to Pico (active low)
-    'reset_me'    : machine.Pin(14, Pin.IN),   # hardware reset of Pico (active low, implemented with interrupt handler)
-    'mode_select' : machine.Pin(26, Pin.IN)    # switch between streaming (LOW) and command mode (HIGH)
+    'pico_led'    : machine.Pin(25, Pin.OUT),           # the led on the Pico
+    'buffer_led'  : machine.Pin(15, Pin.OUT),           # the 'buffer' LED on the PCB
+    'cs_adc'      : machine.Pin(1, Pin.OUT, value=1),   # chip select pin of the ADC (active low)
+    'sck_adc'     : machine.Pin(2, Pin.OUT),            # serial clock for the SPI interface
+    'sdi_adc'     : machine.Pin(3, Pin.OUT),            # serial input to ADC from Pico
+    'sdo_adc'     : machine.Pin(0, Pin.IN),             # serial output from ADC to Pico
+    'reset_adc'   : machine.Pin(5, Pin.OUT, value=1),   # hardware reset of ADC commanded from Pico (active low)
+    'dr_adc'      : machine.Pin(4, Pin.IN),             # data ready from ADC to Pico (active low)
+    'reset_me'    : machine.Pin(14, Pin.IN),            # hardware reset of Pico (active low, implemented with interrupt handler)
+    'mode_select' : machine.Pin(26, Pin.IN)             # switch between streaming (LOW) and command mode (HIGH)
 }
-
 
 def configure_adc_spi_interface():
     global spi_adc_interface
@@ -81,7 +82,7 @@ def configure_adc_spi_interface():
                                     firstbit   = machine.SPI.MSB,
                                     sck        = pins['sck_adc'],
                                     mosi       = pins['sdi_adc'],
-                                    miso       = pins['ado_adc'])
+                                    miso       = pins['sdo_adc'])
 
 
 def set_adc_register(reg, bs):

@@ -232,6 +232,8 @@ def start_adc():
 
 def stop_adc():
     # Tell the ADC to stop sampling
+    # Note that the DR* pin continues to operate, so it's necessary to also stop
+    # interrupts if we want to stop processing completely
     if DEBUG:
         print('Stopping the ADC...')
     pins['cs_adc'].value(1)
@@ -316,6 +318,8 @@ def process_command(adc_settings):
     #  { 'gains': ['1x', '1x', '1x', '1x'], 'sample_rate': '7.812k' }
     while state & COMMAND:
         command_string = sys.stdin.readline()
+        # remove newline and make an array of words
+        command_string.strip()
         words = command_string.split(' ')
         if len(words) == 0:
             continue
@@ -348,13 +352,13 @@ def main():
     # adc_settings can be changed in COMMAND mode
     adc_settings = DEFAULT_ADC_SETTINGS
 
-    # Wait for 30 seconds, provides debug opportunity to return pico to REPL if it is crashing 
+    # Wait for 60 seconds, provides debug opportunity to return pico to REPL if it is crashing 
     if DEBUG:
         print('PICO starting up.')
-        print('Waiting for 30 seconds...')
+        print('Waiting for 60 seconds...')
     # Illuminate the green LED on Pico, while we're waiting
     pins['pico_led'].on()
-    time.sleep(30)
+    time.sleep(60)
     pins['pico_led'].off()
 
     if DEBUG:

@@ -56,6 +56,9 @@ STREAMING_PAGE1   = const(0b100000000000)      # bit6==0: cell pointer is in ran
 STREAMING_PAGE2   = const(0b100001000000)      # bit6==1: cell pointer is in range 64-127, ie page 2
 
 
+# Small pause when we start or after a reset operation
+time.sleep(1)
+
 # Pico pin setup
 # We initialise with the RESET* and CS* pins high, since they are active low and we don't want
 # them to operate at this point
@@ -207,8 +210,8 @@ def configure_interrupts():
 
 
 def disable_interrupts():
-    # we leave the reset interrupt handler running
     pins['dr_adc'].irq(trigger = Pin.IRQ_FALLING, handler = None)
+    pins['reset_me'].irq(trigger = Pin.IRQ_FALLING, handler = None)
     pins['mode_select'].irq(trigger = Pin.IRQ_FALLING, handler = None)
     pins['mode_select'].irq(trigger = Pin.IRQ_RISING, handler = None)
 
@@ -304,13 +307,14 @@ def streaming_loop_core_0():
 
 def reset_microcontroller():
     # The ISR has detected that the reset pin went low
-    # Ensure the CS* pin on ADC is deselected
-    pins['cs_adc'].value(1)
+    # Ensure the reset process is not interrupted
+    disable_interrupts()
+    stop_adc()
     # Wait for the reset pin to return to inactive (high)
     while pins['reset_me'].value() == 0:
         continue
+    time.sleep(0.1)
     # now reset Pico
-    machine.disable_irq()
     machine.reset()
 
 

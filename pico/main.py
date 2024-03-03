@@ -8,10 +8,10 @@ import sys
 from micropython import const
 
 
-# constants are defined with the const() compilation hint to optimise performance
+# some constants are defined with the const() compilation hint to optimise performance
 # SPI_CLOCK_RATE is a configurable clock speed for comms on the SPI bus between
 # Pico and ADC
-SPI_CLOCK_RATE = const(8000000) 
+SPI_CLOCK_RATE = 8000000 
  
 # NB set the DEBUG flag to True when testing the code inside the Thonny REPL.
 # this reduces the sample rate and the amount of data that is output to screen, and
@@ -30,8 +30,7 @@ DEFAULT_ADC_SETTINGS = { 'gains': ['1x', '1x', '1x', '1x'], 'sample_rate': '7.81
 # The buffer size is measured in 'samples' or number of cells.
 # However note the underlying memory size in bytes
 # is BUFFER_SIZE * 8 because we have 4 measurement channels and 2 bytes per channel.
-BUFFER_SIZE = const(128)
-
+BUFFER_SIZE = 128
 
 # For performance optimisation, we hold synchronisation information shared between
 # the two CPU cores in a single 'state' variable that is 12 bits wide
@@ -111,7 +110,7 @@ def reset_adc():
     pins['reset_adc'].value(0)
     time.sleep(0.1)
     pins['reset_adc'].value(1)
-
+    time.sleep(0.1)
 
 # gains are in order of hardware channel: differential current, low range current, full range current, voltage
 # refer to MCP3912 datasheet for behaviour of all the settings configured here
@@ -196,19 +195,19 @@ def configure_interrupts():
         global state
         state = required_mode
 
-    # Bind the ADC sampler handler to a falling edge transition on the DR pin
+    # Bind pin transitions to interrupt handlers
     # we use hard interrupt for the DR* pin to maintain tight timing
+    # and for the RESET* pin so that the reset works even within a blocking function (eg serial write)
     pins['dr_adc'].irq(trigger = Pin.IRQ_FALLING, handler = adc_read_handler, hard=True)
-    # for these other interrupts, timing is less critical so we use soft interrupts
-    pins['reset_me'].irq(trigger = Pin.IRQ_FALLING, handler = lambda _: set_mode(RESET), hard=False)
+    pins['reset_me'].irq(trigger = Pin.IRQ_FALLING, handler = lambda _: set_mode(RESET), hard=True)
+    # for mode select, timing is less critical so we use soft interrupts
     pins['mode_select'].irq(trigger = Pin.IRQ_FALLING, handler = lambda _: set_mode(STREAMING), hard=False)
     pins['mode_select'].irq(trigger = Pin.IRQ_RISING, handler = lambda _: set_mode(COMMAND), hard=False)
 
 
 def disable_interrupts():
+    # we leave the reset interrupt handler running
     pins['dr_adc'].irq(trigger = Pin.IRQ_FALLING, handler = None)
-    # leave the reset interrupt running
-    # pins['reset_me'].irq(trigger = Pin.IRQ_FALLING, handler = None)
     pins['mode_select'].irq(trigger = Pin.IRQ_FALLING, handler = None)
     pins['mode_select'].irq(trigger = Pin.IRQ_RISING, handler = None)
 
@@ -309,6 +308,7 @@ def reset_microcontroller():
     # Wait for the reset pin to return to inactive (high), then reset Pico
     while pins['reset_me'].value() == 0:
         continue
+    disable_interrupts()
     machine.reset()
 
 

@@ -231,7 +231,7 @@ def start_adc():
 
 def stop_adc():
     # Tell the ADC to stop sampling
-    # Note that the DR* pin continues to operate, so it's necessary to also stop
+    # Note that the DR* pin continues to cycle, so it's necessary to also stop
     # interrupts if we want to stop processing completely
     if DEBUG:
         print('Stopping the ADC...')
@@ -347,7 +347,7 @@ def process_command(adc_settings):
 
 
 def main():
-    global state, spi_adc_interface
+    global state
 
     # adc_settings can be changed in COMMAND mode
     adc_settings = DEFAULT_ADC_SETTINGS
@@ -423,7 +423,7 @@ if __name__ == '__main__':
         # stop core 1 if it's still running
         state = QUIT
         stop_adc()
-        disable_interrupts()
         gc.enable()
+        disable_interrupts()
 
 

@@ -1,3 +1,9 @@
+# To run on Raspberry Pi Pico microcontroller, communicating with MCP3912
+# 4-channel ADC via SPI serial interface, and host computer via USB serial
+# interface. The code provides a circular buffer for precisely timed incoming
+# measurements signalled by the ADC (via the data ready, DR* pin), and sends
+# output from the buffer in blocks of 64x4x16 bit integer values.
+
 import time
 import machine
 import gc
@@ -41,12 +47,14 @@ QUIT              = const(0b000100000000)      # tells both cores to exit
 RESET             = const(0b001000000000)      # initiate a machine reset
 COMMAND           = const(0b010000000000)      # receive commands to modify settings
 STREAMING         = const(0b100000000000)      # fast ADC streaming using both cores
+
 # LSB 0yyyyyyy:  sample pointer 0 to 127
 # bit-and the state variable with SAMPLE_MASK to remove the mode bits, to access 
 # just the buffer pointer
 # bit-and the state variable with WRAP_MASK after incrementing it, to make the pointer circular
 SAMPLE_MASK       = const(0b000001111111)      # mask to return just the cell pointer
 WRAP_MASK         = const(0b111101111111)      # pointer increment from 127 wraps round to 0
+
 # The following three constants are used to test whether a page boundary has been crossed, and therefore
 # time to output the next page of sample buffer. The state variable is bit-anded with the PAGE_TEST
 # mask and the result checked against STREAMING_PAGE1 and STREAMING_PAGE2 respectively. The test
@@ -56,27 +64,29 @@ STREAMING_PAGE1   = const(0b100000000000)      # bit6==0: cell pointer is in ran
 STREAMING_PAGE2   = const(0b100001000000)      # bit6==1: cell pointer is in range 64-127, ie page 2
 
 
-# Small pause when we start or after a reset operation
-time.sleep(1)
+def configure_pins():
+    global pins
 
-# Pico pin setup
-# We initialise with the RESET* and CS* pins high, since they are active low and we don't want
-# them to operate at this point
-pins = {
-    'pico_led'    : machine.Pin(25, Pin.OUT),           # the led on the Pico
-    'buffer_led'  : machine.Pin(15, Pin.OUT),           # the 'buffer' LED on the PCB
-    'cs_adc'      : machine.Pin(1, Pin.OUT, value=1),   # chip select pin of the ADC (active low)
-    'sck_adc'     : machine.Pin(2, Pin.OUT),            # serial clock for the SPI interface
-    'sdi_adc'     : machine.Pin(3, Pin.OUT),            # serial input to ADC from Pico
-    'sdo_adc'     : machine.Pin(0, Pin.IN),             # serial output from ADC to Pico
-    'reset_adc'   : machine.Pin(5, Pin.OUT, value=1),   # hardware reset of ADC commanded from Pico (active low)
-    'dr_adc'      : machine.Pin(4, Pin.IN),             # data ready from ADC to Pico (active low)
-    'reset_me'    : machine.Pin(14, Pin.IN),            # hardware reset of Pico (active low, implemented with interrupt handler)
-    'mode_select' : machine.Pin(26, Pin.IN)             # switch between streaming (LOW) and command mode (HIGH)
-}
+    # Pico pin setup
+    # We initialise with the RESET* and CS* pins high, since they are active low and we don't want
+    # them to operate until needed
+    pins = {
+        'pico_led'    : machine.Pin(25, Pin.OUT),           # the led on the Pico
+        'buffer_led'  : machine.Pin(15, Pin.OUT),           # the 'buffer' LED on the PCB
+        'cs_adc'      : machine.Pin(1, Pin.OUT, value=1),   # chip select pin of the ADC (active low)
+        'sck_adc'     : machine.Pin(2, Pin.OUT),            # serial clock for the SPI interface
+        'sdi_adc'     : machine.Pin(3, Pin.OUT),            # serial input to ADC from Pico
+        'sdo_adc'     : machine.Pin(0, Pin.IN),             # serial output from ADC to Pico
+        'reset_adc'   : machine.Pin(5, Pin.OUT, value=1),   # hardware reset of ADC commanded from Pico (active low)
+        'dr_adc'      : machine.Pin(4, Pin.IN),             # data ready from ADC to Pico (active low)
+        'reset_me'    : machine.Pin(14, Pin.IN),            # reset and restart Pico (active low)
+        'mode_select' : machine.Pin(26, Pin.IN)             # switch between streaming (LOW) and command mode (HIGH)
+    }
+    
 
 def configure_adc_spi_interface():
-    global spi_adc_interface
+    global spi_adc_interface, pins
+
     spi_adc_interface = machine.SPI(0,
                                     baudrate   = SPI_CLOCK_RATE,
                                     polarity   = 0,
@@ -89,7 +99,8 @@ def configure_adc_spi_interface():
 
 
 def set_adc_register(reg, bs):
-    global spi_adc_interface
+    global pins, spi_adc_interface
+
     # The actual address byte leads with binary 01 and ends with the read/write bit (1 or 0).
     # The five bits in the middle are the 'register' address inside the ADC
     addr = 0x40 | (reg << 1)
@@ -107,6 +118,8 @@ def set_adc_register(reg, bs):
 
 
 def reset_adc():
+    global pins
+
     # deselect the ADC
     pins['cs_adc'].value(1)
     time.sleep(0.1)
@@ -116,10 +129,10 @@ def reset_adc():
     pins['reset_adc'].value(1)
     time.sleep(0.1)
 
+
 # gains are in order of hardware channel: differential current, low range current, full range current, voltage
 # refer to MCP3912 datasheet for behaviour of all the settings configured here
 def setup_adc(adc_settings):
-    global spi_adc_interface
     # Setup the MCP3912 ADC
     reset_adc()
     
@@ -185,9 +198,10 @@ def setup_adc(adc_settings):
     
  
 def configure_interrupts():
+    global pins, state
+
     # Interrupt handler for data ready pin (this pin is commanded from the ADC)
     def adc_read_handler(_):
-        global state
         # 'anding' the pointer with a bit mask that has binary '0' in the bit above the
         # largest buffer pointer makes the buffer pointer circulate to zero without needing
         # an 'if' conditional: this means the instruction executes in constant time
@@ -196,7 +210,6 @@ def configure_interrupts():
     # we need this helper function, because we can't easily assign to global variable
     # within a lambda expression
     def set_mode(required_mode):
-        global state
         state = required_mode
 
     # Bind pin transitions to interrupt handlers
@@ -210,6 +223,8 @@ def configure_interrupts():
 
 
 def disable_interrupts():
+    global pins
+
     pins['dr_adc'].irq(trigger = Pin.IRQ_FALLING, handler = None)
     pins['reset_me'].irq(trigger = Pin.IRQ_FALLING, handler = None)
     pins['mode_select'].irq(trigger = Pin.IRQ_FALLING, handler = None)
@@ -218,6 +233,7 @@ def disable_interrupts():
 
 def configure_buffer_memory():
     global mv_acq
+
     # 2 bytes per channel, 4 channels
     # we use a memoryview to allow this to be sub-divided into cells and
     # pages in the streaming loops
@@ -225,7 +241,8 @@ def configure_buffer_memory():
 
 
 def start_adc():
-    global spi_adc_interface
+    global pins, spi_adc_interface
+
     if DEBUG:
         print('Starting the ADC...')
     # Command ADC to repeatedly refresh ADC registers, by holding CS* low
@@ -233,7 +250,10 @@ def start_adc():
     pins['cs_adc'].value(0)
     spi_adc_interface.write(bytes([0b01000001]))
 
+
 def stop_adc():
+    global pins
+
     # Tell the ADC to stop sampling
     # Note that the DR* pin continues to cycle, so it's necessary to also stop
     # interrupts if we want to stop processing completely
@@ -267,11 +287,12 @@ def streaming_loop_core_1():
     if DEBUG:
         print('streaming_loop_core_1() exited')
 
+
 #########################################################
 ######### STREAMING LOOP FOR CORE 0 STARTS HERE
 ########################################################
 def streaming_loop_core_0(): 
-    global state, mv_acq
+    global pins, state, mv_acq
 
     # Create memoryviews of each half of the circular buffer (ie two pages)
     half_mem = BUFFER_SIZE * 8 // 2
@@ -306,6 +327,8 @@ def streaming_loop_core_0():
 
 
 def reset_microcontroller():
+    global pins
+
     # The ISR has detected that the reset pin went low
     # Ensure the reset process is not interrupted
     disable_interrupts()
@@ -320,6 +343,7 @@ def reset_microcontroller():
 
 def process_command(adc_settings):
     global state
+
     # adc_settings are assembled into the dictionary structure as below
     #  { 'gains': ['1x', '1x', '1x', '1x'], 'sample_rate': '7.812k' }
     while state & COMMAND:
@@ -353,12 +377,15 @@ def process_command(adc_settings):
 
 
 def main():
-    global state
+    global pins, state
 
     # adc_settings can be changed in COMMAND mode
     adc_settings = DEFAULT_ADC_SETTINGS
+    
+    # set the mode of the hardware pins
+    configure_pins()
 
-    # Wait for 60 seconds, provides debug opportunity to return pico to REPL if it is crashing 
+    # Wait for 60 seconds, provides debug opportunity to return pico to REPL if our code is deadlocked
     if DEBUG:
         print('PICO starting up.')
         print('Waiting for 60 seconds...')

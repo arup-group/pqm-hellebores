@@ -85,7 +85,7 @@ def configure_pins():
     
 
 def configure_adc_spi_interface():
-    global spi_adc_interface, pins
+    global pins, spi_adc_interface
 
     spi_adc_interface = machine.SPI(0,
                                     baudrate   = SPI_CLOCK_RATE,
@@ -109,13 +109,15 @@ def set_adc_register(reg, bs):
     pins['cs_adc'].value(0)
     # for writing, make sure lowest bit is cleared, hence & 0b11111110
     spi_adc_interface.write(bytes([addr & 0b11111110]) + bs) 
+    pins['cs_adc'].value(1)
     if DEBUG:
+        pins['cs_adc'].value(0)
         # for reading, make sure lowest bit is set, hence | 0b00000001
         spi_adc_interface.write(bytes([addr | 0b00000001])) 
         obs = spi_adc_interface.read(len(bs))
+        pins['cs_adc'].value(1)
         print("Verify: " + " ".join(hex(b) for b in obs))
-    pins['cs_adc'].value(1)
-
+ 
 
 def reset_adc():
     global pins
@@ -198,10 +200,11 @@ def setup_adc(adc_settings):
     
  
 def configure_interrupts():
-    global pins, state
+    global pins
 
     # Interrupt handler for data ready pin (this pin is commanded from the ADC)
     def adc_read_handler(_):
+        global state
         # 'anding' the pointer with a bit mask that has binary '0' in the bit above the
         # largest buffer pointer makes the buffer pointer circulate to zero without needing
         # an 'if' conditional: this means the instruction executes in constant time
@@ -210,6 +213,7 @@ def configure_interrupts():
     # we need this helper function, because we can't easily assign to global variable
     # within a lambda expression
     def set_mode(required_mode):
+        global state
         state = required_mode
 
     # Bind pin transitions to interrupt handlers
@@ -384,11 +388,13 @@ def main():
     
     # set the mode of the hardware pins
     configure_pins()
-
-    # Wait for 60 seconds, provides debug opportunity to return pico to REPL if our code is deadlocked
     if DEBUG:
         print('PICO starting up.')
+        print('Pin assignment.')
+        print(pins)
+        # Wait for 60 seconds, provides debug opportunity to return pico to REPL if our code is deadlocked
         print('Waiting for 60 seconds...')
+
     # Illuminate the green LED on Pico, while we're waiting
     pins['pico_led'].on()
     time.sleep(60)

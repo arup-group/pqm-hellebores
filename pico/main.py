@@ -386,7 +386,8 @@ def main():
     # adc_settings can be changed in COMMAND mode
     adc_settings = DEFAULT_ADC_SETTINGS
     
-    # set the mode of the hardware pins
+    # Pause briefly, then set the mode of the hardware pins
+    time.sleep(1)
     configure_pins()
     if DEBUG:
         print('PICO starting up.')

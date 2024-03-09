@@ -19,7 +19,7 @@ class Waveform:
     # array of thorpy text objects
     waveform_colours = [ GREEN, YELLOW, MAGENTA, CYAN ]
     text_colours = [BLACK, WHITE, WHITE] + waveform_colours
-
+    blit_toggle = True
     def __init__(self, st, wfs, app_actions):
         self.texts = []
         self.st = st
@@ -140,9 +140,16 @@ class Waveform:
                 f'exception in hellebores.py: plot_fn(). linedata is: {linedata}.\n',
                 file=sys.stderr)
 
-    def refresh(self, buffer, screen):
-        screen.blit(self.waveform_background, (0,0))
-        self.plot(buffer, screen)
+    
+    def refresh(self, buffer, screen, datetime):
+        self.blit_toggle = not self.blit_toggle
+        # we can only afford to refresh the background every other waveform
+        if self.blit_toggle:
+            screen.blit(self.waveform_background, (0,0))
+            self.plot(buffer, screen)
+            datetime.draw()
+        else:
+            self.plot(buffer, screen)
 
     def plot_mode(self, mode):
         if mode == 'dots':

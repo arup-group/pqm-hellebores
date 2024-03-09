@@ -6,15 +6,16 @@ On Pico
 Copy pico/main.py to the Pico storage, using Thonny.
 
 On Pi
-python3 -m pip install -r requirements.txt
+python -m pip install -r requirements.txt
 to upgrade existing packages:
-python3 -m pip install -r requirements.txt --upgrade
+python -m pip install -r requirements.txt --upgrade
 
 Raspberry Pi OS may also need SDL2 libraries:
 sudo apt install libsdl2-mixer-2.0-0 libsdl2-ttf-2.0-0 libsdl2-image-2.0-0
 
-Raspberry Pi OS may need maths libraries from this package for numpy to work
+Raspberry Pi OS may need maths libraries from these packages for numpy to work
 sudo apt install libatlas-base-dev
+sudo apt install libopenblas-dev
 
 
 

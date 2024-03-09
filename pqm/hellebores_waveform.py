@@ -124,7 +124,6 @@ class Waveform:
     
     def plot(self, buffer, screen):
         # can handle up to six plots...
-        screen.blit(self.waveform_background, (0,0))
         linedata = buffer.get_waveform()
         display_status = [
             self.st.voltage_display_status,
@@ -142,6 +141,7 @@ class Waveform:
                 file=sys.stderr)
 
     def refresh(self, buffer, screen):
+        screen.blit(self.waveform_background, (0,0))
         self.plot(buffer, screen)
 
     def plot_mode(self, mode):

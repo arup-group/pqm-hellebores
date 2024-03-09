@@ -40,7 +40,14 @@ class UI_groups:
     elements = {}
     mode = 'waveform'
     instruments = {}
- 
+    # the flag and circular_counter help to reduce workload of screen refresh
+    # when there are overlay menus.
+    ##############################################################################################
+    overlay_dialog_active = False
+    circular_counter = 0
+    SKIP_RATE = 4          # when frame rate is reduced, determines how often frames are dropped.
+    ##############################################################################################
+
     def __init__(self, st, waveform, multimeter, app_actions):
         # make a local reference to app_actions
         self.app_actions = app_actions
@@ -60,7 +67,7 @@ class UI_groups:
 
         # multi-meter group
         self.instruments['multimeter'] = multimeter
-        self.elements['multimeter'] = [ multimeter.multimeter_controls, multimeter.multimeter_readings ]
+        self.elements['multimeter'] = [ multimeter.multimeter_controls ]
 
         # voltage harmonic group
 
@@ -81,7 +88,17 @@ class UI_groups:
         self.current_range = required_range
 
     def refresh(self, buffer, screen):
-        self.instruments[self.mode].refresh(buffer, screen)
+        """dispatch to the refresh method of the element group currently selected."""
+        # to avoid overloading cpu and not keeping up with incoming data pipeline
+        # we reduce the frame rate to one in SKIP_RATE if overlay dialogs are present
+        # we let the caller know True/False whether a refresh actually was done
+        self.circular_counter = (self.circular_counter + 1) % self.SKIP_RATE
+        if not self.overlay_dialog_active or self.circular_counter == 0:
+            self.instruments[self.mode].refresh(buffer, screen)
+            self.elements['datetime'].draw()
+            return True
+        else:
+            return False
 
     def draw_texts(self, capturing):
         self.instruments[self.mode].draw_texts(capturing)
@@ -92,25 +109,18 @@ class UI_groups:
         if elements_group in ['waveform', 'multimeter', 'voltage_harmonic', 'current_harmonic']:
             # if we picked a different display mode, store it in 'self.mode'.
             self.mode = elements_group
-            selected_elements = [ 
-                *self.elements[self.mode],
-                self.elements['datetime']
-                ]
+            selected_elements = [ *self.elements[self.mode] ]
             self.app_actions.post_clear_screen_event()
+            self.overlay_dialog_active = False
         elif elements_group == 'back':
             # if we picked 'back', then just use the pre-existing mode
-            selected_elements = [
-                *self.elements[self.mode],
-                self.elements['datetime']
-                ]
+            selected_elements = [ *self.elements[self.mode] ]
+            self.overlay_dialog_active = False
         else:
             # otherwise, use the pre-existing mode and add the selected overlay
             # elements to it.
-            selected_elements = [
-                *self.elements[self.mode],
-                self.elements[elements_group],
-                self.elements['datetime']
-                ]
+            selected_elements = [ *self.elements[self.mode], self.elements[elements_group] ]
+            self.overlay_dialog_active = True
         try: 
             self.updater = thorpy.Group(elements=selected_elements, mode=None).get_updater()
         except:
@@ -280,8 +290,10 @@ class App_Actions:
         self.open_streams(waveform_stream_name, analysis_stream_name)
         # allow/stop update of the lines on the screen
         self.capturing = True
-        # create a custom pygame event, which we'll use for clearing the screen
+        # create custom pygame events, which we use for clearing the screen
+        # and triggering a redraw of the controls
         self.clear_screen_event = pygame.event.custom_type()
+        self.draw_controls_event = pygame.event.custom_type()
 
     def open_pipe(self, file_name):
         if os.name == 'posix':
@@ -321,7 +333,10 @@ class App_Actions:
 
 
     def post_clear_screen_event(self):
-        status = pygame.event.post(pygame.event.Event(self.clear_screen_event, {}))
+        pygame.event.post(pygame.event.Event(self.clear_screen_event, {}))
+
+    def post_draw_controls_event(self):
+        pygame.event.post(pygame.event.Event(self.draw_controls_event, {}))
 
     def start_stop(self):
         self.capturing = not self.capturing
@@ -388,13 +403,8 @@ def main():
     # the list of 'other programs' is used to send signals when we change
     # settings in this program. We call st.send_to_all() and then
     # these programs are each told to re-read the settings file.
-    st = Settings(
-        other_programs = [
-            'scaler.py',
-            'trigger.py',
-            'mapper.py'
-            ],
-        reload_on_signal=False)
+    st = Settings(other_programs = [ 'scaler.py', 'trigger.py', 'mapper.py' ],
+                  reload_on_signal=False)
 
     # create objects that hold the state of the application and UI
     app_actions  = App_Actions(waveform_stream_name, analysis_stream_name)
@@ -421,6 +431,8 @@ def main():
             if app_actions.capturing == True:
                 ui.get_element('datetime').set_text(time.ctime())
             ui.draw_texts(app_actions.capturing)
+            # force controls - including new text - to be re-drawn
+            app_actions.post_draw_controls_event()
 
         # ALWAYS read new data, even if we are not capturing it, to keep the incoming data
         # pipeline flowing. If the read rate doesn't keep up with the pipe, then we will see 
@@ -436,12 +448,6 @@ def main():
             # one or both incoming data pipes were closed, quit the application
             app_actions.exit_application('quit')
 
-
-        # we don't use the event handler to schedule plotting updates, because it is not
-        # efficient enough for high frame rates. Instead we plot explicitly when needed, every
-        # time round the loop. 
-        ui.refresh(buffer, screen)
-
         # here we process mouse/touch/keyboard events.
         events = pygame.event.get()
         for e in events:
@@ -456,11 +462,30 @@ def main():
             elif e.type == pygame.KEYDOWN and e.key == pygame.K_s:     # stop
                 app_actions.capturing = False
             elif e.type == app_actions.clear_screen_event:
+                # this event is posted when the 'mode' of the software is changed and we
+                # want to clear the screen completely
                 screen.fill(LIGHT_GREY)
+            elif e.type == app_actions.draw_controls_event:
+                # we don't actually do anything here, just want the side effect of 'events'
+                # having something in it because it is tested next, and will cause the 
+                # controls to be re-drawn
+                pass
 
-        # ui_current_updater.update() is an expensive function, so we use the simplest possible
-        # thorpy theme to achieve highest performance/frame rate
-        ui.get_updater().update(events=events)
+        # we don't use the event handler to schedule plotting updates, because it is not
+        # efficient enough for high frame rates. Instead we plot explicitly each
+        # time round the loop. Depending on the current mode, waveforms, meter readings etc
+        # will be drawn as necessary. The refresh skips some frames, deliberately, when an
+        # overlay dialog is displayed.
+        display_was_refreshed = ui.refresh(buffer, screen)
+
+        # ui.get_updater().update() is an expensive function, so we use the simplest possible
+        # thorpy theme to achieve the quickest redraw time. Then, we only update/redraw when
+        # buttons are pressed or the text needs updating. When there is an overlay menu displayed
+        # there is more drawing work to do. ui.refresh deliberately skips some frames in this
+        # situation to reduce the update rate required -- we use the 'display_was_refreshed'
+        # variable to sync control surface redraw with refresh frames.
+        if events or (ui.overlay_dialog_active and display_was_refreshed):
+            ui.get_updater().update(events=events)
 
         # push all of our updated work into the active display framebuffer
         pygame.display.flip()

@@ -42,10 +42,11 @@ class Multimeter:
             self.texts[T_RUNSTOP].set_bck_color(RED)
             self.texts[T_RUNSTOP].set_text('Stopped', adapt_parent=False)
 
-    def refresh(self, buffer, screen):
+    def refresh(self, buffer, screen, datetime):
         # display all the readings
         screen.blit(self.multimeter_background, (0,0))
         self.multimeter_readings.draw()
+        datetime.draw()
 
     def create_multimeter_controls(self):
         """Multimeter controls, on right of screen"""

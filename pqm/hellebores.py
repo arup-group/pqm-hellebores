@@ -94,8 +94,8 @@ class UI_groups:
         # we let the caller know True/False whether a refresh actually was done
         self.circular_counter = (self.circular_counter + 1) % self.SKIP_RATE
         if not self.overlay_dialog_active or self.circular_counter == 0:
-            self.instruments[self.mode].refresh(buffer, screen)
-            self.elements['datetime'].draw()
+            self.instruments[self.mode].refresh(buffer, screen, self.elements['datetime'])
+            #self.elements['datetime'].draw()
             return True
         else:
             return False

@@ -16,12 +16,13 @@ Use Thonny on your desktop or laptop computer to install MicroPython on the Pico
 
 ## Installation
 **Raspberry PI SD card**
-Prepare the SD card using Raspberry Pi Imager.
+Prepare the SD card using Raspberry Pi Imager. This can be run from a USB stick running Raspberry Pi OS directly on the Pi, but note that an non-initialised Pico must be unplugged from the Pi USB port for this to work.
+Set a project specific password.
 Enable the option for remote SSH access.
-Set the wifi SSID and password to be used for initial access.
+Set the wifi country, SSID and password to be used for initial access.
 
 **Pi setup**  
-Start a terminal session via SSH or use a local keyboard.  
+Start a terminal session via SSH or use a bluetooth keyboard.  
 
 Clone the repository:  
 `git clone https://github.com/arup-group/pqm-hellebores.git`

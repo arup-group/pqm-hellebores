@@ -45,6 +45,7 @@ class Multimeter:
     def refresh(self, buffer, screen):
         # display all the readings
         screen.blit(self.multimeter_background, (0,0))
+        self.multimeter_readings.draw()
 
     def create_multimeter_controls(self):
         """Multimeter controls, on right of screen"""

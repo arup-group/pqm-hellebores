@@ -122,9 +122,7 @@ class Waveform:
             if display_status[i] == True:
                 pygame.draw.lines(screen, self.waveform_colours[i], False, buffer[i], 2)
     
-    def plot(self, buffer, screen):
-        # can handle up to six plots...
-        linedata = buffer.get_waveform()
+    def plot(self, buffer, multi_trace, screen):
         display_status = [
             self.st.voltage_display_status,
             self.st.current_display_status,
@@ -132,7 +130,11 @@ class Waveform:
             self.st.earth_leakage_current_display_status
             ]
         try:
-            self.plot_fn(screen, linedata, display_status)
+            for i in range(multi_trace):
+                # plot multiple frames if required on the same background
+                # can handle up to six plots in each frame...
+                linedata = buffer.get_waveform(i)
+                self.plot_fn(screen, linedata, display_status)
         except (IndexError, ValueError):
             # the pygame.draw.lines will throw an exception if there are not at
             # least two points in each line - (sounds reasonable)
@@ -141,15 +143,10 @@ class Waveform:
                 file=sys.stderr)
 
     
-    def refresh(self, buffer, screen, datetime):
-        self.blit_toggle = not self.blit_toggle
-        # we can only afford to refresh the background every other waveform
-        if self.blit_toggle:
-            screen.blit(self.waveform_background, (0,0))
-            self.plot(buffer, screen)
-            datetime.draw()
-        else:
-            self.plot(buffer, screen)
+    def refresh(self, buffer, multi_trace, screen, datetime):
+        screen.blit(self.waveform_background, (0,0))
+        self.plot(buffer, multi_trace, screen)
+        datetime.draw()
 
     def plot_mode(self, mode):
         if mode == 'dots':

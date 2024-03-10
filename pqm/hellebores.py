@@ -40,17 +40,13 @@ class UI_groups:
     elements = {}
     mode = 'waveform'
     instruments = {}
-    # the flag and circular_counter help to reduce workload of screen refresh
-    # when there are overlay menus.
-    ##############################################################################################
+    # the flag helps to reduce workload of screen refresh when there are overlay menus.
     overlay_dialog_active = False
-    circular_counter = 0
-    SKIP_RATE = 4          # when frame rate is reduced, determines how often frames are dropped.
-    ##############################################################################################
 
     def __init__(self, st, waveform, multimeter, app_actions):
-        # make a local reference to app_actions
+        # make a local reference to app_actions and st
         self.app_actions = app_actions
+        self.st = st
 
         # re-point the updater function in the app_actions object to target the function in this object
         # NB dynamically altering a function definition in another object is a relatively unusual
@@ -89,19 +85,24 @@ class UI_groups:
 
     def refresh(self, buffer, screen):
         """dispatch to the refresh method of the element group currently selected."""
-        # to avoid overloading cpu and not keeping up with incoming data pipeline
-        # we reduce the frame rate to one in SKIP_RATE if overlay dialogs are present
-        # we let the caller know True/False whether a refresh actually was done
-        self.circular_counter = (self.circular_counter + 1) % self.SKIP_RATE
-        if not self.overlay_dialog_active or self.circular_counter == 0:
-            self.instruments[self.mode].refresh(buffer, screen, self.elements['datetime'])
-            #self.elements['datetime'].draw()
-            return True
+        if self.mode == 'waveform':
+            self.instruments[self.mode].refresh(buffer, self.app_actions.multi_trace, screen, self.elements['datetime'])
         else:
-            return False
+            self.instruments[self.mode].refresh(buffer, screen, self.elements['datetime'])
 
     def draw_texts(self, capturing):
         self.instruments[self.mode].draw_texts(capturing)
+
+    def set_multi_trace(self):
+        if self.st.time_axis_per_division < 10:
+            if self.overlay_dialog_active:
+                self.app_actions.multi_trace = 4
+            else:
+                self.app_actions.multi_trace = 2
+        else:
+            # for longer timebases, we can re-draw every time
+            self.app_actions.multi_trace = 1
+
 
     def set_updater(self, elements_group):
         # for 'waveform', 'multimeter', 'voltage_harmonic', 'current_harmonic',
@@ -121,6 +122,7 @@ class UI_groups:
             # elements to it.
             selected_elements = [ *self.elements[self.mode], self.elements[elements_group] ]
             self.overlay_dialog_active = True
+        self.set_multi_trace()
         try: 
             self.updater = thorpy.Group(elements=selected_elements, mode=None).get_updater()
         except:
@@ -188,19 +190,22 @@ class Sample_Buffer:
     def __init__(self):
         # working points buffer for four lines, calculation array
         # flag for detecting when pipes are closed (end of file)
-        self.ps = [ [],[],[],[] ] 
-        self.cs = []
+        self.ps = [ [],[],[],[] ]           # points
+        self.cs = []                        # calculations
         self.pipes_ok = True
-
-    # sample buffer history
-    # future extension is to use this buffer for electrical event history
-    # (eg triggered by power fluctuation etc)
-    sample_waveform_history = [[] for i in range(SAMPLE_BUFFER_SIZE+1)]
-    xp = -1                 # tracks previous 'x coordinate'
+        # sample buffer history
+        # future extension is to use this buffer for electrical event history
+        # (eg triggered by power fluctuation etc)
+        self.sample_waveform_history = [ [] for i in range(SAMPLE_BUFFER_SIZE) ]
+        # tracks previous 'x coordinate'
+        self.xp = -1
 
     def end_frame(self, capturing, wfs):
         if capturing:
-            self.sample_waveform_history[SAMPLE_BUFFER_SIZE] = self.ps
+            # shift the history buffer along and append the new capture
+            self.sample_waveform_history = self.sample_waveform_history[1:]
+            self.sample_waveform_history.append(self.ps)
+            #self.sample_waveform_history[SAMPLE_BUFFER_SIZE] = self.ps
             wfs.increment()
         # reset the working buffer
         self.ps = [ [],[],[],[] ]
@@ -273,14 +278,9 @@ class Sample_Buffer:
                       ' file reading error.', file=sys.stderr) 
                 break
 
-    def save_waveform(self):
-        self.sample_waveform_history = self.sample_waveform_history[1:]
-        self.sample_waveform_history.append('')
-
-    def get_waveform(self, index = SAMPLE_BUFFER_SIZE):
-        if (index < 0) or (index > SAMPLE_BUFFER_SIZE):
-            index = SAMPLE_BUFFER_SIZE
-        return self.sample_waveform_history[index]
+    def get_waveform(self, index=0):
+        # reverse into history by 'index' frames
+        return self.sample_waveform_history[SAMPLE_BUFFER_SIZE-1-index]
 
 
 class App_Actions:
@@ -290,6 +290,9 @@ class App_Actions:
         self.open_streams(waveform_stream_name, analysis_stream_name)
         # allow/stop update of the lines on the screen
         self.capturing = True
+        # multi_trace mode overlays traces on one background and is used to optimise
+        # for high frame rates or dialog overlay
+        self.multi_trace = 1
         # create custom pygame events, which we use for clearing the screen
         # and triggering a redraw of the controls
         self.clear_screen_event = pygame.event.custom_type()
@@ -389,10 +392,10 @@ def main():
     # we can't make the pointer inactive using the pygame flags because we need it working
     # to return correct coordinates from the touchscreen
     if get_screen_hardware_size() == PI_SCREEN_SIZE:
-        screen    = pygame.display.set_mode(PI_SCREEN_SIZE, flags=pygame.FULLSCREEN)
+        screen = pygame.display.set_mode(PI_SCREEN_SIZE, flags=pygame.FULLSCREEN)
         hide_mouse_pointer = True
     else:
-        screen    = pygame.display.set_mode(PI_SCREEN_SIZE)
+        screen = pygame.display.set_mode(PI_SCREEN_SIZE)
         hide_mouse_pointer = False
 
     # initialise thorpy
@@ -421,19 +424,6 @@ def main():
 
     # main loop
     while True:
-        # hack to make the cursor invisible while still responding to touch signals
-        # would like to do this only once, rather than every trip round the loop
-        if hide_mouse_pointer:
-            pygame.mouse.set_cursor(
-                (8,8), (0,0), (0,0,0,0,0,0,0,0), (0,0,0,0,0,0,0,0))
-        # we update status texts and datetime every second
-        if wfs.time_to_update():
-            if app_actions.capturing == True:
-                ui.get_element('datetime').set_text(time.ctime())
-            ui.draw_texts(app_actions.capturing)
-            # force controls - including new text - to be re-drawn
-            app_actions.post_draw_controls_event()
-
         # ALWAYS read new data, even if we are not capturing it, to keep the incoming data
         # pipeline flowing. If the read rate doesn't keep up with the pipe, then we will see 
         # artifacts on screen. Check if the BUFFER led on PCB is stalling if performance
@@ -441,12 +431,30 @@ def main():
         # The load_waveform() function also implicitly manages display refresh speed when not
         # capturing, by waiting for a definite time for new data.
 
-        buffer.load_waveform(app_actions.waveform_stream, app_actions.capturing, wfs)
+        # if multi_trace is active, read multiple frames into the buffer, otherwise just one
+        for i in range(app_actions.multi_trace):
+            buffer.load_waveform(app_actions.waveform_stream, app_actions.capturing, wfs)
+
+        # read new analysis results, if available 
         buffer.load_analysis(app_actions.analysis_stream, app_actions.capturing)
 
         if buffer.pipes_ok == False:
             # one or both incoming data pipes were closed, quit the application
             app_actions.exit_application('quit')
+
+        # hack to make the cursor invisible while still responding to touch signals
+        # would like to do this only once, rather than every trip round the loop
+        if hide_mouse_pointer:
+            pygame.mouse.set_cursor(
+                (8,8), (0,0), (0,0,0,0,0,0,0,0), (0,0,0,0,0,0,0,0))
+
+        # we update status texts and datetime every second
+        if wfs.time_to_update():
+            if app_actions.capturing == True:
+                ui.get_element('datetime').set_text(time.ctime())
+            ui.draw_texts(app_actions.capturing)
+            # force controls - including new text - to be re-drawn
+            app_actions.post_draw_controls_event()
 
         # here we process mouse/touch/keyboard events.
         events = pygame.event.get()
@@ -474,17 +482,14 @@ def main():
         # we don't use the event handler to schedule plotting updates, because it is not
         # efficient enough for high frame rates. Instead we plot explicitly each
         # time round the loop. Depending on the current mode, waveforms, meter readings etc
-        # will be drawn as necessary. The refresh skips some frames, deliberately, when an
-        # overlay dialog is displayed.
-        display_was_refreshed = ui.refresh(buffer, screen)
+        # will be drawn as necessary.
+        ui.refresh(buffer, screen)
 
         # ui.get_updater().update() is an expensive function, so we use the simplest possible
         # thorpy theme to achieve the quickest redraw time. Then, we only update/redraw when
         # buttons are pressed or the text needs updating. When there is an overlay menu displayed
-        # there is more drawing work to do. ui.refresh deliberately skips some frames in this
-        # situation to reduce the update rate required -- we use the 'display_was_refreshed'
-        # variable to sync control surface redraw with refresh frames.
-        if events or (ui.overlay_dialog_active and display_was_refreshed):
+        # there is more drawing work to do, so we use multi_trace to help optimise.
+        if events or ui.overlay_dialog_active:
             ui.get_updater().update(events=events)
 
         # push all of our updated work into the active display framebuffer

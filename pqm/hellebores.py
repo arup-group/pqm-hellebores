@@ -96,7 +96,7 @@ class UI_groups:
     def set_multi_trace(self):
         # need to run this at least when the timebase changes or when there is an overlay dialog
         # currently caused to run for any event
-        if self.st.time_axis_per_division < 10:
+        if self.app_actions.capturing == True and self.st.time_axis_per_division < 10:
             if self.overlay_dialog_active:
                 self.app_actions.multi_trace = 4
             else:

@@ -85,8 +85,12 @@ class UI_groups:
 
     def refresh(self, buffer, screen):
         """dispatch to the refresh method of the element group currently selected."""
-        if self.mode == 'waveform':
+        if self.mode == 'waveform' and self.app_actions.capturing:
+            # if capturing, we might display multiple frames in one display
             self.instruments[self.mode].refresh(buffer, self.app_actions.multi_trace, screen, self.elements['datetime'])
+        elif self.mode == 'waveform':
+            # but just one frame if in stopped mode
+            self.instruments[self.mode].refresh(buffer, 1, screen, self.elements['datetime'])
         else:
             self.instruments[self.mode].refresh(buffer, screen, self.elements['datetime'])
 
@@ -96,7 +100,7 @@ class UI_groups:
     def set_multi_trace(self):
         # need to run this at least when the timebase changes or when there is an overlay dialog
         # currently caused to run for any event
-        if self.app_actions.capturing == True and self.st.time_axis_per_division < 10:
+        if self.st.time_axis_per_division < 10:
             if self.overlay_dialog_active:
                 self.app_actions.multi_trace = 4
             else:

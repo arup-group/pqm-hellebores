@@ -94,6 +94,8 @@ class UI_groups:
         self.instruments[self.mode].draw_texts(capturing)
 
     def set_multi_trace(self):
+        # need to run this at least when the timebase changes or when there is an overlay dialog
+        # currently caused to run for any event
         if self.st.time_axis_per_division < 10:
             if self.overlay_dialog_active:
                 self.app_actions.multi_trace = 4
@@ -122,7 +124,6 @@ class UI_groups:
             # elements to it.
             selected_elements = [ *self.elements[self.mode], self.elements[elements_group] ]
             self.overlay_dialog_active = True
-        self.set_multi_trace()
         try: 
             self.updater = thorpy.Group(elements=selected_elements, mode=None).get_updater()
         except:
@@ -490,6 +491,7 @@ def main():
         # buttons are pressed or the text needs updating. When there is an overlay menu displayed
         # there is more drawing work to do, so we use multi_trace to help optimise.
         if events or ui.overlay_dialog_active:
+            ui.set_multi_trace()
             ui.get_updater().update(events=events)
 
         # push all of our updated work into the active display framebuffer

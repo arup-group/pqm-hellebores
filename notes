@@ -14,13 +14,11 @@ Raspberry Pi OS may also need SDL2 libraries:
 sudo apt install libsdl2-mixer-2.0-0 libsdl2-ttf-2.0-0 libsdl2-image-2.0-0
 
 Raspberry Pi OS may need maths libraries from these packages for numpy to work
-sudo apt install libatlas-base-dev
-sudo apt install libopenblas-dev
-
+sudo apt install libatlas-base-dev libopenblas-dev
 
 
 #######
-# ADDITIONAL TECHNICAL NOTES FOR TROUBLESHOOTING
+### ADDITIONAL TECHNICAL NOTES FOR TROUBLESHOOTING
 #######
 
 Documentation for Thorpy GUI library for pygame:
@@ -31,6 +29,7 @@ export SDL_FBDEV=/dev/fb0
 
 # Disable mouse driver, including OS touch mouse emulation
 export SDL_MOUSEDRV=/dev/null
+
 # App may need to run with root permissions in order to access framebuffer
 sudo ./app.py
 
@@ -41,54 +40,6 @@ sudo raspi-config
 # Check touchscreen device on the commandline
 hexdump /dev/input/event0
 evtest
-
-
-#######
-# DESKTOP COMPUTERS
-#######
-
-# All computers
-Retrieve the software via the command line.
-git clone https://github.com/arup-group/pqm-hellebores.git
-Or download software from Github website by searching for pqm-hellebores project.
-
-Once downloaded, unzipped etc, change to the project home folder:
-cd pqm-hellebores
-
-
-# On Ubuntu/Mac/Windows WSL (development)
-Installation as per Raspberry Pi OS will work (MacOS will need XCode command line tools)
-
-Create a new virtual environment:
-python -m venv create pqm-env
-. pqm-env/bin/activate
-
-Install the dependencies
-python -m pip install -r requirements.txt
-
-Test the software
-run/go.sh
-
-
-# On MS Windows (without WSL)
-On native Windows, the go.sh run script for Raspberry Pi will not work.
-However, code paths have been arranged so that the simulator can run on Windows.
-Use go.bat, or python go.py, instead of go.sh.
-
-Create a new virtual environment, either venv or conda style, and install the dependencies:
-python -m venv create pqm-env
-pqm-env\scripts\activate
- OR
-conda create -n pqm-env
-conda activate pqm-env
-
-Install the dependencies
-python -m pip install -r requirements.txt
-
-Test the software
-run\go.bat
-
-
 
 
 

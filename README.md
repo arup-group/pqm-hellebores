@@ -25,24 +25,24 @@ Set the wifi country, SSID and password to be used for initial access.
 Start a terminal session via SSH or use a bluetooth keyboard.  
 
 Clone the repository:  
-`git clone https://github.com/arup-group/pqm-hellebores.git`
+    git clone https://github.com/arup-group/pqm-hellebores.git
 
 Change to the working directory:  
-`cd pqm-hellebores`
+    cd pqm-hellebores
 
 Create a virtual environment, and activate it:
-`python -m venv create venv
-source venv/bin/activate`
+    python -m venv create venv
+    source venv/bin/activate
 
-Install the dependencies  
-`python -m pip install -r requirements.txt`
+Install the dependencies:
+    python -m pip install -r requirements.txt
 
 See notes file for additional system dependencies.
 
-Set up the desktop shortcuts:  
-`cp ./pi-setup/find-me.desktop /home/pi/.local/share/applications
-cp ./pi-setup/hellebores.desktop /home/pi/.local/share/applications
-cp ./pi-setup/autorun.sh /home/pi`
+Set up the desktop shortcuts: 
+    cp ./pi-setup/find-me.desktop /home/pi/.local/share/applications
+    cp ./pi-setup/hellebores.desktop /home/pi/.local/share/applications
+    cp ./pi-setup/autorun.sh /home/pi
   
 **Pico setup**  
 Using Thonny, open `./pico/main.py` and save it to the root folder of the microcontroller.

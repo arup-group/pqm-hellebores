@@ -67,11 +67,18 @@ The Pi code will run in WSL, Ubuntu, Mac or similar environments that have a mod
 
 On a Posix system (Raspberry Pi OS, WSL, Ubuntu, Mac etc) execute `run/go.sh` from the terminal to run the full pipeline. This will access live measurements on real PQM hardware, and simulated measurements on other computers.
 
-For Windows computers without WSL, use `run\go.bat` or, from the 'run' directory, `python go.py` from a cmd.exe shell. This sets up extra python code to implement named pipes and signals sufficiently to meet the needs of the app. However, some features of the go.sh script (eg software update) aren't implemented.
+It's possible to access the running environment on a Pi using SSH. For working on the Pico microcontroller, use ssh -X to connect to the Pi and then start `thonny` within your SSH session. This will redirect thonny's program window to your local X-server (needs a Linux or WSL2 system, or install an X-server separately).
 
-It's possible to access the running environment on a Pi using SSH. For working on the Pico microcontroller, use ssh -X and start `thonny` within your SSH session. This will redirect thonny's program window to your local X-server (needs a Linux or WSL2 system, or install X-server separately).
+### Windows computers
+In the installation step for creating virual environment, for cmd.exe type shell, use
+```
+python -m venv create venv-windows
+venv-windows\scripts\activate
+```
 
-## Calibration
+Within cmd.exe, use `run\go.bat` instead of `run/go.sh`. This activates the venv-windows environment and uses some additional code to sufficiently implement named pipes and signals to meet most of the dependencies of the project. These windows-specific workarounds are respectively in `mswin_pipes.py` and `settings.py`. However, some features of the go.sh script (eg software update) aren't implemented.
+
+# Calibration
 The four channels of the ADC each have an associated DC offset and gain calibration factor. The calibration factors for each device are stored in the `calibrations.json` file. The identity of the specific device at hand is stored in the `identity` file. Hardware scaling and calibration factors are applied to the data stream by the `scaler.py` program.
 
 

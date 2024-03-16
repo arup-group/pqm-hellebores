@@ -27,9 +27,9 @@ def read_and_print(ser):
             retries = 5
 
         except ValueError:
-            print('reader.py, main(): The data was not correct or complete.', file=sys.stderr)
+            print('reader.py, read_and_print(): The data was not correct or complete.', file=sys.stderr)
         except OSError:
-            print('reader.py, main(): Failed to read from serial port.', file=sys.stderr)
+            print('reader.py, read_and_print(): Failed to read from serial port.', file=sys.stderr)
             retries = retries - 1
     print('reader.py, read_and_print(): Read error was persistent, exiting loop.', file=sys.stderr)
 
@@ -38,18 +38,15 @@ def main():
     # load settings from settings.json
     # settings aren't used yet, but could be added to adjust ADC
     st = settings.Settings(reload_on_signal=False)
-    
     try:
         ser = serial.Serial('/dev/ttyACM0')
+        read_and_print(ser)
     except:
-        print("reader.py: Couldn't open serial port.", file=sys.stderr)
-        sys.exit(1)
-
-    # enter the main loop
-    read_and_print(ser)
-
-    ser.close()
-
+        print("reader.py, main(): Error reading from serial port.", file=sys.stderr)
+    finally:
+        # close the file if it was opened
+        if 'ser' in locals():
+            ser.close()
 
 
 if __name__ == '__main__':

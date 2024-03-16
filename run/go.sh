@@ -99,9 +99,6 @@ exit_code=$?
 
 echo "Finished processing."
 
-# Change back to the original working directory, so that we quit in the right place or re-launch if need be
-cd $CWD
-
 # Restore stderr file descriptor 2 from saved state on 4, and delete fd 4
 exec 2>&4 4>&-
 
@@ -125,6 +122,7 @@ if [[ $exit_code -eq 2 ]]; then
     # Trampoline: reload the launch script (this file) and run again
     echo "Restarting $0 in 5s..."
     sleep 5
+    cd $CWD
     exec $0
 
 # 3: Software update
@@ -136,7 +134,8 @@ elif [[ $exit_code -eq 3 ]]; then
     # Trampoline: reload the launch script and run again
     echo "Restarting $0 in 5s..."
     sleep 5
-    exec $0 
+    cd $CWD
+    exec $0
 
 # 4: Shutdown
 elif [[ $exit_code -eq 4 ]]; then
@@ -149,10 +148,12 @@ elif [[ $exit_code -ne 0 ]]; then
     echo "Here's the error log file $ERROR_LOG_FILE, hope it helps :-)"
     cat $ERROR_LOG_FILE
     sleep 60
+    cd $CWD
     exit $exit_code
 fi
 
 # 0: Exit normally
+cd $CWD
 echo "Exited."
 
 

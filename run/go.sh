@@ -1,6 +1,7 @@
 #!/bin/bash
 
-# Find absolute paths of script and program file directories
+# Find current working directory and absolute paths of script and program file directories
+CWD=$(pwd)
 SCRIPT_DIR=$(realpath $(dirname $0))
 PROGRAM_DIR=$(realpath $SCRIPT_DIR/../pqm)
 
@@ -98,8 +99,8 @@ exit_code=$?
 
 echo "Finished processing."
 
-# Change back to the script directory, so that we can re-launch if need be
-cd $SCRIPT_DIR
+# Change back to the original working directory, so that we quit in the right place or re-launch if need be
+cd $CWD
 
 # Restore stderr file descriptor 2 from saved state on 4, and delete fd 4
 exec 2>&4 4>&-
@@ -111,12 +112,16 @@ if [[ $exit_code -eq 2 ]]; then
     # open the serial port for reading on a new file descriptor 5,
     # drain the data waiting in it, and then close
     if $have_pico; then
+        echo "Resetting Pico, sampling will restart after a while."
+        $SCRIPT_DIR/../tools/reset_pico.py
+        echo "Flushing the serial interface."
         exec 5</dev/ttyACM0
         while read -t 0 -u 5 discard; do echo "Flushing serial port..."; done
         exec 5>&-
     fi
     # Trampoline: reload the launch script (this file) and run again
-    echo "Restarting $0..."
+    echo "Restarting $0 in 5s..."
+    sleep 5
     exec $0
 
 # 3: Software update

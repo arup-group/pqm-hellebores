@@ -114,6 +114,9 @@ if [[ $exit_code -eq 2 ]]; then
     if $have_pico; then
         echo "Resetting Pico, sampling will restart after a while."
         $SCRIPT_DIR/../tools/pico_reset.py
+        # allow serial connection to be re-established
+        sleep 5  
+        # get rid of any left-over data in the interface
         echo "Flushing the serial interface."
         exec 5</dev/ttyACM0
         while read -t 0 -u 5 discard; do echo "Flushing serial port..."; done

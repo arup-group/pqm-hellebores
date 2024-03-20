@@ -9,7 +9,9 @@ import settings
 
 BUFFER_SIZE = 32
 BLOCK_SIZE = BUFFER_SIZE * 8
-
+SERIAL_PORTS = ['/dev/ttyACM0', '/dev/ttyUSB0',
+                'COM4', 'COM3', 'COM2', 'COM1',
+                '/dev/ttyS4', '/dev/ttyS3', '/dev/ttyS2', '/dev/ttyS1']
  
  
 def read_and_print(ser):
@@ -38,15 +40,27 @@ def main():
     # load settings from settings.json
     # settings aren't used yet, but could be added to adjust ADC
     st = settings.Settings(reload_on_signal=False)
-    try:
-        ser = serial.Serial('/dev/ttyACM0')
-        read_and_print(ser)
-    except:
-        print("reader.py, main(): Error reading from serial port.", file=sys.stderr)
-    finally:
-        # close the file if it was opened
-        if 'ser' in locals():
-            ser.close()
+    connection_made = False
+    # try a selection of serial ports
+    for port in SERIAL_PORTS:
+        try:
+            # if we've previously made a connection, but the read loop was broken,
+            # quit here rather than trying a different port
+            if connection_made:
+                break
+            # try the port
+            print(f"reader.py, main(): Trying port {port}.", file=sys.stderr)
+            ser = serial.Serial(port)
+            connection_made = True
+            # read the data
+            print(f"reader.py, main(): Connected.", file=sys.stderr)
+            read_and_print(ser)
+        except:
+            print(f"reader.py, main(): Serial error.", file=sys.stderr)
+        finally:
+            # make sure we have closed the port if it was opened
+            if 'ser' in locals():
+                ser.close()
 
 
 if __name__ == '__main__':

@@ -8,43 +8,61 @@ import signal
 # local
 from settings import Settings
 
-  
 
 def from_twos_complement(v):
     return -(v & 0x8000) | (v & 0x7fff)
 
+def get_factors(run_calibrated=True):
+    global st, offsets, gains
+    if run_calibrated == True:
+        offsets = st.cal_offsets
+        gains   = [ s*g for s,g in zip(st.scale_factors, st.cal_gains) ]
+    # we support running in 'uncalibrated' mode when we want to calibrate the device
+    else:
+        offsets = [0, 0, 0, 0]
+        gains   = st.scale_factors
+   
+
+def scale_readings(cs):
+    """cs contains channel readings in integers"""
+    global offsets, gains
+    return [ (from_twos_complement(cs[i]) + offsets[i]) * gains[i] for i in [0,1,2,3] ]
+
 
 def main():
-    st = Settings()
+    global st
 
-    print(st.scale_factors)
+    # check for uncalibrated mode
+    if len(sys.argv) == 2 and sys.argv[1] == '--uncalibrated':
+        run_calibrated = False
+    else:
+        run_calibrated = True
+    # get_factors() function will be called when settings are changed
+    st = Settings(get_factors)
     i = 0   # sample index
+    get_factors(run_calibrated)
+
+    # now loop over all the lines of data from stdin
     for line in sys.stdin:
         line = line.rstrip()
         try:
             # calculate time axis position
             t = st.interval*i
-            # get channel values as integer array, removing the index field
+            # split channel values into an integer array, removing the index field
             cs = [ int(w.strip(), base=16) for w in line.split() ][1:]
-            # calculate floating point values, using appropriate scaling factors
-            voltage = ((from_twos_complement(cs[3]) + st.cal_offsets[3]) 
-                       * st.scale_factors[3]
-                       * st.cal_gains[3])
+            # scale the readings
+            scaled = scale_readings(cs)
+            # calculate floating point values, with appropriate calibration factors
+            voltage = scaled[3]
             # if st.current_axis_per_division is less than or equal to 0.1 A/div,
             # we use channel 1 for current measurements. If it is more than 0.1 A/div,
             # we use channel 2.
             if st.current_axis_per_division <= 0.1:
-                current = ((from_twos_complement(cs[1]) + st.cal_offsets[1]) 
-                           * st.scale_factors[1]
-                           * st.cal_gains[1])
+                current = scaled[1]
             else:
-                current = ((from_twos_complement(cs[2]) + st.cal_offsets[2]) 
-                           * st.scale_factors[2]
-                           * st.cal_gains[2])
+                current = scaled[2]
             power = voltage * current
-            leakage_current = ((from_twos_complement(cs[0]) + st.cal_offsets[0])
-                               * st.scale_factors[0]
-                               * st.cal_gains[0])
+            leakage_current = scaled[0]
             print(f'{t:12.4f} {voltage:10.3f} {current:10.5f} {power:10.3f} {leakage_current:12.7f}')
             i = i + 1
 

@@ -35,12 +35,12 @@ def run_on_windows():
     pipe_waveform = r'\\.\pipe\waveform_pipe'
     pipe_analysis = r'\\.\pipe\analysis_pipe'
  
-    cmd_1 = f'{pyth} rain_chooser.py | {pyth} scaler.py'
-            f' | {pyth} mswin_pipes.py tee {pipe_branch1} {pipe_branch2}'
-    cmd_2 = f'{pyth} mswin_pipes.py read {pipe_branch1} | {pyth} trigger.py | {pyth} mapper.py'
-            f' | {pyth} mswin_pipes.py write {pipe_waveform}'
-    cmd_3 = f'{pyth} mswin_pipes.py read {pipe_branch2} | {pyth} analyser.py'
-            f' | {pyth} mswin_pipes.py write {pipe_analysis}'
+    cmd_1 = (f'{pyth} rain_chooser.py | {pyth} scaler.py'
+             f' | {pyth} mswin_pipes.py tee {pipe_branch1} {pipe_branch2}')
+    cmd_2 = (f'{pyth} mswin_pipes.py read {pipe_branch1} | {pyth} trigger.py | {pyth} mapper.py'
+             f' | {pyth} mswin_pipes.py write {pipe_waveform}')
+    cmd_3 = (f'{pyth} mswin_pipes.py read {pipe_branch2} | {pyth} analyser.py'
+             f' | {pyth} mswin_pipes.py write {pipe_analysis}')
     cmd_4 = f'{pyth} hellebores.py {pipe_waveform} {pipe_analysis}'
 
     # On Windows, SIGINT (CTRL_C events) are raised by hellebores.py when the user settings are

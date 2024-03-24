@@ -3,25 +3,19 @@
 import subprocess
 import settings
 import sys
+import math
+
+# local
+from settings import Settings
 
 
-READINGS=10
 ADC_SAMPLES = 78125
 
 def from_twos_complement(v):
     return -(v & 0x8000) | (v & 0x7fff)
 
-def average_offsets():
-    print('')
-    print('******      Offset calibration        *******')
-    print('ADC integer readings will be received from all channels')
-    print('and averaged over 10 seconds.')
-    print('ENSURE NO LOADS ARE CONNECTED TO THE METER.')
-    print('')
-    print('Enter to start, (q) to quit: ', end='')
-    choice = input() 
-    if choice == 'q':
-        return
+
+def get_lines_from_reader():
     print('Receiving', end='')
     # receive the measurements
     process = subprocess.Popen('./rain_chooser.py',
@@ -41,81 +35,86 @@ def average_offsets():
         lines.append(process.stdout.readline())    
     process.terminate()
     print(f' {len(lines)} samples, done.\n')
+    return lines
 
-    # now average the offsets
+
+def lines_to_numbers(lines):
+    def line_to_numbers(line):
+        ws = line.decode('utf-8').strip().split()
+        ns = [ from_twos_complement(int(w, base=16)) for w in ws[1:] ]  
+        return ns
+
+    # numbers is a list of 4-tuples (sample per channel in numeric form)
+    numbers = [ line_to_numbers(line) for line in lines ]
+    return numbers 
+
+
+def scaled(numbers, offsets):
+    global st
+    scaled_numbers = []
+    for ns in numbers:
+        scaled_numbers.append([ sf*(n+o) for sf,n,o in zip(st.scale_factors, ns, offsets) ])
+    return scaled_numbers
+
+
+def numbers_to_rms(numbers, offsets):
+    scaled_numbers = scaled(numbers, offsets)
+    sum_of_squares = [0,0,0,0]
+    for ns in scaled_numbers:
+        sum_of_squares = [ n*n + s for n,s in zip(ns, sum_of_squares) ] 
+    mean_squares = [ n/ADC_SAMPLES for n in sum_of_squares ]
+    rmses = [ math.sqrt(n) for n in mean_squares ]
+    return rmses
+
+
+def numbers_to_offsets(numbers):
     accumulators = [0,0,0,0]
-    for l in lines:
-        output_words = l.decode('utf-8').strip().split()
-        output_numbers = [ from_twos_complement(int(w, base=16)) for w in output_words[1:] ] 
-        # print(output_numbers)
-        accumulators = [ a+n for a,n in zip(accumulators, output_numbers) ]
-    averages = [ round(-n/ADC_SAMPLES) for n in accumulators ]
-    labels = ['o0: Earth leakage current', 'o1: Current (low)', 'o2: Current (full)', 'o3: Voltage']
-    units = ['adc counts', 'adc counts', 'adc counts', 'adc counts']
-
-    # present the results
-    print('Required offset calibration:')
-    results = [ f'{l:28} : {a:12} {u}' for l,a,u in zip(labels, averages, units) ]
-    print('\n'.join(results))
-    print()
+    for ns in numbers:
+        accumulators = [ a+n for a,n in zip(accumulators, ns) ]
+    offsets = [ round(-n/ADC_SAMPLES) for n in accumulators ]
+    return offsets
 
 
-
-
-
-def average_amplitudes():
+def calibrate():
     print('')
-    print('******       Gain calibration         *******')
-    print('RMS calculated measurements will be received from all channels')
-    print('and averaged over 10 seconds.')
-    print('CONNECT THE APPROPRIATE LOAD TO THE PQM AND A CALIBRATED COMPARISON METER.')
+    print('******   CALIBRATOR UTILITY   *******')
+    print('ADC integer readings will be received from all channels')
+    print('and collected over 10 seconds.')
     print('')
-    print('Enter to start, or (q) to quit: ', end='')
+    print('Enter to start, (q) to quit: ', end='')
     choice = input() 
     if choice == 'q':
         return
-    print('Receiving', end='')
-    # receive the measurements
-    process = subprocess.Popen('./rain_chooser.py | ./scaler.py --uncalibrated | ./analyser.py',
-                               stdout=subprocess.PIPE,
-                               stderr=subprocess.DEVNULL,
-                               shell=True)
-    accumulators = [0,0,0,0]
-    for i in range(READINGS):
-        output_words = process.stdout.readline().decode('utf-8').strip().split()
-        output_numbers = [ float(w) for w in output_words[1:] ] 
-        accumulators = [ a+n for a,n in zip(accumulators, output_numbers) ]
-        sys.stdout.write('.')
-        sys.stdout.flush()
-    process.terminate()
-    print('done.\n')
-    # calculate the average for each channel
-    averages = [ n/READINGS for n in accumulators ]
-    averages[0] = averages[0]*1000  # for convenience, convert leakage current to mA
-    labels = ['r0: Earth leakage current', 'r1: Current (low)', 'r2: Current (full)', 'r3: Voltage']
-    units = ['mA', 'A', 'A', 'V']
+    numbers = lines_to_numbers(get_lines_from_reader())
+    # now average the offsets
+    offsets = numbers_to_offsets(numbers)
+    # calculate the rms values, applying necessary offsets
+    measurements = numbers_to_rms(numbers, offsets)
+    # for convenience, convert channel 0 into mA
+    measurements[0] = measurements[0] * 1000
+
     # present the results
-    print('Results:')
-    results = [ f'{l:28} : {a:28} {u}' for l,a,u in zip(labels, averages, units) ]
+    labels = ['o0: Earth leakage current', 'o1: Current (low)', 'o2: Current (full)', 'o3: Voltage']
+    units = ['adc counts', 'adc counts', 'adc counts', 'adc counts']
+    
+    print('NB CHANNEL 1 CALIBRATION RESULTS ARE ONLY VALID FOR CURRENTS UP TO APPROX 0.5A')
+    print('Required offset calibration:')
+    results = [ f'{l:28} : {a:6} {u}' for l,a,u in zip(labels, offsets, units) ]
     print('\n'.join(results))
     print()
-    print('To determine the gain calibration')
-    print('factor, divide the average multimeter reading by the measurement')
-    print('result above, eg g0 = m0/r0.')
+    labels = ['r0: Earth leakage current', 'r1: Current (low)', 'r2: Current (full)', 'r3: Voltage']
+    units = ['mA', 'A', 'A', 'V']
+    g_factor = ['g0=multimeter/r0', 'g1=multimeter/r1', 'g2=multimeter/r2', 'g3=multimeter/r3']
+    print('Uncalibrated meter readings, with offsets applied:')
+    results = [ f'{l:28} : {a:12.4f} {u:4} :    {g}' for l,a,u,g in zip(labels, measurements, units, g_factor) ]
+    print('\n'.join(results))
     print()
-
 
 
 if __name__ == '__main__':
-    print('****** Power quality meter calibrator *******')
-    print('(o) offset calibration, (g) gain calibration, (q) to quit: ', end='')
-    choice = input()
-    if choice == 'o':
-        average_offsets()
-    elif choice == 'g':
-        average_amplitudes()
-    else:
-        pass 
+    global st
+    st = Settings()
+    calibrate()
 
 
 

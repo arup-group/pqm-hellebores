@@ -14,11 +14,12 @@ if [[ -e $SCRIPT_DIR/../venv ]]; then
 fi
 
 # Figure out if we are running on real hardware or not
-if [[ -e /dev/ttyACM0 ]]; then
-    have_pico=true
+grep raspberry '/sys/firmware/devicetree/base/model' &> /dev/null
+if [[ $? -eq 0 ]]; then
+    real_hardware=true
     READER="./reader.py"
 else
-    have_pico=false
+    real_hardware=false
     READER="./rain_chooser.py"
 fi
 
@@ -108,7 +109,7 @@ if [[ $exit_code -eq 2 ]]; then
     # Flush serial interface
     # open the serial port for reading on a new file descriptor 5,
     # drain the data waiting in it, and then close
-    if $have_pico; then
+    if $real_hardware; then
         echo "Resetting Pico, sampling will restart after a while."
         $SCRIPT_DIR/../tools/pico_reset.py
         # allow serial connection to be re-established

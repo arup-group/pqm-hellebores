@@ -18,10 +18,11 @@ def run_on_windows():
 
     # Change working directory to the program directory (NB relative to the location of this file)
     os.chdir(resolve_path('../pqm', ''))
+    pyth = sys.executable
 
     # Display version and initial settings
-    os.system('python version.py')
-    os.system('python settings.py')
+    os.system(f'{pyth} version.py')
+    os.system(f'{pyth} settings.py')
 
     # An earlier attempt at forming the pipelines within a .BAT file worked using the START
     # command in a batch file. However, each instance of the 'start' command creates a new 
@@ -29,7 +30,6 @@ def run_on_windows():
     # SIGINT signal needs to be seen by all programs and it is not feasible to discover the
     # various process group IDs and send the signal to them all.
 
-    pyth = sys.executable
     pipe_branch1 = r'\\.\pipe\branch1'
     pipe_branch2 = r'\\.\pipe\branch2'
     pipe_waveform = r'\\.\pipe\waveform_pipe'

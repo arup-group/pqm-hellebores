@@ -254,6 +254,12 @@ def setup_ui(screen, parameters):
     return all_ui
 
 
+def resolve_path(path, file):
+    file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), path, file)
+    resolved_path = os.path.abspath(file_path)
+    return resolved_path
+
+
 def main():
     # import constants from settings
     global st, time_zero, sample_index
@@ -269,7 +275,9 @@ def main():
     screen = pygame.display.set_mode(WINDOW_SIZE)
 
     # initialise thorpy
-    thorpy.set_default_font(FONT, FONT_SIZE)
+    font = resolve_path('.', FONT)
+    print('font is ', font)
+    thorpy.set_default_font(font, FONT_SIZE)
     thorpy.init(screen, thorpy.theme_classic)
 
     # initialise the parameter object

@@ -3,6 +3,7 @@
 import subprocess
 import settings
 import sys
+import os
 import math
 
 # local
@@ -10,15 +11,41 @@ from settings import Settings
 
 
 ADC_SAMPLES = 78125
+READER      = 'reader.py'
+READER_TEST = 'rain_chooser.py'    # use this for testing
+
+
+def is_raspberry_pi():
+    try:
+        with open('/sys/firmware/devicetree/base/model', 'r') as model:
+            if 'raspberry' in model.read().lower():
+                return True
+    except Exception:
+        pass
+    return False
+
+
+def resolve_path(path, file):
+    file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), path, file)
+    resolved_path = os.path.abspath(file_path)
+    return resolved_path
+
 
 def from_twos_complement(v):
     return -(v & 0x8000) | (v & 0x7fff)
 
 
 def get_lines_from_reader():
+    pyth = sys.executable
+    if is_raspberry_pi():
+        reader = resolve_path('.', READER)
+    else:
+        reader = resolve_path('.', READER_TEST)
+
+
     print('Receiving', end='')
     # receive the measurements
-    process = subprocess.Popen('./rain_chooser.py',
+    process = subprocess.Popen(f'{pyth} {reader}',
                                stdout=subprocess.PIPE,
                                stderr=subprocess.DEVNULL,
                                shell=True)

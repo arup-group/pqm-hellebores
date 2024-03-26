@@ -30,11 +30,16 @@ def run_on_windows():
     # SIGINT signal needs to be seen by all programs and it is not feasible to discover the
     # various process group IDs and send the signal to them all.
 
+    # Named pipe names are defined here
     pipe_branch1 = r'\\.\pipe\branch1'
     pipe_branch2 = r'\\.\pipe\branch2'
     pipe_waveform = r'\\.\pipe\waveform_pipe'
     pipe_analysis = r'\\.\pipe\analysis_pipe'
  
+    # We will start four separate command lines
+    # mswin_pipes.py is used to help read data into and out of named pipes, and to
+    # implement the 'tee' command to duplicate the data stream from scaler.py.
+    # Standard shell anonymous pipes are used for the remainder of connections between programs.
     cmd_1 = (f'{pyth} rain_chooser.py | {pyth} scaler.py'
              f' | {pyth} mswin_pipes.py tee {pipe_branch1} {pipe_branch2}')
     cmd_2 = (f'{pyth} mswin_pipes.py read {pipe_branch1} | {pyth} trigger.py | {pyth} mapper.py'
@@ -45,6 +50,7 @@ def run_on_windows():
 
     # On Windows, SIGINT (CTRL_C events) are raised by hellebores.py when the user settings are
     # changed. All programs running within the console will receive this SIGINT signal.
+    # (NB on Raspberry Pi and Posix, we use SIGUSR1 for this instead of CTRL_C)
 
     # when CATCH_SIGINT is set to 'yes', the signal handler in each program will catch SIGINT
     # events and treat them as a signal to re-load settings.json. If this environment variable
@@ -52,10 +58,17 @@ def run_on_windows():
     os.environ['CATCH_SIGINT'] = 'yes'
 
     # start all the programs
+    # In addition to the 6 python processes required to actually process the data, there are a
+    # further 14 processes required to support on Windows:
+    # 1 instance of go.py
+    # 4x2 instances of subprocess (one python process at each end of each shell sub-process)
+    # 5 instances of mswin_pipes.py
     ps = [ subprocess.Popen(c, shell=True) for c in [cmd_1, cmd_2, cmd_3, cmd_4] ]
 
-    # restore the environment and exit. The sub-processes will remain running.
+    # Restore the environment.
+    # Exit from this process is delayed until the sub-processes have exited.
     os.environ['CATCH_SIGINT'] = ''
+
 
 def main():
     if os.name == 'nt':

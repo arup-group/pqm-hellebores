@@ -68,7 +68,7 @@ def main():
             i = i + 1
 
         except ValueError:
-            print(f'scaler.py, main(): Failed to read {line}.', file=sys.stderr)
+            print(f'scaler.py, main(): Failed to read "{line}".', file=sys.stderr)
 
 
 if __name__ == '__main__':

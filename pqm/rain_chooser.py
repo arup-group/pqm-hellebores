@@ -199,20 +199,21 @@ def setup_ui(screen, parameters):
 
     def set_text(text, parameters):
         p = parameters
-        new_text = f"freq    : {p.get('freq')}\n"
-        new_text = new_text + f"voltage : {p.get('v1')} (0)," \
-                            + f" {p.get('v3')} ({p.get('v_ph3')})," \
-                            + f" {p.get('v5')} ({p.get('v_ph5')})\n"
-        new_text = new_text + f"current : {p.get('i1')} ({p.get('i_ph1')})," \
-                            + f" {p.get('i3')} ({p.get('i_ph3')})," \
-                            + f" {p.get('i5')} ({p.get('i_ph5')})\n"
-        new_text = new_text + f"leakage : {p.get('el')} ({p.get('el_ph')})\n"
-        new_text = new_text + ' '*48         # include a long line so that the dimensions never change
+        new_text = f"freq    : {p.get('freq')}\n" \
+                   + f"voltage : {p.get('v1')} (0)," \
+                   + f" {p.get('v3')} ({p.get('v_ph3')})," \
+                   + f" {p.get('v5')} ({p.get('v_ph5')})\n" \
+                   + f"current : {p.get('i1')} ({p.get('i_ph1')})," \
+                   + f" {p.get('i3')} ({p.get('i_ph3')})," \
+                   + f" {p.get('i5')} ({p.get('i_ph5')})\n" \
+                   + f"leakage : {p.get('el')} ({p.get('el_ph')})\n" \
+                   + ' '*48         # include a long line so that the dimensions never change
         text.set_value(new_text)
 
     def load_presets(preset_name, parameters):
         """This callback function is called when a preset button is pressed."""
-        nonlocal inhibit_set_from_slider      # we use this flag to stop the slider from updating settings
+        # we use this flag to stop the slider from updating settings
+        nonlocal inhibit_set_from_slider
         parameters.load_presets(preset_name)
         inhibit_set_from_slider = True            
         for ref in parameters.labels:
@@ -271,12 +272,11 @@ def main():
 
     # initialise pygame
     pygame.init()
-    pygame.display.set_caption('rain_chooser')
+    pygame.display.set_caption('Rain Chooser')
     screen = pygame.display.set_mode(WINDOW_SIZE)
 
     # initialise thorpy
     font = resolve_path('.', FONT)
-    print('font is ', font)
     thorpy.set_default_font(font, FONT_SIZE)
     thorpy.init(screen, thorpy.theme_classic)
 

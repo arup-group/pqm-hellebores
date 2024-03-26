@@ -34,7 +34,7 @@ class Pipe:
     def open_existing_pipe(self, pipe_name):
         """open a pipe for reading using Windows file API"""
         pipe = None
-        retries = 6
+        retries = 10
         while pipe == None and retries > 0:
             try:
                 pipe = win32file.CreateFile(

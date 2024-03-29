@@ -38,22 +38,32 @@ def get_lines_from_reader(number_of_lines):
         reader = resolve_path('.', READER_TEST)
     print('Receiving', end='')
     # receive the measurements
-    process = subprocess.Popen(f'{pyth} {reader}',
-                               stdout=subprocess.PIPE,
-                               stderr=subprocess.DEVNULL,
-                               shell=True)
-    # read some dummy lines, to get beyond pygame library startup lines
-    for i in range(5):
-        process.stdout.readline()
-    # read the correct number of lines
-    lines = []
-    for i in range(number_of_lines):
-        if i % 1000 == 0:
-            sys.stdout.write('.')
-            sys.stdout.flush()
-        lines.append(process.stdout.readline())    
-    process.terminate()
-    print(f' {len(lines)} samples, done.\n')
+    try:
+        process = subprocess.Popen(f'{pyth} {reader}',
+                                   stdout=subprocess.PIPE,
+                                   stderr=subprocess.DEVNULL,
+                                   shell=True)
+        # read some dummy lines, to get beyond pygame library startup lines
+        for i in range(5):
+            process.stdout.readline()
+        # read the correct number of lines
+        lines = []
+        for i in range(number_of_lines):
+            if i % 1000 == 0:
+                sys.stdout.write('.')
+                sys.stdout.flush()
+            line = process.stdout.readline()
+            # check if readline() returned empty bytestring: indicates subprocess terminated
+            if line == b'':
+                print('')   
+                raise EOFError
+            lines.append(line)
+        print(f' {len(lines)} samples, done.\n')
+    except EOFError:
+        print(f'{os.path.basename(__file__)}, get_lines_from_reader(): Reader program terminated.', file=sys.stderr)
+        raise ValueError    # bump the error to caller, we need to exit.
+    finally:
+        process.terminate()
     return lines
 
 
@@ -194,9 +204,16 @@ def calibrate(samples):
     return(c_config, u_config, c_measurements, u_measurements)
 
 
-if __name__ == '__main__':
+def main():
     if ready_to_proceed():
-        samples = lines_to_samples(get_lines_from_reader(ADC_SAMPLES))
-        print_results(*calibrate(samples))
+        try:
+            samples = lines_to_samples(get_lines_from_reader(ADC_SAMPLES))
+            print_results(*calibrate(samples))
+        except:
+            print(f'{os.path.basename(__file__)}, main(): Error caused exit', file=sys.stderr)
+            sys.exit(1)
 
 
+
+if __name__ == '__main__':
+    main() 

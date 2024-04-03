@@ -48,6 +48,12 @@ class Multimeter:
         self.multimeter_readings.draw()
         datetime.draw()
 
+    def left_pad(self, texts, width):
+        pad = ' ' * width
+        # update strings in place
+        for i in range(len(texts)):
+            texts[i] = (pad + texts[i])[-width:]
+            
     def create_multimeter_controls(self):
         """Multimeter controls, on right of screen"""
         control_texts = []
@@ -77,31 +83,76 @@ class Multimeter:
 
     def create_multimeter_readings(self):
         """Multimeter readings, on main part of screen"""
-        meter_texts = []
-        for s in [ ('230.01 ', TEXT_METER_SIZE, FONT_METER_SIZE, YELLOW),
-                   ('  0.534', TEXT_METER_SIZE, FONT_METER_SIZE, YELLOW),
-                   (' 20.344', TEXT_METER_SIZE, FONT_METER_SIZE, YELLOW),
-                   (' 34.234', TEXT_METER_SIZE, FONT_METER_SIZE, YELLOW),
-                   ('  0.762', TEXT_METER_SIZE, FONT_METER_SIZE, YELLOW),
-                   ('  0.452', TEXT_METER_SIZE, FONT_METER_SIZE, YELLOW),
-                   ('V  ', TEXT_METER_LABEL_SIZE, FONT_SIZE, WHITE),
-                   ('A  ', TEXT_METER_LABEL_SIZE, FONT_SIZE, WHITE),
-                   ('W  ', TEXT_METER_LABEL_SIZE, FONT_SIZE, WHITE),
-                   ('VA ', TEXT_METER_LABEL_SIZE, FONT_SIZE, WHITE),
-                   ('PF ', TEXT_METER_LABEL_SIZE, FONT_SIZE, WHITE),
-                   ('kWh', TEXT_METER_LABEL_SIZE, FONT_SIZE, WHITE) ]:
-            t = thorpy.Text(s[0])
-            t.set_size(s[1])
-            t.set_font_size(s[2])
-            t.set_font_color(s[3])
-            meter_texts.append(t)
-        multimeter_readings = thorpy.Group(meter_texts[:6], mode='v', align='center',
-                                            gap=0, margins=(0,0))
+        #
+        # Voltage /Vrms            Voltage maximum /Vrms            Voltage inst. maximum /V
+        #                          Voltage minimum /Vrms            Voltage inst. minimum /V
+        # Current /Arms            Current maximum /Arms            Current inst. maximum /A
+        #                          Current minimum /Arms            Current inst. minimum /A
+        # Power /W                 Power maximum /W                 Power inst. maximum /W 
+        #                          Power minimum /W                 Power inst. minimum /W
+        # Reactive power /VAR      Reactive power maximum /VAR      Crest factor /1
+        #                          Reactive power minimum /VAR      Frequency /Hz
+        # Apparent power /VA       Apparent power maximum /VA       Energy accumulator /kWh
+        #                          Apparent power minimum /VA       Reactive energy accumulator /kVAh
+        # Power factor /1          THDv /%                          Accumulation time /hr
+        #                          THDi /%
+
+        field_labels_1        = [ 'Voltage rms /V',
+                                  'Current rms /A',
+                                  'Power /W',
+                                  'Reactive power /VAR',
+                                  'Apparent power /VA',
+                                  'Power factor /1' ]
+        self.left_pad(field_labels_1, 28)
+        initial_values_1      = [ '999.999' for i in range(len(field_labels_1)) ]
+        field_labels_2        = [ 'Voltage maximum rms /V',
+                                  'Voltage minimum rms /V',
+                                  'Current maximum rms /A'
+                                  'Current minimum rms /A',
+                                  'Power maximum /W',
+                                  'Power minimum /W',
+                                  'Reactive power maximum /VAR',
+                                  'Reactive power minimum /VAR',
+                                  'Apparent power maximum /VA',
+                                  'Apparent power minimum /VA',
+                                  'THD(v) /%',
+                                  'THD(i) /%' ]
+        initial_values_2      = [ '999.999' for i in range(len(field_labels_2)) ]
+        field_labels_3        = [ 'Voltage maximum inst. /V',
+                                  'Voltage minimum inst. /V',
+                                  'Current maximum inst. /A',
+                                  'Current minimum inst. /A',
+                                  'Power maximum inst. /W',
+                                  'Power minimum inst. /W',
+                                  'Crest factor /1',
+                                  'Frequency /Hz',
+                                  'Energy cumulative /kWh',
+                                  'Reactive energy cumulative /kVARh',
+                                  'Accumulation time /hr' ]
+        initial_values_3      = [ '999.999' for i in range(len(field_labels_3)) ]
+
+        labels = []
+        values = []
+        for l,v in zip(field_labels_1, initial_values_1):
+            label = thorpy.Text(l)
+            value = thorpy.Text(v)
+            #label.set_size(TEXT_METER_LABEL_SIZE)
+            label.set_size((230,68))
+            value.set_size(TEXT_METER_SIZE)
+            label.set_font_size(FONT_SIZE)
+            value.set_font_size(FONT_METER_SIZE)
+            label.set_font_color(WHITE)
+            value.set_font_color(YELLOW)
+            labels.append(label)
+            values.append(value)
+           
+        multimeter_column_1 = thorpy.Group(labels, mode='grid', nx=1, ny=6, align='center',
+                                            gap=0, margins=(0,20))
         pad = thorpy.Text('')
         pad.set_size((0,20))
-        multimeter_reading_labels = thorpy.Group([pad] + meter_texts[6:], mode='v', align='center',
-                                                  gap=0, margins=(0,0))
-        multimeter = thorpy.Group([multimeter_readings, multimeter_reading_labels], mode='h',
+        #multimeter_reading_labels = thorpy.Group([pad] + meter_texts[6:], mode='v', align='center',
+        #                                          gap=0, margins=(0,0))
+        multimeter = thorpy.Group([multimeter_column_1], mode='h',
                                    gap=0, margins=(0,0))
         multimeter.set_topleft(*METER_POSITION)
         multimeter.set_size((200,200))

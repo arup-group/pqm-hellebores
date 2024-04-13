@@ -104,10 +104,10 @@ class Multimeter:
                                   'Apparent power /VA',
                                   'Power factor /1' ]
         self.left_pad(field_labels_1, 28)
-        initial_values_1      = [ '999.999' for i in range(len(field_labels_1)) ]
+
         field_labels_2        = [ 'Voltage maximum rms /V',
                                   'Voltage minimum rms /V',
-                                  'Current maximum rms /A'
+                                  'Current maximum rms /A',
                                   'Current minimum rms /A',
                                   'Power maximum /W',
                                   'Power minimum /W',
@@ -117,7 +117,8 @@ class Multimeter:
                                   'Apparent power minimum /VA',
                                   'THD(v) /%',
                                   'THD(i) /%' ]
-        initial_values_2      = [ '999.999' for i in range(len(field_labels_2)) ]
+        self.left_pad(field_labels_2, 28)
+
         field_labels_3        = [ 'Voltage maximum inst. /V',
                                   'Voltage minimum inst. /V',
                                   'Current maximum inst. /A',
@@ -126,36 +127,44 @@ class Multimeter:
                                   'Power minimum inst. /W',
                                   'Crest factor /1',
                                   'Frequency /Hz',
-                                  'Energy cumulative /kWh',
-                                  'Reactive energy cumulative /kVARh',
-                                  'Accumulation time /hr' ]
-        initial_values_3      = [ '999.999' for i in range(len(field_labels_3)) ]
+                                  'Energy /kWh',
+                                  'Reactive energy /kVARh',
+                                  'Accumulation time /hr',
+                                  ' ' ]
+        self.left_pad(field_labels_3, 28)
 
-        labels = []
-        values = []
-        for l,v in zip(field_labels_1, initial_values_1):
-            label = thorpy.Text(l)
-            value = thorpy.Text(v)
-            #label.set_size(TEXT_METER_LABEL_SIZE)
-            label.set_size((230,68))
-            value.set_size(TEXT_METER_SIZE)
-            label.set_font_size(FONT_SIZE)
-            value.set_font_size(FONT_METER_SIZE)
-            label.set_font_color(WHITE)
-            value.set_font_color(YELLOW)
-            labels.append(label)
-            values.append(value)
+        tp_labels = []
+        tp_values = []
+        for labels, size in zip([field_labels_1, field_labels_2, field_labels_3],\
+                                [(224,60),(224,30),(224,30)]):
+            for l in labels:
+                # create the label
+                tp_label = thorpy.Text(l)
+                tp_label.set_size(size)
+                tp_label.set_font_size(FONT_SIZE)
+                tp_label.set_font_color(WHITE)
+                tp_labels.append(tp_label)
+                # and then initial text for the value
+                tp_value = thorpy.Text('999.999')
+                tp_value.set_size(TEXT_METER_SIZE)
+                tp_value.set_font_size(FONT_METER_SIZE)
+                tp_value.set_font_color(YELLOW)
+                tp_values.append(tp_value)
            
-        multimeter_column_1 = thorpy.Group(labels, mode='grid', nx=1, ny=6, align='center',
-                                            gap=0, margins=(0,20))
-        pad = thorpy.Text('')
-        pad.set_size((0,20))
+        multimeter_column_1 = thorpy.Group(tp_labels[:6], mode='grid', nx=1, ny=6, align='center',
+                                           gap=0, margins=(0,0))
+        multimeter_column_2 = thorpy.Group(tp_labels[6:18], mode='grid', nx=1, ny=12, align='center',
+                                           gap=0, margins=(0,0))
+        multimeter_column_3 = thorpy.Group(tp_labels[18:], mode='grid', nx=1, ny=12, align='center',
+                                           gap=0, margins=(0,0))
+        #pad = thorpy.Text('')
+        #pad.set_size((0,20))
         #multimeter_reading_labels = thorpy.Group([pad] + meter_texts[6:], mode='v', align='center',
         #                                          gap=0, margins=(0,0))
-        multimeter = thorpy.Group([multimeter_column_1], mode='h',
-                                   gap=0, margins=(0,0))
+        multimeter = thorpy.Group([multimeter_column_1, multimeter_column_2, multimeter_column_3],
+                                   mode='h', gap=0, margins=(0,0))
+        #multimeter = multimeter_column_1
         multimeter.set_topleft(*METER_POSITION)
-        multimeter.set_size((200,200))
         return multimeter
 
 

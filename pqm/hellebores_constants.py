@@ -16,7 +16,7 @@ CONTROLS_BOX_SIZE = (100,480)        # main buttons and status texts
 CONTROLS_BOX_POSITION = (800,0)      # top right corner
 SETTINGS_BOX_SIZE = (500,400)        # 'dialog' boxes
 SETTINGS_BOX_POSITION = (690,100)    # top right corner
-METER_POSITION = (20,40)
+METER_POSITION = (0,40)
 BUTTON_SIZE = (90,50) 
 BUTTON_WIDE_SIZE = (180,50) 
 TEXT_SIZE = (90,16)
@@ -25,7 +25,7 @@ TEXT_METER_LABEL_SIZE = (30,64)
 TEXT_METER_SIZE = (184,64)
 FONT = 'font/RobotoMono-Medium.ttf'
 FONT_SIZE = 14
-FONT_METER_SIZE = 42
+LARGE_FONT_SIZE = 64
 SAMPLE_BUFFER_SIZE = 100 
 
 # Default pygame font: freesansbold

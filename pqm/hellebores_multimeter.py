@@ -48,12 +48,7 @@ class Multimeter:
         self.multimeter_readings.draw()
         datetime.draw()
 
-    def left_pad(self, texts, width):
-        pad = ' ' * width
-        # update strings in place
-        for i in range(len(texts)):
-            texts[i] = (pad + texts[i])[-width:]
-            
+           
     def create_multimeter_controls(self):
         """Multimeter controls, on right of screen"""
         control_texts = []
@@ -84,86 +79,82 @@ class Multimeter:
     def create_multimeter_readings(self):
         """Multimeter readings, on main part of screen"""
         #
-        # Voltage /Vrms            Voltage maximum /Vrms            Voltage inst. maximum /V
-        #                          Voltage minimum /Vrms            Voltage inst. minimum /V
-        # Current /Arms            Current maximum /Arms            Current inst. maximum /A
-        #                          Current minimum /Arms            Current inst. minimum /A
-        # Power /W                 Power maximum /W                 Power inst. maximum /W 
-        #                          Power minimum /W                 Power inst. minimum /W
-        # Reactive power /VAR      Reactive power maximum /VAR      Crest factor /1
-        #                          Reactive power minimum /VAR      Frequency /Hz
-        # Apparent power /VA       Apparent power maximum /VA       Energy accumulator /kWh
-        #                          Apparent power minimum /VA       Reactive energy accumulator /kVAh
-        # Power factor /1          THDv /%                          Accumulation time /hr
-        #                          THDi /%
+        # Voltage /Vrms            Voltage maximum /Vrms            Energy accumulator /kWh
+        #                          Voltage minimum /Vrms            Reactive energy accumulator /kVAh
+        # Current /Arms            Current maximum /Arms            Crest factor /1
+        #                          Current minimum /Arms            Frequency /Hz 
+        # Power /W                 Power maximum /W                 THDv /%                         
+        #                          Power minimum /W                 THDi /%
+        # Reactive power /VAR      Reactive power maximum /VAR      Accumulation time /hr 
+        #                          Reactive power minimum /VAR     
+        # Apparent power /VA       Apparent power maximum /VA       
+        #                          Apparent power minimum /VA       
+        # Power factor /1          
+        #                         
 
-        field_labels_1        = [ 'Voltage rms /V',
-                                  'Current rms /A',
-                                  'Power /W',
-                                  'Reactive power /VAR',
-                                  'Apparent power /VA',
-                                  'Power factor /1' ]
-        self.left_pad(field_labels_1, 28)
+        column_1        = [ ('Voltage rms /V',         300, 58, LARGE_FONT_SIZE, 10),
+                            ('Current rms /A',         300, 58, LARGE_FONT_SIZE, 10),
+                            ('Power /W',               300, 58, LARGE_FONT_SIZE, 10),
+                            ('Reactive power /VAR',    300, 58, LARGE_FONT_SIZE, 10),
+                            ('Apparent power /VA',     300, 58, LARGE_FONT_SIZE, 10) ]
 
-        field_labels_2        = [ 'Voltage maximum rms /V',
-                                  'Voltage minimum rms /V',
-                                  'Current maximum rms /A',
-                                  'Current minimum rms /A',
-                                  'Power maximum /W',
-                                  'Power minimum /W',
-                                  'Reactive power maximum /VAR',
-                                  'Reactive power minimum /VAR',
-                                  'Apparent power maximum /VA',
-                                  'Apparent power minimum /VA',
-                                  'THD(v) /%',
-                                  'THD(i) /%' ]
-        self.left_pad(field_labels_2, 28)
+        column_2        = [ ('Vmax rms /V',            224, 20, FONT_SIZE, 0),
+                            ('Vmin rms /V',            224, 20, FONT_SIZE, 10),
+                            ('Imax rms /A',            224, 20, FONT_SIZE, 0),
+                            ('Imin rms /A',            224, 20, FONT_SIZE, 10),
+                            ('Pmax /W',                224, 20, FONT_SIZE, 0),
+                            ('Pmin /W',                224, 20, FONT_SIZE, 10),
+                            ('RPmax /VAR',             224, 20, FONT_SIZE, 0),
+                            ('RPmin /VAR',             224, 20, FONT_SIZE, 10),
+                            ('APmax /VA',              224, 20, FONT_SIZE, 0),
+                            ('APmin /VA',              224, 20, FONT_SIZE, 10) ]
 
-        field_labels_3        = [ 'Voltage maximum inst. /V',
-                                  'Voltage minimum inst. /V',
-                                  'Current maximum inst. /A',
-                                  'Current minimum inst. /A',
-                                  'Power maximum inst. /W',
-                                  'Power minimum inst. /W',
-                                  'Crest factor /1',
-                                  'Frequency /Hz',
-                                  'Energy /kWh',
-                                  'Reactive energy /kVARh',
-                                  'Accumulation time /hr',
-                                  ' ' ]
-        self.left_pad(field_labels_3, 28)
+        column_3        = [ ('Energy /kWh',            224, 20, FONT_SIZE, 0),
+                            ('Reactive energy /kVARh', 224, 20, FONT_SIZE, 0),
+                            ('Power factor /1',        224, 20, FONT_SIZE, 0),
+                            ('Crest factor /1',        224, 20, FONT_SIZE, 0),
+                            ('Frequency /Hz',          224, 20, FONT_SIZE, 0),
+                            ('THD(v) /%',              224, 20, FONT_SIZE, 0),
+                            ('THD(i) /%',              224, 20, FONT_SIZE, 0),
+                            ('Accumulation time /hr',  224, 20, FONT_SIZE, 0) ]
 
-        tp_labels = []
-        tp_values = []
-        for labels, size in zip([field_labels_1, field_labels_2, field_labels_3],\
-                                [(224,60),(224,30),(224,30)]):
-            for l in labels:
+        tp_texts = []
+        label_h = 18 
+        label_font_size = FONT_SIZE
+        for column, x in zip([column_1, column_2, column_3], [0, 200, 440]):
+            y = 0
+            for item in column:
+                text, w, value_h, value_font_size, gap_h = item
                 # create the label
-                tp_label = thorpy.Text(l)
-                tp_label.set_size(size)
-                tp_label.set_font_size(FONT_SIZE)
+                if x==0:
+                    pad = 36
+                else:
+                    pad = 28
+                tp_label = thorpy.Text(text.rjust(pad))
+                tp_label.set_size((w,label_h))
+                tp_label.set_font_size(label_font_size)
                 tp_label.set_font_color(WHITE)
-                tp_labels.append(tp_label)
+                tp_label.set_topleft(x,y)
+                tp_texts.append(tp_label)
+                y = y + label_h
                 # and then initial text for the value
-                tp_value = thorpy.Text('999.999')
-                tp_value.set_size(TEXT_METER_SIZE)
-                tp_value.set_font_size(FONT_METER_SIZE)
+                if value_font_size == LARGE_FONT_SIZE:
+                    pad = 8
+                else:
+                    pad = 28 
+                tp_value = thorpy.Text('999.999'.rjust(pad))
+                tp_value.set_size((w,value_h))
+                tp_value.set_font_size(value_font_size)
                 tp_value.set_font_color(YELLOW)
-                tp_values.append(tp_value)
+                tp_value.set_topleft(x,y)
+                tp_texts.append(tp_value)
+                y = y + value_h + gap_h
            
-        multimeter_column_1 = thorpy.Group(tp_labels[:6], mode='grid', nx=1, ny=6, align='center',
-                                           gap=0, margins=(0,0))
-        multimeter_column_2 = thorpy.Group(tp_labels[6:18], mode='grid', nx=1, ny=12, align='center',
-                                           gap=0, margins=(0,0))
-        multimeter_column_3 = thorpy.Group(tp_labels[18:], mode='grid', nx=1, ny=12, align='center',
-                                           gap=0, margins=(0,0))
-        #pad = thorpy.Text('')
-        #pad.set_size((0,20))
-        #multimeter_reading_labels = thorpy.Group([pad] + meter_texts[6:], mode='v', align='center',
-        #                                          gap=0, margins=(0,0))
+        multimeter_column_1 = thorpy.Group(tp_texts[:10], mode=None)
+        multimeter_column_2 = thorpy.Group(tp_texts[10:30], mode=None)
+        multimeter_column_3 = thorpy.Group(tp_texts[30:], mode=None)
         multimeter = thorpy.Group([multimeter_column_1, multimeter_column_2, multimeter_column_3],
                                    mode='h', gap=0, margins=(0,0))
-        #multimeter = multimeter_column_1
         multimeter.set_topleft(*METER_POSITION)
         return multimeter
 

@@ -41,5 +41,8 @@ sudo raspi-config
 hexdump /dev/input/event0
 evtest
 
+# Mirror DSI touchscreen to HDMI
+xrandr --output DSI-1 --same-as --output HDMI-1 --scale-from 800x600
+
 
 

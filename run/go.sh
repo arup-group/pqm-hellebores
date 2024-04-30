@@ -14,7 +14,7 @@ if [[ -e $SCRIPT_DIR/../venv ]]; then
 fi
 
 # Figure out if we are running on real hardware or not
-grep raspberry '/sys/firmware/devicetree/base/model' &> /dev/null
+grep --ignore-case raspberry '/sys/firmware/devicetree/base/model' &> /dev/null
 if [[ $? -eq 0 ]]; then
     real_hardware=true
     READER="./reader.py"

@@ -5,18 +5,16 @@ import time
 
 # The Pico software has a hardware interrupt configured to monitor pin 6.
 # When a falling edge is detected, the ISR will stop and restart the software.
-# The entry point of the software includes a pause, at least 30 seconds
-# which in some scenarios allows the Pico to be investigated using the REPL
-# in thonny.
 
 # Running this script will cycle pin 6 thus triggering the reset routine.
+RESET = 6
 
 gp.setmode(gp.BCM)
-gp.setup(6, gp.OUT)
+gp.setup(RESET, gp.OUT)
 time.sleep(1)
-gp.output(6, False)
+gp.output(RESET, False)
 time.sleep(1)
-gp.output(6, True)
+gp.output(RESET, True)
 time.sleep(1)
 gp.cleanup()
 

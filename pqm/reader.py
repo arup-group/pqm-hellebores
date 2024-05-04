@@ -6,14 +6,26 @@
 import sys
 import serial
 import settings
+import serial.tools.list_ports
 
 BUFFER_SIZE = 32
 BLOCK_SIZE = BUFFER_SIZE * 8
-SERIAL_PORTS = ['/dev/ttyACM0', '/dev/ttyUSB0',
-                'COM4', 'COM3', 'COM2', 'COM1',
-                '/dev/ttyS4', '/dev/ttyS3', '/dev/ttyS2', '/dev/ttyS1']
  
  
+# on Ubuntu/Raspberry Pi, serial ports are in the form '/dev/ttyUSBx' where x is an integer 0-7
+# on Windows, serial ports are in the form 'COMx' where x is an integer 1-8
+def find_serial_device():
+    ports = serial.tools.list_ports.comports()
+    port_name = None
+    for port in ports:
+        description = port.description
+        if 'serial' in description.lower() or 'uart' in description.lower():        
+            print(f'Found {port.description}.', file=sys.stderr)
+            port_name = port.device
+            break
+    return port_name
+ 
+
 def read_and_print(ser):
     # sometimes (rarely) there is a serial read error.
     # this can be caused by the getty terminal process trying to read/write
@@ -40,19 +52,10 @@ def main():
     # load settings from settings.json
     # settings aren't used yet, but could be added to adjust ADC
     st = settings.Settings(reload_on_signal=False)
-    connection_made = False
-    # try a selection of serial ports
-    for port in SERIAL_PORTS:
+    port_name = find_serial_device()
+    if port_name:
         try:
-            # if we've previously made a connection, but the read loop was broken,
-            # quit here rather than trying a different port
-            if connection_made:
-                break
-            # try the port
-            print(f"reader.py, main(): Trying port {port}.", file=sys.stderr)
             ser = serial.Serial(port)
-            connection_made = True
-            # read the data
             print(f"reader.py, main(): Connected.", file=sys.stderr)
             read_and_print(ser)
         except:

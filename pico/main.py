@@ -346,10 +346,12 @@ def reset_microcontroller():
 
 
 def process_command(adc_settings):
-    global state
+    global state, pins
 
     # adc_settings are assembled into the dictionary structure as below
     #  { 'gains': ['1x', '1x', '1x', '1x'], 'sample_rate': '7.812k' }
+    # Pico LED lights while waiting for commands
+    pins['pico_led'].on()
     while state & COMMAND:
         command_string = sys.stdin.readline()
         # remove newline and make an array of words
@@ -361,7 +363,10 @@ def process_command(adc_settings):
             token = words[0]
             if token == 'RESET':
                 print('OK')
-                reset_microcontroller()
+                state = RESET
+            elif token == 'GO':
+                print('OK')
+                state = STREAMING
             continue
         elif len(words) == 2:
             token, value = words
@@ -377,6 +382,7 @@ def process_command(adc_settings):
             continue
         else:
             print('Error')
+    pins['pico_led'].off()
     return adc_settings
 
 
@@ -386,23 +392,14 @@ def main():
     # adc_settings can be changed in COMMAND mode
     adc_settings = DEFAULT_ADC_SETTINGS
     
-    # Pause briefly, then set the mode of the hardware pins
+    # Pause briefly at startup, to ensure IO hardware is initialised
     time.sleep(1)
-    configure_pins()
     if DEBUG:
         print('PICO starting up.')
-        print('Pin assignment.')
-        print(pins)
-        # Wait for 60 seconds, provides debug opportunity to return pico to REPL if our code is deadlocked
-        print('Waiting for 60 seconds...')
-
-    # Illuminate the green LED on Pico, while we're waiting
-    pins['pico_led'].on()
-    time.sleep(60)
-    pins['pico_led'].off()
 
     if DEBUG:
-        print('Configuring SPI interface to ADC.')
+        print('Configuring pins and SPI interface to ADC.')
+    configure_pins()
     configure_adc_spi_interface()
 
     if DEBUG:
@@ -412,12 +409,12 @@ def main():
     configure_buffer_memory()
 
     if DEBUG:
-        print('Set streaming mode and configuring interrupts.')
-    state = STREAMING       # buffer pointer is zero at this point
+        print('Set command mode and configure interrupts.')
+    state = COMMAND
     configure_interrupts()
 
     if DEBUG:
-        print('Entering mode switch loop.')
+        print('Entering outer processing loop.')
 
     # test all of the mode flags in turn
     while not (state & QUIT):

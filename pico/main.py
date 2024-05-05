@@ -355,11 +355,11 @@ def process_command(adc_settings):
         command_string.strip()
         words = command_string.split(' ')
         command_status = 'OK'
-        if len(words) == 0:
-            pass    # do nothing for blank lines, don't handle as an error
-        elif len(words) == 1:
+        if len(words) == 1:
             token = words[0]
-            if token == 'RESET':
+            if token == '':
+                pass    # do nothing for blank lines, don't handle as an error
+            elif token == 'RESET':
                 state = RESET
             elif token == 'MD5':
                 with open(__file__, 'rb') as f:

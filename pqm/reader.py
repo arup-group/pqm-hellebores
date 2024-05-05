@@ -26,6 +26,28 @@ def find_serial_device():
     return port_name
  
 
+def is_already_streaming(ser):
+    # if we are already streaming, there should be at least one block of buffered data
+    # waiting in the input stream. If not, then the select function will return empty
+    # and we know that the input is blocking (empty).
+    # if we are not already streaming, this test has the side effect of ensuring
+    # that the input stream is drained properly before we tell Pico to go into streaming
+    # mode
+    for i in range(BLOCK_SIZE):
+        if select.select([ser], [], [], 0)[0] != []:
+            bs = ser.read(1)
+            is_streaming = True
+        else:
+            is_streaming = False
+            break
+    return is_streaming
+
+
+def enter_streaming_mode(ser):
+    print("STREAM", file=ser) 
+    ser.flush()
+
+
 def read_and_print(ser):
     # sometimes (rarely) there is a serial read error.
     # this can be caused by the getty terminal process trying to read/write
@@ -57,6 +79,9 @@ def main():
         try:
             ser = serial.Serial(port)
             print(f"reader.py, main(): Connected.", file=sys.stderr)
+            # pico starts up in command mode by default, to allow debugging and special modes
+            if not is_already_streaming(ser):
+                enter_streaming_mode(ser)
             read_and_print(ser)
         except:
             print(f"reader.py, main(): Serial error.", file=sys.stderr)

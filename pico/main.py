@@ -7,6 +7,7 @@
 import time
 import machine
 import gc
+import hashlib
 import binascii
 from machine import Pin
 import _thread
@@ -23,10 +24,6 @@ SPI_CLOCK_RATE = 8000000
 # this reduces the sample rate and the amount of data that is output to screen, and
 # it prints some diagnostic progress info as the code proceeds
 DEBUG = const(False)
-
-# A synchronisation string that can be transmitted at the beginning or end of each
-# page of buffer data.
-SYNC_BYTES = const(b'\x00\x00\x00\x00\x00\x00\x00\x00')
 
 # These adc settings can be adjusted via comms from the Pi when in COMMAND mode
 DEFAULT_ADC_SETTINGS = { 'gains': ['1x', '1x', '1x', '1x'], 'sample_rate': '7.812k' }
@@ -314,7 +311,6 @@ def streaming_loop_core_0():
             sys.stdout.buffer.write(bs)
             # the synchronisation string could be used if the Pi is having trouble
             # with byte alignment, otherwise, omit it
-            #sys.stdout.buffer.write(SYNC_BYTES)
         pins['buffer_led'].off()
 
     while state & STREAMING:
@@ -364,8 +360,14 @@ def process_command(adc_settings):
             if token == 'RESET':
                 print('OK')
                 state = RESET
-            elif token == 'GO':
-                print('OK')
+            elif token == 'MD5':
+                with open(__file__, 'rb') as f:
+                    # outputs the MD5 checksum of the current source code
+                    print(hashlib.file_digest(f, 'md5').hexdigest())
+            elif token == 'STREAM':
+                # change to ADC streaming mode
+                # do not output anything -- at this point the receiving process will
+                # be expecting to read bytes from the ADC
                 state = STREAMING
             continue
         elif len(words) == 2:

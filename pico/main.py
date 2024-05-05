@@ -348,17 +348,18 @@ def process_command(adc_settings):
     #  { 'gains': ['1x', '1x', '1x', '1x'], 'sample_rate': '7.812k' }
     # Pico LED lights while waiting for commands
     pins['pico_led'].on()
+
     while state & COMMAND:
         command_string = sys.stdin.readline()
         # remove newline and make an array of words
         command_string.strip()
         words = command_string.split(' ')
+        command_status = 'OK'
         if len(words) == 0:
-            continue
+            pass    # do nothing for blank lines, don't handle as an error
         elif len(words) == 1:
             token = words[0]
             if token == 'RESET':
-                print('OK')
                 state = RESET
             elif token == 'MD5':
                 with open(__file__, 'rb') as f:
@@ -369,21 +370,24 @@ def process_command(adc_settings):
                 # do not output anything -- at this point the receiving process will
                 # be expecting to read bytes from the ADC
                 state = STREAMING
-            continue
+            else:
+                command_status = 'Error'
         elif len(words) == 2:
             token, value = words
             if token == 'SAMPLERATE':
-                print('OK')
                 adc_settings['sample_rate'] = value
-            continue
+            else:
+                status = 'Error'
         elif len(words) == 5:
             token, g3, g2, g1, g0 = words
             if token == 'GAINS':
-                print('OK')
                 adc_settings['gains'] = [g3, g2, g1, g0] 
-            continue
+            else:
+                command_status = 'Error'
         else:
-            print('Error')
+            command_status = 'Error'
+        print(command_status)
+
     pins['pico_led'].off()
     return adc_settings
 

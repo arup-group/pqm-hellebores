@@ -15,6 +15,10 @@ import sys
 from micropython import const
 
 
+# __file__ isn't defined in micropython, so we have to define the file name explicitly
+# this is used to do the MD5 check to help with version verification at runtime
+PROGRAM_FILE_NAME = 'main.py'
+
 # some constants are defined with the const() compilation hint to optimise performance
 # SPI_CLOCK_RATE is a configurable clock speed for comms on the SPI bus between
 # Pico and ADC
@@ -341,6 +345,14 @@ def reset_microcontroller():
     machine.reset()
 
 
+def get_sha256(filename):
+    with open(filename, 'rb') as f:
+        sha = hashlib.sha256(f.read())
+    bs = sha.digest()
+    # return as a string containing the hex respresentation
+    return binascii.hexlify(bs).decode('utf-8')
+
+
 def process_command(adc_settings):
     global state, pins
 
@@ -351,41 +363,40 @@ def process_command(adc_settings):
 
     while state & COMMAND:
         command_string = sys.stdin.readline()
-        # remove newline and make an array of words
-        command_string.strip()
-        words = command_string.split(' ')
+        # remove newline and CR and make an array of words
+        words = command_string.strip('\n\r').split(' ')
+        # remove any empty words (eg caused by duplicate spaces)
+        words = [ w for w in words if w != '' ]
         command_status = 'OK'
-        if len(words) == 1:
+        if len(words) == 0:
+            continue    # do nothing for blank lines, don't handle as an error
+        elif len(words) == 1:
             token = words[0]
-            if token == '':
-                pass    # do nothing for blank lines, don't handle as an error
-            elif token == 'RESET':
+            if token == 'RESET':
                 state = RESET
             elif token == 'MD5':
-                with open(__file__, 'rb') as f:
-                    # outputs the MD5 checksum of the current source code
-                    print(hashlib.file_digest(f, 'md5').hexdigest())
+                print(get_sha256(PROGRAM_FILE_NAME))
             elif token == 'STREAM':
                 # change to ADC streaming mode
                 # do not output anything -- at this point the receiving process will
                 # be expecting to read bytes from the ADC
                 state = STREAMING
             else:
-                command_status = 'Error'
+                command_status = f'Error: bad token {token}'
         elif len(words) == 2:
             token, value = words
             if token == 'SAMPLERATE':
                 adc_settings['sample_rate'] = value
             else:
-                status = 'Error'
+                command_status = f'Error: bad token {token}'
         elif len(words) == 5:
             token, g3, g2, g1, g0 = words
             if token == 'GAINS':
                 adc_settings['gains'] = [g3, g2, g1, g0] 
             else:
-                command_status = 'Error'
+                command_status = f'Error: bad token {token}'
         else:
-            command_status = 'Error'
+            command_status = f'Error: bad structure {words}'
         print(command_status)
 
     pins['pico_led'].off()

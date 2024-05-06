@@ -5,6 +5,7 @@
 
 import sys
 import serial
+import select
 import settings
 import serial.tools.list_ports
 
@@ -19,7 +20,7 @@ def find_serial_device():
     port_name = None
     for port in ports:
         description = port.description
-        if 'serial' in description.lower() or 'uart' in description.lower():        
+        if 'board in fs mode' in description.lower():
             print(f'Found {port.description}.', file=sys.stderr)
             port_name = port.device
             break
@@ -44,7 +45,7 @@ def is_already_streaming(ser):
 
 
 def enter_streaming_mode(ser):
-    print("STREAM", file=ser) 
+    ser.write(bytes('STREAM\n', 'utf-8')) 
     ser.flush()
 
 
@@ -77,13 +78,13 @@ def main():
     port_name = find_serial_device()
     if port_name:
         try:
-            ser = serial.Serial(port)
+            ser = serial.Serial(port_name)
             print(f"reader.py, main(): Connected.", file=sys.stderr)
             # pico starts up in command mode by default, to allow debugging and special modes
             if not is_already_streaming(ser):
                 enter_streaming_mode(ser)
             read_and_print(ser)
-        except:
+        except OSError:
             print(f"reader.py, main(): Serial error.", file=sys.stderr)
         finally:
             # make sure we have closed the port if it was opened

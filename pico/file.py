@@ -5,6 +5,7 @@ import binascii
 import sys
 import os
 import micropython
+import time
 
 
 pins = {
@@ -29,7 +30,7 @@ def process_command():
     
     command_status = ''
     if len(words) == 0:
-        continue    # do nothing for blank lines, don't handle as an error
+        return    # do nothing for blank lines, don't handle as an error
     
     # retrieve the command and the arguments
     command = words[0]
@@ -87,16 +88,12 @@ def process_command():
             command_status = 'Failed to determine contents of directory.'
     elif command == 'START' and len(arguments) > 0:
         program_file = arguments[0]
-        program_arguments = arguments[1:]
         try:
-            with open(program_file) as f:
-                program_code = f.read()
-            # the global namespace of the started program will contain a dictionary
-            # 'arguments' containing run-time arguments for the program
-            exec(program_code, {'arguments': program_arguments})  
-            command_status = f'Started {program_file} {program_arguments}'
+            sys.argv = arguments
+            execfile(program_file)
+            command_status = f'Started {program_file}.'
         except:
-            command_status = f'Failed to start {program_file} {program_arguments}'
+            command_status = f'Failed to start {program_file}.'
     elif command == 'CAT' and len(arguments) == 1:
         program_file = arguments[0]
         try:
@@ -106,7 +103,7 @@ def process_command():
         except:
             command_status = f'Failed to read {program_file}'
     else:
-        command_status = f'Error: failed to parse {words}'
+        command_status = f'Error: failed to parse {words}.'
     print(command_status)
 
    

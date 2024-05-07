@@ -21,7 +21,7 @@ SPI_CLOCK_RATE = 8000000
 # NB set the DEBUG flag to True when testing the code inside the Thonny REPL.
 # this reduces the sample rate and the amount of data that is output to screen, and
 # it prints some diagnostic progress info as the code proceeds
-DEBUG = const(False)
+DEBUG = const(True)
 
 # These adc settings can be adjusted via comms from the Pi when in COMMAND mode
 DEFAULT_ADC_SETTINGS = { 'gains': ['1x', '1x', '1x', '1x'], 'sample_rate': '7.812k' }
@@ -78,7 +78,7 @@ def configure_pins():
     
 
 def configure_adc_spi_interface():
-    global pins, spi_adc_interface
+    global spi_adc_interface
 
     spi_adc_interface = machine.SPI(0,
                                     baudrate   = SPI_CLOCK_RATE,
@@ -92,8 +92,6 @@ def configure_adc_spi_interface():
 
 
 def set_adc_register(reg, bs):
-    global pins, spi_adc_interface
-
     # The actual address byte leads with binary 01 and ends with the read/write bit (1 or 0).
     # The five bits in the middle are the 'register' address inside the ADC
     addr = 0x40 | (reg << 1)
@@ -113,8 +111,6 @@ def set_adc_register(reg, bs):
  
 
 def reset_adc():
-    global pins
-
     # deselect the ADC
     pins['cs_adc'].high()
     time.sleep(0.1)
@@ -193,8 +189,6 @@ def setup_adc(adc_settings):
     
  
 def configure_interrupts():
-    global pins
-
     # Interrupt handler for data ready pin (this pin is commanded from the ADC)
     def adc_read_handler(_):
         global state
@@ -217,7 +211,6 @@ def configure_interrupts():
 
 
 def disable_interrupts():
-    global pins
     pins['dr_adc'].irq(handler = None)
     pins['reset_me'].irq(handler = None)
 
@@ -232,8 +225,6 @@ def configure_buffer_memory():
 
 
 def start_adc():
-    global pins, spi_adc_interface
-
     if DEBUG:
         print('Starting the ADC...')
     # Command ADC to repeatedly refresh ADC registers, by holding CS* low
@@ -243,8 +234,6 @@ def start_adc():
 
 
 def stop_adc():
-    global pins
-
     # Tell the ADC to stop sampling
     # Note that the DR* pin continues to cycle, so it's necessary to also stop
     # interrupts if we want to stop processing completely
@@ -283,7 +272,7 @@ def streaming_loop_core_1():
 ######### STREAMING LOOP FOR CORE 0 STARTS HERE
 ########################################################
 def streaming_loop_core_0(): 
-    global pins, state, mv_acq
+    global state, mv_acq
 
     # Create memoryviews of each half of the circular buffer (ie two pages)
     half_mem = BUFFER_SIZE * 8 // 2

@@ -99,16 +99,16 @@ def set_adc_register(reg, bs):
     addr = 0x40 | (reg << 1)
 
     # Activate the CS* pin to communicate with the ADC
-    pins['cs_adc'].value(0)
+    pins['cs_adc'].low()
     # for writing, make sure lowest bit is cleared, hence & 0b11111110
     spi_adc_interface.write(bytes([addr & 0b11111110]) + bs) 
-    pins['cs_adc'].value(1)
+    pins['cs_adc'].high()
     if DEBUG:
-        pins['cs_adc'].value(0)
+        pins['cs_adc'].low()
         # for reading, make sure lowest bit is set, hence | 0b00000001
         spi_adc_interface.write(bytes([addr | 0b00000001])) 
         obs = spi_adc_interface.read(len(bs))
-        pins['cs_adc'].value(1)
+        pins['cs_adc'].high()
         print("Verify: " + " ".join(hex(b) for b in obs))
  
 
@@ -116,12 +116,12 @@ def reset_adc():
     global pins
 
     # deselect the ADC
-    pins['cs_adc'].value(1)
+    pins['cs_adc'].high()
     time.sleep(0.1)
     # cycle the reset pin
-    pins['reset_adc'].value(0)
+    pins['reset_adc'].low()
     time.sleep(0.1)
-    pins['reset_adc'].value(1)
+    pins['reset_adc'].high()
     time.sleep(0.1)
 
 
@@ -218,8 +218,8 @@ def configure_interrupts():
 
 def disable_interrupts():
     global pins
-    pins['dr_adc'].irq(trigger = Pin.IRQ_FALLING, handler = None)
-    pins['reset_me'].irq(trigger = Pin.IRQ_FALLING, handler = None)
+    pins['dr_adc'].irq(handler = None)
+    pins['reset_me'].irq(handler = None)
 
 
 def configure_buffer_memory():
@@ -238,7 +238,7 @@ def start_adc():
         print('Starting the ADC...')
     # Command ADC to repeatedly refresh ADC registers, by holding CS* low
     # Pico will successively read the SPI bus each time the DR* pin is activated
-    pins['cs_adc'].value(0)
+    pins['cs_adc'].low()
     spi_adc_interface.write(bytes([0b01000001]))
 
 
@@ -250,7 +250,7 @@ def stop_adc():
     # interrupts if we want to stop processing completely
     if DEBUG:
         print('Stopping the ADC...')
-    pins['cs_adc'].value(1)
+    pins['cs_adc'].high()
 
 
 ########################################################
@@ -317,8 +317,6 @@ def streaming_loop_core_0():
 
 
 def reset_microcontroller():
-    global pins
-
     # Wait for the reset pin to return to inactive (high)
     while pins['reset_me'].value() == 0:
         continue
@@ -328,10 +326,11 @@ def reset_microcontroller():
 
 
 def stream(adc_settings):
-    global pins, state
+    global state
 
     if DEBUG:
         print('Configuring pins, SPI interface to ADC, and buffer memory.')
+    state = STREAMING
     configure_pins()
     configure_adc_spi_interface()
     # buffer memory is set up in a memoryview called mv_acq
@@ -342,6 +341,7 @@ def stream(adc_settings):
         print('Configuring interrupts and starting ADC.')
     configure_interrupts()
     setup_adc(adc_settings)
+    start_adc()
     # we don't want GC pauses while streaming
     gc.disable()
     if DEBUG:
@@ -350,8 +350,6 @@ def stream(adc_settings):
     # the same buffer memory
     # core 1 captures samples from the ADC, triggered by the DR* pin
     # core 0 prints blocks of samples from the capture buffer in two pages
-    state = STREAMING
-    start_adc()
     _thread.start_new_thread(streaming_loop_core_1, ())
     streaming_loop_core_0()
     # runs forever, unless reset pin is activated

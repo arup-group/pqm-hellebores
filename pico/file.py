@@ -92,8 +92,9 @@ def process_command():
             if len(sys.argv) == 0:
                 # we can't assign to sys.argv, but we can extend it
                 sys.argv.extend(arguments)
+            print(f'Starting {program_file} with sys.argv = {sys.argv}.')
             execfile(program_file)
-            command_status = f'Started {program_file} with sys.argv = {sys.argv}.'
+            command_status = f'Program {program_file} exited normally.'
         except:
             command_status = f'Program {program_file} failed to start or quit with an error.'
     elif command == 'CAT' and len(arguments) == 1:

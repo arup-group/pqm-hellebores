@@ -21,7 +21,7 @@ SPI_CLOCK_RATE = 8000000
 # NB set the DEBUG flag to True when testing the code inside the Thonny REPL.
 # this reduces the sample rate and the amount of data that is output to screen, and
 # it prints some diagnostic progress info as the code proceeds
-DEBUG = const(True)
+DEBUG = True
 
 # These adc settings can be adjusted via comms from the Pi when in COMMAND mode
 DEFAULT_ADC_SETTINGS = { 'gains': ['1x', '1x', '1x', '1x'], 'sample_rate': '7.812k' }
@@ -366,15 +366,16 @@ def cleanup():
 if __name__ == '__main__':
     # Pause briefly at startup, to ensure IO hardware is initialised
     time.sleep(0.5)
-    if DEBUG:
-        print('stream.py started.')
     try:
-        # sys.argv = [ '1x', '1x', '1x', '1x', '7.812k' ]
+        # sys.argv = [ 'stream.py', '1x', '1x', '1x', '1x', '7.812k' ]
         # adc_settings = { 'gains': ['1x', '1x', '1x', '1x'], 'sample_rate': '7.812k' }
-        if len(sys.argv) >= 5:
-            adc_settings = { 'gains': sys.argv[0:4], 'sample_rate': sys.argv[4] }
+        if len(sys.argv) == 6:
+            _, g0, g1, g2, g3, sample_rate = sys.argv
+            adc_settings = { 'gains': [g0, g1, g2, g3], 'sample_rate': sample_rate }
         else:
             adc_settings = DEFAULT_ADC_SETTINGS
+        if DEBUG:
+            print('stream.py started.')
         stream(adc_settings)
     except KeyError:
         if DEBUG:

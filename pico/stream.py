@@ -246,7 +246,6 @@ def stop_adc():
 ######### STREAMING LOOP FOR CORE 1 STARTS HERE
 ########################################################
 def streaming_loop_core_1():
-    global state, spi_adc_interface, mv_acq
 
     # Create a memoryview reference into each sample or slice of the buffer.
     # The SPI read instruction will write into these memory slices directly.
@@ -272,7 +271,6 @@ def streaming_loop_core_1():
 ######### STREAMING LOOP FOR CORE 0 STARTS HERE
 ########################################################
 def streaming_loop_core_0(): 
-    global state, mv_acq
 
     # Create memoryviews of each half of the circular buffer (ie two pages)
     half_mem = BUFFER_SIZE * 8 // 2

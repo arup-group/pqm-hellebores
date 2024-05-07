@@ -384,10 +384,10 @@ if __name__ == '__main__':
     if DEBUG:
         print('stream.py started.')
     try:
-        # arguments = [ '1x', '1x', '1x', '1x', '7.812k' ]
+        # sys.argv = [ '1x', '1x', '1x', '1x', '7.812k' ]
         # adc_settings = { 'gains': ['1x', '1x', '1x', '1x'], 'sample_rate': '7.812k' }
-        if 'arguments' in globals() and len(arguments) = 5:
-            adc_settings = { 'gains': arguments[0:4], 'sample_rate': arguments[4] }
+        if len(sys.argv) >= 5:
+            adc_settings = { 'gains': sys.argv[0:4], 'sample_rate': sys.argv[4] }
         else:
             adc_settings = DEFAULT_ADC_SETTINGS
         stream(adc_settings)

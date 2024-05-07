@@ -89,7 +89,9 @@ def process_command():
     elif command == 'START' and len(arguments) > 0:
         program_file = arguments[0]
         try:
-            sys.argv = arguments
+            if len(sys.argv) == 0:
+                # we can't assign to sys.argv, but we can extend it
+                sys.argv.extend(arguments)
             execfile(program_file)
             command_status = f'Started {program_file}.'
         except:

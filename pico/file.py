@@ -11,8 +11,8 @@ import time
 pins = {
     'pico_led'    : Pin(25, Pin.OUT),           # the led on the Pico
     'reset_adc'   : Pin(5, Pin.OUT, value=1),   # hardware reset of ADC commanded from Pico (active low)
+    'reset_me'    : Pin(14, Pin.IN)             # reset and restart Pico (active low)
 }
-
 
 def process_command():
     '''Implements readline from stdin and the following commands: RESET, SAVE [filename] [length],
@@ -29,13 +29,15 @@ def process_command():
     words = [ w for w in words if w != '' ]
     
     command_status = ''
+    # do nothing for blank lines, don't handle as an error
     if len(words) == 0:
-        return    # do nothing for blank lines, don't handle as an error
+        return
     
     # retrieve the command and the arguments
     command = words[0]
     arguments = words[1:]
 
+    # switch through the expected command key words
     if command == 'RESET' and len(arguments) == 0:
         # reset the ADC
         pins['reset_adc'].low()
@@ -98,13 +100,13 @@ def process_command():
         except:
             command_status = f'Program {program_file} failed to start or quit with an error.'
     elif command == 'CAT' and len(arguments) == 1:
-        program_file = arguments[0]
+        filename = arguments[0]
         try:
-            with open(program_file) as f:
-                program_code = f.read()
-            command_status = program_code
+            with open(filename) as f:
+                file_contents = f.read()
+            command_status = file_contents
         except:
-            command_status = f'Failed to read {program_file}'
+            command_status = f'Failed to read {filename}'
     else:
         command_status = f'Error: failed to parse {words}.'
     print(command_status)

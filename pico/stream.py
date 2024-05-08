@@ -275,7 +275,7 @@ def streaming_loop_core_1():
 def streaming_loop_core_0(): 
 
     # Create memoryviews of each half of the circular buffer (ie two pages)
-    half_mem = BUFFER_SIZE/2 * 8
+    half_mem = BUFFER_SIZE // 2 * 8
     mv_p0 = memoryview(mv_acq[:half_mem])
     mv_p1 = memoryview(mv_acq[half_mem:])
 

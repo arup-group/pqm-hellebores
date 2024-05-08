@@ -6,12 +6,18 @@
 
 import time
 import machine
-from machine import Pin
 import gc
+import hashlib
+import binascii
+from machine import Pin
 import _thread
 import sys
 from micropython import const
 
+
+# __file__ isn't defined in micropython, so we have to define the file name explicitly
+# this is used to do the MD5 check to help with version verification at runtime
+PROGRAM_FILE_NAME = 'main.py'
 
 # some constants are defined with the const() compilation hint to optimise performance
 # SPI_CLOCK_RATE is a configurable clock speed for comms on the SPI bus between
@@ -21,9 +27,9 @@ SPI_CLOCK_RATE = 8000000
 # NB set the DEBUG flag to True when testing the code inside the Thonny REPL.
 # this reduces the sample rate and the amount of data that is output to screen, and
 # it prints some diagnostic progress info as the code proceeds
-DEBUG = const(True)
+DEBUG = const(False)
 
-# These adc settings can be adjusted via comms from the Pi via command line arguments
+# These adc settings can be adjusted via comms from the Pi when in COMMAND mode
 DEFAULT_ADC_SETTINGS = { 'gains': ['1x', '1x', '1x', '1x'], 'sample_rate': '7.812k' }
 
 # Buffer memory -- number of samples cached in Pico memory.
@@ -34,27 +40,29 @@ DEFAULT_ADC_SETTINGS = { 'gains': ['1x', '1x', '1x', '1x'], 'sample_rate': '7.81
 BUFFER_SIZE = 128
 
 # For performance optimisation, we hold synchronisation information shared between
-# the two CPU cores in a single 'state' variable that is 10 bits wide
+# the two CPU cores in a single 'state' variable that is 12 bits wide
 # The following mask definitions enable us to perform certain assignments and tests
 # on the state variable efficiently.
-STOPPED           = const(0b0000000000)      # tells both cores to exit
-RESET             = const(0b0100000000)      # initiate a machine reset
-STREAMING         = const(0b1000000000)      # fast ADC streaming using both cores
+# MSB 0000xxxx:  mode flags 0001=QUIT, 0010=RESET, 0100=COMMAND, 1000=STREAMING
+QUIT              = const(0b000100000000)      # tells both cores to exit
+RESET             = const(0b001000000000)      # initiate a machine reset
+COMMAND           = const(0b010000000000)      # receive commands to modify settings
+STREAMING         = const(0b100000000000)      # fast ADC streaming using both cores
 
 # LSB 0yyyyyyy:  sample pointer 0 to 127
 # bit-and the state variable with SAMPLE_MASK to remove the mode bits, to access 
 # just the buffer pointer
 # bit-and the state variable with WRAP_MASK after incrementing it, to make the pointer circular
-SAMPLE_MASK       = const(0b0001111111)      # mask to return just the cell pointer
-WRAP_MASK         = const(0b1101111111)      # pointer increment from 127 wraps round to 0
+SAMPLE_MASK       = const(0b000001111111)      # mask to return just the cell pointer
+WRAP_MASK         = const(0b111101111111)      # pointer increment from 127 wraps round to 0
 
 # The following three constants are used to test whether a page boundary has been crossed, and therefore
 # time to output the next page of sample buffer. The state variable is bit-anded with the PAGE_TEST
-# mask and the result checked against STREAMING_PAGE0 and STREAMING_PAGE1 respectively. The test
+# mask and the result checked against STREAMING_PAGE1 and STREAMING_PAGE2 respectively. The test
 # also breaks the waiting loop if a mode other than STREAMING is selected.
-PAGE_TEST         = const(0b1001000000)      # test page number and streaming flag
-WRITING_PAGE0     = const(0b1000000000)      # bit6==0: cell pointer is in range 0-63, ie page 0
-WRITING_PAGE1     = const(0b1001000000)      # bit6==1: cell pointer is in range 64-127, ie page 1
+PAGE_TEST         = const(0b100001000000)      # test page number and streaming flag
+STREAMING_PAGE1   = const(0b100000000000)      # bit6==0: cell pointer is in range 0-63, ie page 1
+STREAMING_PAGE2   = const(0b100001000000)      # bit6==1: cell pointer is in range 64-127, ie page 2
 
 
 def configure_pins():
@@ -64,21 +72,21 @@ def configure_pins():
     # We initialise with the RESET* and CS* pins high, since they are active low and we don't want
     # them to operate until needed
     pins = {
-        'pico_led'    : Pin(25, Pin.OUT),           # the led on the Pico
-        'buffer_led'  : Pin(15, Pin.OUT),           # the 'buffer' LED on the PCB
-        'cs_adc'      : Pin(1, Pin.OUT, value=1),   # chip select pin of the ADC (active low)
-        'sck_adc'     : Pin(2, Pin.OUT),            # serial clock for the SPI interface
-        'sdi_adc'     : Pin(3, Pin.OUT),            # serial input to ADC from Pico
-        'sdo_adc'     : Pin(0, Pin.IN),             # serial output from ADC to Pico
-        'reset_adc'   : Pin(5, Pin.OUT, value=1),   # hardware reset of ADC commanded from Pico (active low)
-        'dr_adc'      : Pin(4, Pin.IN),             # data ready from ADC to Pico (active low)
-        'reset_me'    : Pin(14, Pin.IN),            # reset and restart Pico (active low)
-        'mode_select' : Pin(26, Pin.IN)             # switch between streaming (LOW) and command mode (HIGH)
+        'pico_led'    : machine.Pin(25, Pin.OUT),           # the led on the Pico
+        'buffer_led'  : machine.Pin(15, Pin.OUT),           # the 'buffer' LED on the PCB
+        'cs_adc'      : machine.Pin(1, Pin.OUT, value=1),   # chip select pin of the ADC (active low)
+        'sck_adc'     : machine.Pin(2, Pin.OUT),            # serial clock for the SPI interface
+        'sdi_adc'     : machine.Pin(3, Pin.OUT),            # serial input to ADC from Pico
+        'sdo_adc'     : machine.Pin(0, Pin.IN),             # serial output from ADC to Pico
+        'reset_adc'   : machine.Pin(5, Pin.OUT, value=1),   # hardware reset of ADC commanded from Pico (active low)
+        'dr_adc'      : machine.Pin(4, Pin.IN),             # data ready from ADC to Pico (active low)
+        'reset_me'    : machine.Pin(14, Pin.IN),            # reset and restart Pico (active low)
+        'mode_select' : machine.Pin(26, Pin.IN)             # switch between streaming (LOW) and command mode (HIGH)
     }
     
 
 def configure_adc_spi_interface():
-    global spi_adc_interface
+    global pins, spi_adc_interface
 
     spi_adc_interface = machine.SPI(0,
                                     baudrate   = SPI_CLOCK_RATE,
@@ -92,32 +100,36 @@ def configure_adc_spi_interface():
 
 
 def set_adc_register(reg, bs):
+    global pins, spi_adc_interface
+
     # The actual address byte leads with binary 01 and ends with the read/write bit (1 or 0).
     # The five bits in the middle are the 'register' address inside the ADC
     addr = 0x40 | (reg << 1)
 
     # Activate the CS* pin to communicate with the ADC
-    pins['cs_adc'].low()
+    pins['cs_adc'].value(0)
     # for writing, make sure lowest bit is cleared, hence & 0b11111110
     spi_adc_interface.write(bytes([addr & 0b11111110]) + bs) 
-    pins['cs_adc'].high()
+    pins['cs_adc'].value(1)
     if DEBUG:
-        pins['cs_adc'].low()
+        pins['cs_adc'].value(0)
         # for reading, make sure lowest bit is set, hence | 0b00000001
         spi_adc_interface.write(bytes([addr | 0b00000001])) 
         obs = spi_adc_interface.read(len(bs))
-        pins['cs_adc'].high()
+        pins['cs_adc'].value(1)
         print("Verify: " + " ".join(hex(b) for b in obs))
  
 
 def reset_adc():
+    global pins
+
     # deselect the ADC
-    pins['cs_adc'].high()
+    pins['cs_adc'].value(1)
     time.sleep(0.1)
     # cycle the reset pin
-    pins['reset_adc'].low()
+    pins['reset_adc'].value(0)
     time.sleep(0.1)
-    pins['reset_adc'].high()
+    pins['reset_adc'].value(1)
     time.sleep(0.1)
 
 
@@ -189,6 +201,8 @@ def setup_adc(adc_settings):
     
  
 def configure_interrupts():
+    global pins
+
     # Interrupt handler for data ready pin (this pin is commanded from the ADC)
     def adc_read_handler(_):
         global state
@@ -206,14 +220,20 @@ def configure_interrupts():
     # Bind pin transitions to interrupt handlers
     # we use hard interrupt for the DR* pin to maintain tight timing
     # and for the RESET* pin so that the reset works even within a blocking function (eg serial write)
-    # we defer the actual hardware reset until cleanup has happened, including core 1 exiting
     pins['dr_adc'].irq(trigger = Pin.IRQ_FALLING, handler = adc_read_handler, hard=True)
     pins['reset_me'].irq(trigger = Pin.IRQ_FALLING, handler = lambda _: set_mode(RESET), hard=True)
+    # for mode select, timing is less critical so we use soft interrupts
+    pins['mode_select'].irq(trigger = Pin.IRQ_FALLING, handler = lambda _: set_mode(STREAMING), hard=False)
+    pins['mode_select'].irq(trigger = Pin.IRQ_RISING, handler = lambda _: set_mode(COMMAND), hard=False)
 
 
 def disable_interrupts():
-    pins['dr_adc'].irq(handler = None)
-    pins['reset_me'].irq(handler = None)
+    global pins
+
+    pins['dr_adc'].irq(trigger = Pin.IRQ_FALLING, handler = None)
+    pins['reset_me'].irq(trigger = Pin.IRQ_FALLING, handler = None)
+    pins['mode_select'].irq(trigger = Pin.IRQ_FALLING, handler = None)
+    pins['mode_select'].irq(trigger = Pin.IRQ_RISING, handler = None)
 
 
 def configure_buffer_memory():
@@ -226,34 +246,38 @@ def configure_buffer_memory():
 
 
 def start_adc():
+    global pins, spi_adc_interface
+
     if DEBUG:
         print('Starting the ADC...')
     # Command ADC to repeatedly refresh ADC registers, by holding CS* low
     # Pico will successively read the SPI bus each time the DR* pin is activated
-    pins['cs_adc'].low()
+    pins['cs_adc'].value(0)
     spi_adc_interface.write(bytes([0b01000001]))
 
 
 def stop_adc():
+    global pins
+
     # Tell the ADC to stop sampling
     # Note that the DR* pin continues to cycle, so it's necessary to also stop
     # interrupts if we want to stop processing completely
     if DEBUG:
         print('Stopping the ADC...')
-    pins['cs_adc'].high()
+    pins['cs_adc'].value(1)
 
 
 ########################################################
 ######### STREAMING LOOP FOR CORE 1 STARTS HERE
 ########################################################
 def streaming_loop_core_1():
+    global state, spi_adc_interface, mv_acq
 
     # Create a memoryview reference into each sample or slice of the buffer.
     # The SPI read instruction will write into these memory slices directly.
     mv_cells = []
-    # 8 bytes each cell, stepping 8 bytes
-    for m in range(0, BUFFER_SIZE*8, 8):
-        mv_cells.append(memoryview(mv_acq[m:m+8]))
+    for i in range(0, BUFFER_SIZE):
+        mv_cells.append(memoryview(mv_acq[i*8 : i*8+8]))
 
     # make a local variable to track the previous value of state
     p_state = state
@@ -273,11 +297,12 @@ def streaming_loop_core_1():
 ######### STREAMING LOOP FOR CORE 0 STARTS HERE
 ########################################################
 def streaming_loop_core_0(): 
+    global pins, state, mv_acq
 
     # Create memoryviews of each half of the circular buffer (ie two pages)
-    half_mem = BUFFER_SIZE // 2 * 8
-    mv_p0 = memoryview(mv_acq[:half_mem])
-    mv_p1 = memoryview(mv_acq[half_mem:])
+    half_mem = BUFFER_SIZE * 8 // 2
+    mv_p1 = memoryview(mv_acq[:half_mem])
+    mv_p2 = memoryview(mv_acq[half_mem:])
 
     def print_buffer(bs):
         pins['buffer_led'].on()
@@ -293,86 +318,166 @@ def streaming_loop_core_0():
         pins['buffer_led'].off()
 
     while state & STREAMING:
-        # wait while Core 1 is writing to page 0
-        while (state & PAGE_TEST) == WRITING_PAGE0:
-            continue
-        print_buffer(mv_p0)
         # wait while Core 1 is writing to page 1
-        while (state & PAGE_TEST) == WRITING_PAGE1:
+        while (state & PAGE_TEST) == STREAMING_PAGE1:
             continue
         print_buffer(mv_p1)
+        # wait while Core 1 is writing to page 2
+        while (state & PAGE_TEST) == STREAMING_PAGE2:
+            continue
+        print_buffer(mv_p2)
     if DEBUG:
         print('streaming_loop_core_0() exited')
 
 
-def stream(adc_settings):
-    global state
+def reset_microcontroller():
+    global pins
+
+    # The ISR has detected that the reset pin went low
+    # Ensure the reset process is not interrupted
+    disable_interrupts()
+    stop_adc()
+    # Wait for the reset pin to return to inactive (high)
+    while pins['reset_me'].value() == 0:
+        continue
+    time.sleep(0.1)
+    # now reset Pico
+    machine.reset()
+
+
+def get_sha256(filename):
+    with open(filename, 'rb') as f:
+        sha = hashlib.sha256(f.read())
+    bs = sha.digest()
+    # return as a string containing the hex respresentation
+    return binascii.hexlify(bs).decode('utf-8')
+
+
+def process_command(adc_settings):
+    global state, pins
+
+    # adc_settings are assembled into the dictionary structure as below
+    #  { 'gains': ['1x', '1x', '1x', '1x'], 'sample_rate': '7.812k' }
+    # Pico LED lights while waiting for commands
+    pins['pico_led'].on()
+
+    while state & COMMAND:
+        command_string = sys.stdin.readline()
+        # remove newline and CR and make an array of words
+        words = command_string.strip('\n\r').split(' ')
+        # remove any empty words (eg caused by duplicate spaces)
+        words = [ w for w in words if w != '' ]
+        command_status = 'OK'
+        if len(words) == 0:
+            continue    # do nothing for blank lines, don't handle as an error
+        elif len(words) == 1:
+            token = words[0]
+            if token == 'RESET':
+                state = RESET
+            elif token == 'MD5':
+                print(get_sha256(PROGRAM_FILE_NAME))
+            elif token == 'STREAM':
+                # change to ADC streaming mode
+                # do not output anything -- at this point the receiving process will
+                # be expecting to read bytes from the ADC
+                state = STREAMING
+            else:
+                command_status = f'Error: bad token {token}'
+        elif len(words) == 2:
+            token, value = words
+            if token == 'SAMPLERATE':
+                adc_settings['sample_rate'] = value
+            else:
+                command_status = f'Error: bad token {token}'
+        elif len(words) == 5:
+            token, g3, g2, g1, g0 = words
+            if token == 'GAINS':
+                adc_settings['gains'] = [g3, g2, g1, g0] 
+            else:
+                command_status = f'Error: bad token {token}'
+        else:
+            command_status = f'Error: bad structure {words}'
+        print(command_status)
+
+    pins['pico_led'].off()
+    return adc_settings
+
+
+def main():
+    global pins, state
+
+    # adc_settings can be changed in COMMAND mode
+    adc_settings = DEFAULT_ADC_SETTINGS
+    
+    # Pause briefly at startup, to ensure IO hardware is initialised
+    time.sleep(1)
+    if DEBUG:
+        print('PICO starting up.')
 
     if DEBUG:
-        print('Configuring pins, SPI interface to ADC, and buffer memory.')
-    state = STREAMING
+        print('Configuring pins and SPI interface to ADC.')
     configure_pins()
     configure_adc_spi_interface()
+
+    if DEBUG:
+        print('Configuring buffer memory.')
     # buffer memory is set up in a memoryview called mv_acq
     # this has to be a global variable so it can be accessed in both cores
     configure_buffer_memory()
 
     if DEBUG:
-        print('Configuring interrupts and starting ADC.')
+        print('Set command mode and configure interrupts.')
+    state = COMMAND
     configure_interrupts()
-    setup_adc(adc_settings)
-    start_adc()
-    # we don't want GC pauses while streaming
-    gc.disable()
+
     if DEBUG:
-        print('Starting streaming loops on both cores.')
-    # start the streaming loops on the two CPU cores, both accessing
-    # the same buffer memory
-    # core 1 captures samples from the ADC, triggered by the DR* pin
-    # core 0 prints blocks of samples from the capture buffer in two pages
-    _thread.start_new_thread(streaming_loop_core_1, ())
-    streaming_loop_core_0()
-    # runs forever, unless reset pin is activated
-    # in case of error or interruption, we do cleanup in an exception 
-    # 'finally' block
+        print('Entering outer processing loop.')
 
+    # test all of the mode flags in turn
+    while not (state & QUIT):
+        if state & STREAMING:
+            if DEBUG:
+                print('Entering streaming mode...')
+            setup_adc(adc_settings)
+            # we don't want GC pauses while streaming
+            gc.disable()
+            # start the ADC continuous capture mode
+            start_adc()
+            # start the streaming loops on the two CPU cores, both accessing
+            # the same buffer memory
+            # core 1 captures samples from the ADC, triggered by the DR* pin
+            # core 0 prints blocks of samples from the capture buffer in two pages
+            _thread.start_new_thread(streaming_loop_core_1, ())
+            streaming_loop_core_0()
+            # after streaming ends, stop the ADC capture and enable the GC
+            stop_adc()
+            gc.enable()
+
+        elif state & COMMAND:
+            if DEBUG:
+                print('Entering command mode...')
+            # Receive new ADC settings, they will be transferred to the ADC when we
+            # resume STREAMING mode
+            adc_settings = process_command(adc_settings)
+        
+        elif state & RESET:
+            reset_microcontroller()
+
+    if DEBUG:
+        print('Main function exited.')
     
-def cleanup():
-    global state
-
-    # stop core 1 if it's still running
-    if state & STREAMING:
-        state = STOPPED
-
-    stop_adc()
-    gc.enable()
-    disable_interrupts()
-
-    if state & RESET:
-        if DEBUG:
-            print('Reset signal received.')
-            time.sleep(1)
-        machine.reset()
-
-
 # Run from here
 if __name__ == '__main__':
-    # Pause briefly at startup, to ensure IO hardware is initialised
-    time.sleep(0.5)
     try:
-        # sys.argv = [ 'stream.py', '1x', '1x', '1x', '1x', '7.812k' ]
-        # adc_settings = { 'gains': ['1x', '1x', '1x', '1x'], 'sample_rate': '7.812k' }
-        if len(sys.argv) == 6:
-            _, g0, g1, g2, g3, sample_rate = sys.argv
-            adc_settings = { 'gains': [g0, g1, g2, g3], 'sample_rate': sample_rate }
-        else:
-            adc_settings = DEFAULT_ADC_SETTINGS
-        if DEBUG:
-            print('stream.py started.')
-        stream(adc_settings)
+        main()
     except KeyError:
         if DEBUG:
             print('Interrupted.')
     finally:
-        cleanup()
+        # stop core 1 if it's still running
+        state = QUIT
+        stop_adc()
+        gc.enable()
+        disable_interrupts()
+
 

@@ -16,6 +16,7 @@ pins = {
 
 
 def configure_reset_interrupt(mode='enable'):
+    '''Implements hardware interrupt on pin 14 that cause the Pico to restart'''
     if mode == 'enable':
         pins['reset_me'].irq(trigger = Pin.IRQ_FALLING, handler = lambda _: machine.reset(), hard=True)
     elif mode == 'disable':
@@ -23,20 +24,35 @@ def configure_reset_interrupt(mode='enable'):
 
 
 def read_command():
+    '''Read command from remote terminal. String is returned without CRLF'''
+    command_string = ''
+    # we read characters individually so that we can echo them back to the controlling terminal as
+    # we receive them
     # Pico LED lights while waiting for commands
     pins['pico_led'].high()
-    command_string = sys.stdin.readline()
+    while True:
+        # to achieve consistent behaviour on incoming line endings, need to read from the binary
+        # buffer rather than the text one
+        c = sys.stdin.buffer.read(1).decode('utf-8')
+        # ignore the \r character if present
+        if c == '\r':
+            continue
+        # echo what we received back to the controlling terminal
+        sys.stdout.write(c)
+        # break out of the loop at end of line
+        if c == '\n':
+            break
+        command_string += c
     pins['pico_led'].low()
     return command_string
 
 
 def process_command(command_string):
-    '''Implements readline from stdin and the following commands: RESET, SAVE [filename] [length],
-    SHA256 [filename], RENAME [from_name] [to_name], REMOVE [filename], LISTDIR, START [filename] [args],
-    CAT [filename] ''' 
+    '''Implements the following commands: RESET, SAVE [filename] [length], SHA256 [filename],
+    RENAME [from_name] [to_name], REMOVE [filename], LISTDIR, START [filename] [args], CAT [filename]''' 
 
-    # remove newline and CR and make an array of words
-    words = command_string.strip('\n\r').split(' ')
+    # make an array of words
+    words = command_string.split(' ')
     # remove any empty words (eg caused by duplicate spaces)
     words = [ w for w in words if w != '' ]
     

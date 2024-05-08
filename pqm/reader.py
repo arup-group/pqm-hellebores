@@ -5,17 +5,16 @@
 
 import sys
 import serial
-import select
-import settings
 import serial.tools.list_ports
 
 BUFFER_SIZE = 32
 BLOCK_SIZE = BUFFER_SIZE * 8
  
  
-# on Ubuntu/Raspberry Pi, serial ports are in the form '/dev/ttyUSBx' where x is an integer 0-7
-# on Windows, serial ports are in the form 'COMx' where x is an integer 1-8
 def find_serial_device():
+    '''determines the serial port that the Pico is connected to. On Ubuntu/Raspberry
+    Pi, serial ports are in the form '/dev/ttyUSBx' where x is an integer 0-7.
+    On Windows, serial ports are in the form 'COMx' where x is an integer 1-8'''
     ports = serial.tools.list_ports.comports()
     port_name = None
     for port in ports:
@@ -27,32 +26,11 @@ def find_serial_device():
     return port_name
  
 
-def is_already_streaming(ser):
-    # if we are already streaming, there should be at least one block of buffered data
-    # waiting in the input stream. If not, then the select function will return empty
-    # and we know that the input is blocking (empty).
-    # if we are not already streaming, this test has the side effect of ensuring
-    # that the input stream is drained properly before we tell Pico to go into streaming
-    # mode
-    for i in range(BLOCK_SIZE):
-        if select.select([ser], [], [], 0)[0] != []:
-            bs = ser.read(1)
-            is_streaming = True
-        else:
-            is_streaming = False
-            break
-    return is_streaming
-
-
-def enter_streaming_mode(ser):
-    ser.write(bytes('STREAM\n', 'utf-8')) 
-    ser.flush()
-
-
 def read_and_print(ser):
-    # sometimes (rarely) there is a serial read error.
-    # this can be caused by the getty terminal process trying to read/write
-    # the serial port. We allow up to 5 successive re-tries.
+    '''Reads binary data from serial port, and prints as hexadecimal text to stdout.
+    Sometimes (rarely) there is a serial read error. This can be caused by the getty
+    terminal process trying to read/write the serial port. We allow up to 5 successive
+    re-tries before quitting.'''
     retries = 5
     while retries > 0:    
         try:
@@ -72,17 +50,13 @@ def read_and_print(ser):
 
 
 def main():
-    # load settings from settings.json
-    # settings aren't used yet, but could be added to adjust ADC
-    st = settings.Settings(reload_on_signal=False)
+    '''This program needs the Pico to have been set into streaming mode by the 
+    pico_control.py program first.'''
     port_name = find_serial_device()
     if port_name:
         try:
             ser = serial.Serial(port_name)
             print(f"reader.py, main(): Connected.", file=sys.stderr)
-            # pico starts up in command mode by default, to allow debugging and special modes
-            if not is_already_streaming(ser):
-                enter_streaming_mode(ser)
             read_and_print(ser)
         except OSError:
             print(f"reader.py, main(): Serial error.", file=sys.stderr)

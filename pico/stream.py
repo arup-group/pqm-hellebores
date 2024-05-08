@@ -21,9 +21,9 @@ SPI_CLOCK_RATE = 8000000
 # NB set the DEBUG flag to True when testing the code inside the Thonny REPL.
 # this reduces the sample rate and the amount of data that is output to screen, and
 # it prints some diagnostic progress info as the code proceeds
-DEBUG = True
+DEBUG = const(True)
 
-# These adc settings can be adjusted via comms from the Pi when in COMMAND mode
+# These adc settings can be adjusted via comms from the Pi via command line arguments
 DEFAULT_ADC_SETTINGS = { 'gains': ['1x', '1x', '1x', '1x'], 'sample_rate': '7.812k' }
 
 # Buffer memory -- number of samples cached in Pico memory.
@@ -34,27 +34,27 @@ DEFAULT_ADC_SETTINGS = { 'gains': ['1x', '1x', '1x', '1x'], 'sample_rate': '7.81
 BUFFER_SIZE = 128
 
 # For performance optimisation, we hold synchronisation information shared between
-# the two CPU cores in a single 'state' variable that is 12 bits wide
+# the two CPU cores in a single 'state' variable that is 10 bits wide
 # The following mask definitions enable us to perform certain assignments and tests
 # on the state variable efficiently.
-STOPPED           = const(0b000000000000)      # tells both cores to exit
-RESET             = const(0b010000000000)      # initiate a machine reset
-STREAMING         = const(0b100000000000)      # fast ADC streaming using both cores
+STOPPED           = const(0b0000000000)      # tells both cores to exit
+RESET             = const(0b0100000000)      # initiate a machine reset
+STREAMING         = const(0b1000000000)      # fast ADC streaming using both cores
 
 # LSB 0yyyyyyy:  sample pointer 0 to 127
 # bit-and the state variable with SAMPLE_MASK to remove the mode bits, to access 
 # just the buffer pointer
 # bit-and the state variable with WRAP_MASK after incrementing it, to make the pointer circular
-SAMPLE_MASK       = const(0b000001111111)      # mask to return just the cell pointer
-WRAP_MASK         = const(0b111101111111)      # pointer increment from 127 wraps round to 0
+SAMPLE_MASK       = const(0b0001111111)      # mask to return just the cell pointer
+WRAP_MASK         = const(0b1101111111)      # pointer increment from 127 wraps round to 0
 
 # The following three constants are used to test whether a page boundary has been crossed, and therefore
 # time to output the next page of sample buffer. The state variable is bit-anded with the PAGE_TEST
-# mask and the result checked against STREAMING_PAGE1 and STREAMING_PAGE2 respectively. The test
+# mask and the result checked against STREAMING_PAGE0 and STREAMING_PAGE1 respectively. The test
 # also breaks the waiting loop if a mode other than STREAMING is selected.
-PAGE_TEST         = const(0b100001000000)      # test page number and streaming flag
-STREAMING_PAGE1   = const(0b100000000000)      # bit6==0: cell pointer is in range 0-63, ie page 1
-STREAMING_PAGE2   = const(0b100001000000)      # bit6==1: cell pointer is in range 64-127, ie page 2
+PAGE_TEST         = const(0b1001000000)      # test page number and streaming flag
+WRITING_PAGE0     = const(0b1000000000)      # bit6==0: cell pointer is in range 0-63, ie page 0
+WRITING_PAGE1     = const(0b1001000000)      # bit6==1: cell pointer is in range 64-127, ie page 1
 
 
 def configure_pins():
@@ -206,6 +206,7 @@ def configure_interrupts():
     # Bind pin transitions to interrupt handlers
     # we use hard interrupt for the DR* pin to maintain tight timing
     # and for the RESET* pin so that the reset works even within a blocking function (eg serial write)
+    # we defer the actual hardware reset until cleanup has happened, including core 1 exiting
     pins['dr_adc'].irq(trigger = Pin.IRQ_FALLING, handler = adc_read_handler, hard=True)
     pins['reset_me'].irq(trigger = Pin.IRQ_FALLING, handler = lambda _: set_mode(RESET), hard=True)
 
@@ -250,8 +251,9 @@ def streaming_loop_core_1():
     # Create a memoryview reference into each sample or slice of the buffer.
     # The SPI read instruction will write into these memory slices directly.
     mv_cells = []
-    for i in range(0, BUFFER_SIZE):
-        mv_cells.append(memoryview(mv_acq[i*8 : i*8+8]))
+    # 8 bytes each cell, stepping 8 bytes
+    for m in range(0, BUFFER_SIZE*8, 8):
+        mv_cells.append(memoryview(mv_acq[m:m+8]))
 
     # make a local variable to track the previous value of state
     p_state = state
@@ -273,9 +275,9 @@ def streaming_loop_core_1():
 def streaming_loop_core_0(): 
 
     # Create memoryviews of each half of the circular buffer (ie two pages)
-    half_mem = BUFFER_SIZE * 8 // 2
-    mv_p1 = memoryview(mv_acq[:half_mem])
-    mv_p2 = memoryview(mv_acq[half_mem:])
+    half_mem = BUFFER_SIZE/2 * 8
+    mv_p0 = memoryview(mv_acq[:half_mem])
+    mv_p1 = memoryview(mv_acq[half_mem:])
 
     def print_buffer(bs):
         pins['buffer_led'].on()
@@ -291,25 +293,16 @@ def streaming_loop_core_0():
         pins['buffer_led'].off()
 
     while state & STREAMING:
+        # wait while Core 1 is writing to page 0
+        while (state & PAGE_TEST) == WRITING_PAGE0:
+            continue
+        print_buffer(mv_p0)
         # wait while Core 1 is writing to page 1
-        while (state & PAGE_TEST) == STREAMING_PAGE1:
+        while (state & PAGE_TEST) == WRITING_PAGE1:
             continue
         print_buffer(mv_p1)
-        # wait while Core 1 is writing to page 2
-        while (state & PAGE_TEST) == STREAMING_PAGE2:
-            continue
-        print_buffer(mv_p2)
     if DEBUG:
         print('streaming_loop_core_0() exited')
-
-
-def reset_microcontroller():
-    # Wait for the reset pin to return to inactive (high)
-    while pins['reset_me'].value() == 0:
-        continue
-    time.sleep(0.1)
-    # now reset Pico
-    machine.reset()
 
 
 def stream(adc_settings):
@@ -350,6 +343,7 @@ def cleanup():
     # stop core 1 if it's still running
     if state & STREAMING:
         state = STOPPED
+
     stop_adc()
     gc.enable()
     disable_interrupts()
@@ -357,9 +351,8 @@ def cleanup():
     if state & RESET:
         if DEBUG:
             print('Reset signal received.')
-        # don't actually restart in DEBUG mode
-        if not DEBUG:
-            reset_microcontroller()
+            time.sleep(1)
+        machine.reset()
 
 
 # Run from here

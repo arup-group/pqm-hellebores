@@ -55,7 +55,9 @@ cp ./pi-setup/autorun.sh /home/pi
 ```
   
 **Pico setup**  
-Using Thonny, open `./pico/main.py` and save it to the root folder of the microcontroller.
+Using Thonny:
+Open `./pico/main.py` and save it to the root folder of the microcontroller.
+Open `./pico/stream.py` and save it to the root folder of the microcontroller.
 
 ## Running
 To use the interactive user interface, run "hellebores" from the Raspberry Pi desktop menu.

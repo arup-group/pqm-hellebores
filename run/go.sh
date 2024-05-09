@@ -76,12 +76,18 @@ echo "Measurement source: $READER"
 
 ####
 # This is where we actually start the programs
-# The incoming data is split (using 'tee') into two pipelines that
-# feed analysis and waveform processes simultaneously
-# Note that the analysis pipeline is further split by another instance of tee so that analysis results
-# are stored in a file as well as sent onwards, via $ANALYSIS_PIPE, to hellebores.py
-# hellebores.py reads both $WAVEFORM_PIPE and $ANALYSIS_PIPE all the time, to keep the pipelines moving
+# The incoming data is split (using 'tee') into two pipelines that feed analysis and waveform
+# processes simultaneously.
+# Note that the analysis pipeline is further split by another instance of tee so that analysis
+# results are stored in a file as well as sent onwards, via $ANALYSIS_PIPE, to hellebores.py
+# hellebores.py reads both $WAVEFORM_PIPE and $ANALYSIS_PIPE all the time, to keep the
+# pipelines moving.
 ####
+
+# Reset the Pico, and start streaming
+if $real_hardware; then
+    ./pico_control.py --hard_reset --command "START stream.py"
+fi
 
 # Plumbing, pipe, pipe, pipe...
 $READER \
@@ -91,8 +97,8 @@ $READER \
 
 ./hellebores.py $WAVEFORM_PIPE $ANALYSIS_PIPE
 # Because hellebores.py is running in the foreground, this script blocks (waits) until it finishes.
-# The reader, scaler, analysis and waveform programs also terminate at that point because their pipeline
-# connections are broken/closed.
+# The reader, scaler, analysis and waveform programs also terminate at that point because their
+# pipeline connections are broken/closed.
 
 # Capture the exit code from hellebores.py
 # We'll check it's status shortly
@@ -106,20 +112,6 @@ exec 2>&4 4>&-
 # Now check the exit code
 # 2: Restart
 if [[ $exit_code -eq 2 ]]; then
-    # Flush serial interface
-    # open the serial port for reading on a new file descriptor 5,
-    # drain the data waiting in it, and then close
-    if $real_hardware; then
-        echo "Resetting Pico, sampling will restart after a while."
-        $SCRIPT_DIR/../tools/pico_reset.py
-        # allow serial connection to be re-established
-        sleep 5  
-        # get rid of any left-over data in the interface
-        echo "Flushing the serial interface."
-        exec 5</dev/ttyACM0
-        while read -t 0 -u 5 discard; do echo "Flushing serial port..."; done
-        exec 5>&-
-    fi
     # Trampoline: reload the launch script (this file) and run again
     echo "Restarting $0 in 5s..."
     sleep 5

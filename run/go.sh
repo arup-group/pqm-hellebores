@@ -86,7 +86,9 @@ echo "Measurement source: $READER"
 
 # Reset the Pico, and start streaming
 if $real_hardware; then
-    ./pico_control.py --hard_reset --command "START stream.py"
+    ./pico_control.py --hard_reset
+    sleep 1
+    ./pico_control.py --command "START stream.py" --no_response
 fi
 
 # Plumbing, pipe, pipe, pipe...

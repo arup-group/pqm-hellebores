@@ -19,7 +19,7 @@ def find_serial_device():
     port_name = None
     for port in ports:
         description = port.description
-        if 'board in fs mode' in description.lower():
+        if 'board in fs mode' in description.lower() or 'serial' in description.lower():
             print(f'Found {port.description}.', file=sys.stderr)
             port_name = port.device
             break

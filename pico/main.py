@@ -79,8 +79,17 @@ def process_command(command_string):
         try:
             # disable CTRL-C handling on stdin during binary read
             micropython.kbd_intr(-1)
+            remaining = int(length)
+            # we read in chunks of no more than 1024 bytes, so that we don't
+            # run out of memory
+            CHUNK = 1024
             with open(filename, 'wb') as f:
-                f.write(sys.stdin.buffer.read(int(length)))
+                while remaining > 0:
+                    if remaining > CHUNK:
+                        f.write(sys.stdin.buffer.read(CHUNK))
+                    else:
+                        f.write(sys.stdin.buffer.read(remaining))
+                    remaining -= CHUNK
             # restore CTRL-C
             micropython.kbd_intr(3)
             command_status = 'OK'

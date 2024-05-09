@@ -16,12 +16,12 @@ from micropython import const
 # some constants are defined with the const() compilation hint to optimise performance
 # SPI_CLOCK_RATE is a configurable clock speed for comms on the SPI bus between
 # Pico and ADC
-SPI_CLOCK_RATE = 8000000 
+SPI_CLOCK_RATE = 6000000 
  
 # NB set the DEBUG flag to True when testing the code inside the Thonny REPL.
 # this reduces the sample rate and the amount of data that is output to screen, and
 # it prints some diagnostic progress info as the code proceeds
-DEBUG = const(True)
+DEBUG = const(False)
 
 # These adc settings can be adjusted via comms from the Pi via command line arguments
 DEFAULT_ADC_SETTINGS = { 'gains': ['1x', '1x', '1x', '1x'], 'sample_rate': '7.812k' }
@@ -64,10 +64,10 @@ def configure_pins():
     # We initialise with the RESET* and CS* pins high, since they are active low and we don't want
     # them to operate until needed
     pins = {
-        'pico_led'    : Pin(25, Pin.OUT),           # the led on the Pico
-        'buffer_led'  : Pin(15, Pin.OUT),           # the 'buffer' LED on the PCB
+        'pico_led'    : Pin(25, Pin.OUT, value=0),  # the led on the Pico
+        'buffer_led'  : Pin(15, Pin.OUT, value=0),  # the 'buffer' LED on the PCB
         'cs_adc'      : Pin(1, Pin.OUT, value=1),   # chip select pin of the ADC (active low)
-        'sck_adc'     : Pin(2, Pin.OUT),            # serial clock for the SPI interface
+        'sck_adc'     : Pin(2, Pin.OUT, value=1),   # serial clock for the SPI interface
         'sdi_adc'     : Pin(3, Pin.OUT),            # serial input to ADC from Pico
         'sdo_adc'     : Pin(0, Pin.IN),             # serial output from ADC to Pico
         'reset_adc'   : Pin(5, Pin.OUT, value=1),   # hardware reset of ADC commanded from Pico (active low)
@@ -116,9 +116,8 @@ def reset_adc():
     time.sleep(0.1)
     # cycle the reset pin
     pins['reset_adc'].low()
-    time.sleep(0.1)
     pins['reset_adc'].high()
-    time.sleep(0.1)
+    time.sleep(0.5)
 
 
 # gains are in order of hardware channel: differential current, low range current, full range current, voltage
@@ -312,6 +311,8 @@ def stream(adc_settings):
         print('Configuring pins, SPI interface to ADC, and buffer memory.')
     state = STREAMING
     configure_pins()
+    # Pause briefly to ensure IO hardware is initialised
+    time.sleep(0.5)
     configure_adc_spi_interface()
     # buffer memory is set up in a memoryview called mv_acq
     # this has to be a global variable so it can be accessed in both cores
@@ -320,7 +321,9 @@ def stream(adc_settings):
     if DEBUG:
         print('Configuring interrupts and starting ADC.')
     configure_interrupts()
+    time.sleep(0.5)
     setup_adc(adc_settings)
+    time.sleep(0.5)
     start_adc()
     # we don't want GC pauses while streaming
     gc.disable()
@@ -357,8 +360,6 @@ def cleanup():
 
 # Run from here
 if __name__ == '__main__':
-    # Pause briefly at startup, to ensure IO hardware is initialised
-    time.sleep(0.5)
     try:
         # sys.argv = [ 'stream.py', '1x', '1x', '1x', '1x', '7.812k' ]
         # adc_settings = { 'gains': ['1x', '1x', '1x', '1x'], 'sample_rate': '7.812k' }

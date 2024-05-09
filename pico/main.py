@@ -81,7 +81,7 @@ def process_command(command_string):
             micropython.kbd_intr(-1)
             with open(filename, 'wb') as f:
                 f.write(sys.stdin.buffer.read(int(length)))
-             # restore CTRL-C
+            # restore CTRL-C
             micropython.kbd_intr(3)
             command_status = 'OK'
         except:

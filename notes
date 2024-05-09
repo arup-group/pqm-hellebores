@@ -3,7 +3,7 @@
 #######
 
 On Pico
-Copy pico/main.py to the Pico storage, using Thonny.
+Copy pico/main.py and pico/stream.py to the Pico storage, using Thonny.
 
 On Pi
 sudo apt install python-venv

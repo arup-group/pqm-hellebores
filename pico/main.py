@@ -26,13 +26,13 @@ def configure_reset_interrupt(mode='enable'):
 def read_command():
     '''Read command from remote terminal. String is returned without CRLF'''
     command_string = ''
-    # we read characters individually so that we can echo them back to the controlling terminal as
-    # we receive them
     # Pico LED lights while waiting for commands
     pins['pico_led'].high()
     while True:
-        # to achieve consistent behaviour on incoming line endings, need to read from the binary
-        # buffer rather than the text one
+        # We read characters individually so that we can echo them back to the
+        # controlling terminal as we receive them.
+        # To achieve consistent behaviour on incoming line endings, need to
+        # read from the binary buffer rather than the text one.
         c = sys.stdin.buffer.read(1).decode('utf-8')
         # ignore the \r character if present
         if c == '\r':
@@ -48,8 +48,9 @@ def read_command():
 
 
 def process_command(command_string):
-    '''Implements the following commands: RESET, SAVE [filename] [length], SHA256 [filename],
-    RENAME [from_name] [to_name], REMOVE [filename], LISTDIR, START [filename] [args], CAT [filename]''' 
+    '''Implements the following commands: RESET, SAVE [filename] [length],
+    SHA256 [filename], RENAME [from_name] [to_name], REMOVE [filename],
+    LISTDIR, START [filename] [args], CAT [filename]''' 
 
     # make an array of words
     words = command_string.split(' ')
@@ -80,8 +81,8 @@ def process_command(command_string):
             # disable CTRL-C handling on stdin during binary read
             micropython.kbd_intr(-1)
             remaining = int(length)
-            # we read in chunks of no more than 1024 bytes, so that we don't
-            # run out of memory
+            # we read in chunks of no more than 1024 bytes, so that we
+            # don't run out of memory
             CHUNK = 1024
             with open(filename, 'wb') as f:
                 while remaining > 0:
@@ -132,7 +133,8 @@ def process_command(command_string):
                 # we can't assign to sys.argv, but we can extend it
                 sys.argv.extend(arguments)
             print(f'Starting {program_file} with sys.argv = {sys.argv}.')
-            execfile(program_file)
+            # sys is the only variable we export to the next process
+            execfile(program_file, {sys})
             command_status = f'Program {program_file} exited normally.'
         except:
             command_status = f'Program {program_file} failed to start or quit with an error.'

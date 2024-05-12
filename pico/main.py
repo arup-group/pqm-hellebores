@@ -134,7 +134,7 @@ def process_command(command_string):
                 sys.argv.extend(arguments)
             print(f'Starting {program_file} with sys.argv = {sys.argv}.')
             # sys is the only variable we export to the next process
-            execfile(program_file, {sys})
+            execfile(program_file)
             command_status = f'Program {program_file} exited normally.'
         except:
             command_status = f'Program {program_file} failed to start or quit with an error.'

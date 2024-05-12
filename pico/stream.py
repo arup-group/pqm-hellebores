@@ -10,6 +10,7 @@ from machine import Pin
 import gc
 import _thread
 import sys
+import binascii
 from micropython import const
 
 
@@ -244,6 +245,7 @@ def start_adc():
     # Command ADC to repeatedly refresh ADC registers, by holding CS* low
     # Pico will successively read the SPI bus each time the DR* pin is activated
     pins['cs_adc'].low()
+    time.sleep(0.1)
     spi_adc_interface.write(bytes([0b01000001]))
 
 
@@ -308,18 +310,20 @@ def streaming_loop_core_0():
 
     def _write_buffer_normal(bs):
         pins['buffer_led'].on()
-            # write out the selected portion of buffer as raw bytes
-            sys.stdout.buffer.write(bs)
+        # write out the selected portion of buffer as raw bytes
+        sys.stdout.buffer.write(bs)
         pins['buffer_led'].off()
 
     def _write_buffer_debug(bs):
+        nonlocal debug_block_counter
+        global state
         pins['buffer_led'].on()
-            # We capture the first four samples of each buffer
-            # Printing is slow, so we'll output them when finished.
-            debug_mv[debug_sample_counter][:] = bs[:32]  
-            debug_block_counter += 1
-            if debug_block_counter == debug_blocks:
-                state = STOPPED
+        # We capture the first four samples of each buffer
+        # Printing is slow, so we'll output them when finished.
+        debug_bs[debug_block_counter][:] = bytes(bs[:30])  
+        debug_block_counter += 1
+        if debug_block_counter >= 31:
+            state = STOPPED
         pins['buffer_led'].off()
 
     # select the writing function once at runtime
@@ -343,8 +347,8 @@ def streaming_loop_core_0():
         print('streaming_loop_core_0() exited.')
         print('Here are the contents of debug buffer memory:')
         for bs in debug_bs:
-            h = binascii.hexlify(bs).decode('utf-8'))
-            print(f'{h[0:8] h[8:16] h[16.24] h[24:32]')
+            h = binascii.hexlify(bs).decode('utf-8')
+            print(f'{h[0:8]} {h[8:16]} {h[16:24]} {h[24:32]}')
 
 
 def prepare_to_stream(adc_settings):
@@ -370,16 +374,16 @@ def prepare_to_stream(adc_settings):
     configure_buffer_memory()
 
     if DEBUG:
-        print('Configuring interrupts and starting ADC.')
+        print('Starting ADC and configuring interrupts.')
+    # We push some settings into the ADC...
+    setup_adc(adc_settings)
+    # ...and now tell it to start.
+    start_adc()
+
     # ADC is responsible for sample timing. Every sample, it toggles the DR* pin.
     # An interrupt handler on Pico receives this pulse, so that the data can
     # be processed.
     configure_interrupts()
-
-    # With everything on the Pico setup, we push some settings into the ADC...
-    setup_adc(adc_settings)
-    # ...and now tell it to start.
-    start_adc()
 
     # We don't want garbage collection pauses while streaming, so we disable the
     # automatic GC.
@@ -441,4 +445,5 @@ if __name__ == '__main__':
             print('Interrupted.')
     finally:
         cleanup()
+
 

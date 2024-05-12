@@ -24,7 +24,7 @@ for pico_file in main.py stream.py; do
 	echo $file_length
 	$PROGRAM_DIR/pico_control.py --command "SAVE $pico_file $file_length"
         $PROGRAM_DIR/pico_control.py --send_file "$PICO_DIR/$pico_file"
-        version_pico=$($PROGRAM_DIR/pico_control.py --command "SHA256 $pico_file" | cut -d ' ' -f 3)
+        version_pico=$($PROGRAM_DIR/pico_control.py --command "SHA256 $pico_file" | cut -d ' ' -f 3 | tr -d '\n')
 	if [ "$version_pico" == "$version_local" ]; then
             echo "Update succeeded."
 	else

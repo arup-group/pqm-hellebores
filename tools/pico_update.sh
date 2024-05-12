@@ -33,4 +33,7 @@ for pico_file in main.py stream.py; do
     fi
 done
 
+# Hard reset Pico, so that we run the new code
+$PROGRAM_DIR/pico_control.py --hard_reset
+
 

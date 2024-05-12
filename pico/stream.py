@@ -144,9 +144,9 @@ def setup_adc(adc_settings):
     bs = [0x00, gain_bits >> 8, gain_bits & 0b11111111]
     if DEBUG:
         print('Setting gain register at 0b to 0x{:02x} 0x{:02x} 0x{:02x}'.format(*bs))
-        time.sleep(1)
     set_adc_register(0x0b, bytes(bs))
-    
+    time.sleep(0.1)
+
     # Set the status and communication register 0x0c
     # required bytes are:
     # 0x88 = 0b10001000: 10 READ address increments on TYPES, 0 WRITE address does not
@@ -157,8 +157,8 @@ def setup_adc(adc_settings):
     bs = [0x88, 0x00, 0x0f]
     if DEBUG:
         print('Setting status and communication register STATUSCOM at 0c to 0x{:02x} 0x{:02x} 0x{:02x}'.format(*bs))
-        time.sleep(1)
     set_adc_register(0x0c, bytes(bs))
+    time.sleep(0.1)
 
     # Set the configuration register CONFIG0 at 0x0d
     # 1st byte sets various ADC modes
@@ -179,17 +179,16 @@ def setup_adc(adc_settings):
     except KeyError:
         bs = [0x24, osr_table['7.812k'], 0x50]
     if DEBUG:
-        bs = [0x24, osr_table['976'], 0x50]   # SLOW DOWN sampling rate for debug mode
         print('Setting configuration register CONFIG0 at 0d to 0x{:02x} 0x{:02x} 0x{:02x}'.format(*bs))
-        time.sleep(1)
     set_adc_register(0x0d, bytes(bs))
+    time.sleep(0.1)
 
     # Set the configuration register CONFIG1 at 0x0e
     bs = [0x00, 0x00, 0x00]
     if DEBUG:
         print('Setting configuration register CONFIG1 at 0e to 0x{:02x} 0x{:02x} 0x{:02x}'.format(*bs))
-        time.sleep(1)
     set_adc_register(0x0e, bytes(bs))
+    time.sleep(0.1)
     
     
  
@@ -228,13 +227,13 @@ def configure_interrupts(mode='enable'):
 
 def configure_buffer_memory():
     '''Buffer memory is allocated for retaining a cache of samples received from
-    the ADC. The memory is referenced by a global variable mv_acq.'''
-    global mv_acq
+    the ADC. The memory is referenced by a global variable acq_mv.'''
+    global acq_mv
 
     # 2 bytes per channel, 4 channels
     # we use a memoryview to allow this to be sub-divided into cells and
     # pages in the streaming loops
-    mv_acq = memoryview(bytearray(BUFFER_SIZE * 8))
+    acq_mv = memoryview(bytearray(BUFFER_SIZE * 8))
 
 
 def start_adc():
@@ -265,10 +264,10 @@ def streaming_loop_core_1():
     and reads new data from the ADC into memory.'''
     # Create a memoryview reference into each sample or slice of the buffer.
     # The SPI read instruction will write into these memory slices directly.
-    mv_cells = []
+    cells_mv = []
     # 8 bytes each cell, stepping 8 bytes
     for m in range(0, BUFFER_SIZE*8, 8):
-        mv_cells.append(memoryview(mv_acq[m:m+8]))
+        cells_mv.append(memoryview(acq_mv[m:m+8]))
 
     # It's really important that SPI reads are timed correctly and don't
     # happen while the ADC is trying to latch in new data -- it will stop
@@ -287,7 +286,7 @@ def streaming_loop_core_1():
         if state != p_state:
             # read out from the ADC *immediately*
             # SAMPLE_MASK masks the mode bits, just leaving the array index
-            spi_adc_interface.readinto(mv_cells[state & SAMPLE_MASK])
+            spi_adc_interface.readinto(cells_mv[state & SAMPLE_MASK])
             # save the new state
             p_state = state
     if DEBUG:
@@ -299,34 +298,53 @@ def streaming_loop_core_0():
     '''Prints data from memory to stdout in 'half-buffer' chunks.'''
     # Create memoryviews of each half of the circular buffer (ie two pages)
     half_mem = BUFFER_SIZE // 2 * 8
-    mv_p0 = memoryview(mv_acq[:half_mem])
-    mv_p1 = memoryview(mv_acq[half_mem:])
+    p0_mv = memoryview(acq_mv[:half_mem])
+    p1_mv = memoryview(acq_mv[half_mem:])
 
-    def print_buffer(bs):
+    # This memory is only actually used in debug mode
+    debug_blocks = 32
+    debug_bs = [ bytearray(32) for i in range(debug_blocks) ]
+    debug_block_counter = 0
+
+    def _write_buffer_normal(bs):
         pins['buffer_led'].on()
-        if DEBUG:
-            # when debugging, just print out a few of the samples as a byte string
-            print(bytes(bs[:24]))
-            gc.collect()
-        else:
             # write out the selected portion of buffer as raw bytes
             sys.stdout.buffer.write(bs)
-            # the synchronisation string could be used if the Pi is having trouble
-            # with byte alignment, otherwise, omit it
         pins['buffer_led'].off()
 
+    def _write_buffer_debug(bs):
+        pins['buffer_led'].on()
+            # We capture the first four samples of each buffer
+            # Printing is slow, so we'll output them when finished.
+            debug_mv[debug_sample_counter][:] = bs[:32]  
+            debug_block_counter += 1
+            if debug_block_counter == debug_blocks:
+                state = STOPPED
+        pins['buffer_led'].off()
+
+    # select the writing function once at runtime
+    if DEBUG:
+        write_buffer = _write_buffer_debug
+    else:
+        write_buffer = _write_buffer_normal
+
+    # Now loop...
     while state & STREAMING:
         # wait while Core 1 is writing to page 0
         while (state & PAGE_TEST) == WRITING_PAGE0:
             continue
-        print_buffer(mv_p0)
+        write_buffer(p0_mv)
         # wait while Core 1 is writing to page 1
         while (state & PAGE_TEST) == WRITING_PAGE1:
             continue
-        print_buffer(mv_p1)
-    if DEBUG:
-        print('streaming_loop_core_0() exited')
+        write_buffer(p1_mv)
 
+    if DEBUG:
+        print('streaming_loop_core_0() exited.')
+        print('Here are the contents of debug buffer memory:')
+        for bs in debug_bs:
+            h = binascii.hexlify(bs).decode('utf-8'))
+            print(f'{h[0:8] h[8:16] h[16.24] h[24:32]')
 
 
 def prepare_to_stream(adc_settings):
@@ -346,8 +364,8 @@ def prepare_to_stream(adc_settings):
     # Interface to the ADC uses SPI protocol
     configure_adc_spi_interface()
 
-    # Buffer memory is set up in a memoryview called mv_acq. Memoryview objects
-    # allow read/write access to a block of memory. mv_acq is declared a
+    # Buffer memory is set up in a memoryview called acq_mv. Memoryview objects
+    # allow read/write access to a block of memory. acq_mv is declared a
     # global variable so it can be reached by both CPU cores.
     configure_buffer_memory()
 

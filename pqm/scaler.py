@@ -58,7 +58,7 @@ def main():
             # if st.current_axis_per_division is less than or equal to 0.1 A/div,
             # we use channel 1 for current measurements. If it is more than 0.1 A/div,
             # we use channel 2.
-            if st.current_axis_per_division <= 0.1:
+            if st.current_sensor == 'low':
                 current = scaled[1]
             else:
                 current = scaled[2]

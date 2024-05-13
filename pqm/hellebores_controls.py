@@ -155,6 +155,11 @@ def create_vertical(st, app_actions):
         current_display.set_text(
             f'{currents.get_value()} A/div', adapt_parent=False)
         st.current_display_index = currents.get_index()
+        # Here we switch physical sense channel, if necessary
+        if st.current_display_ranges[current_display_index] <= 0.1:
+            st.current_sensor = 'low'
+        else:
+            st.current_sensor = 'full'
         st.send_to_all() 
 
     def update_power_range(powers, offset):

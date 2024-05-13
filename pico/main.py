@@ -162,6 +162,7 @@ except KeyError:
     print('Interrupted.')
 finally:
     pins['pico_led'].low()
-    configure_reset_interrupt('disable')
+    # leave the reset interrupt enabled, even when returning to the REPL.
+    #configure_reset_interrupt('disable')
 
 

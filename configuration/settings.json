@@ -23,6 +23,7 @@
     ],
     "voltage_display_index": 3,
     "voltage_display_status": true,
+    "current_sensor": "full",
     "current_display_ranges": [
         0.001,
         0.002,

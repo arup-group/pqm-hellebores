@@ -79,6 +79,7 @@ class Settings():
         self.voltage_display_ranges                    = js['voltage_display_ranges']
         self.voltage_display_index                     = js['voltage_display_index'] 
         self.voltage_display_status                    = js['voltage_display_status']
+        self.current_sensor                            = js['current_sensor']
         self.current_display_ranges                    = js['current_display_ranges']
         self.current_display_index                     = js['current_display_index']
         self.current_display_status                    = js['current_display_status']
@@ -111,6 +112,7 @@ class Settings():
         js['voltage_display_ranges']                   = self.voltage_display_ranges
         js['voltage_display_index']                    = self.voltage_display_index
         js['voltage_display_status']                   = self.voltage_display_status
+        js['current_sensor']                           = self.current_sensor
         js['current_display_ranges']                   = self.current_display_ranges
         js['current_display_index']                    = self.current_display_index
         js['current_display_status']                   = self.current_display_status 
@@ -295,6 +297,7 @@ default_settings = '''
     ],
     "voltage_display_index": 3,
     "voltage_display_status": true,
+    "current_sensor": "full",
     "current_display_ranges": [
         0.001,
         0.002,

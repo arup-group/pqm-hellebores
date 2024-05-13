@@ -122,7 +122,7 @@ def reset_adc():
     # cycle the reset pin
     pins['reset_adc'].low()
     pins['reset_adc'].high()
-    time.sleep(0.5)
+    time.sleep(0.1)
 
 
 def setup_adc(adc_settings):
@@ -146,7 +146,6 @@ def setup_adc(adc_settings):
     if DEBUG:
         print('Setting gain register at 0b to 0x{:02x} 0x{:02x} 0x{:02x}'.format(*bs))
     set_adc_register(0x0b, bytes(bs))
-    time.sleep(0.1)
 
     # Set the status and communication register 0x0c
     # required bytes are:
@@ -159,7 +158,6 @@ def setup_adc(adc_settings):
     if DEBUG:
         print('Setting status and communication register STATUSCOM at 0c to 0x{:02x} 0x{:02x} 0x{:02x}'.format(*bs))
     set_adc_register(0x0c, bytes(bs))
-    time.sleep(0.1)
 
     # Set the configuration register CONFIG0 at 0x0d
     # 1st byte sets various ADC modes
@@ -182,14 +180,12 @@ def setup_adc(adc_settings):
     if DEBUG:
         print('Setting configuration register CONFIG0 at 0d to 0x{:02x} 0x{:02x} 0x{:02x}'.format(*bs))
     set_adc_register(0x0d, bytes(bs))
-    time.sleep(0.1)
 
     # Set the configuration register CONFIG1 at 0x0e
     bs = [0x00, 0x00, 0x00]
     if DEBUG:
         print('Setting configuration register CONFIG1 at 0e to 0x{:02x} 0x{:02x} 0x{:02x}'.format(*bs))
     set_adc_register(0x0e, bytes(bs))
-    time.sleep(0.1)
     
     
  
@@ -245,7 +241,6 @@ def start_adc():
     # Command ADC to repeatedly refresh ADC registers, by holding CS* low
     # Pico will successively read the SPI bus each time the DR* pin is activated
     pins['cs_adc'].low()
-    time.sleep(0.1)
     spi_adc_interface.write(bytes([0b01000001]))
 
 
@@ -271,18 +266,12 @@ def streaming_loop_core_1():
     for m in range(0, BUFFER_SIZE*8, 8):
         cells_mv.append(memoryview(acq_mv[m:m+8]))
 
-    # It's really important that SPI reads are timed correctly and don't
-    # happen while the ADC is trying to latch in new data -- it will stop
-    # working. At this point, we could be anywhere in the sampling cycle.
-    # To help synchronise, we wait until 'state' changes once before
-    # slipping into the data acquisition loop. 'p_state' is a variable that
-    # helps us to detect when state changes value.
+    # Make a local note of the state value, so that we can detect when
+    # it changes
     p_state = state
-    while state == p_state:
-        continue
-    # ok, a DR* pulse just happened, we're now ready to enter the loop. 
-    p_state = state
-    
+    # Tell the ADC to enter 'continuous capture' mode. We do this as late as
+    # possible so that we are ready to read when the first sample is ready
+    start_adc()    
     while state & STREAMING:
         # check to see if state has changed
         if state != p_state:
@@ -291,8 +280,9 @@ def streaming_loop_core_1():
             spi_adc_interface.readinto(cells_mv[state & SAMPLE_MASK])
             # save the new state
             p_state = state
+    stop_adc()
     if DEBUG:
-        print('streaming_loop_core_1() exited')
+        print('Streaming_loop_core_1() exited')
 
 
 ########################################################
@@ -320,7 +310,7 @@ def streaming_loop_core_0():
         pins['buffer_led'].on()
         # We capture the first four samples of each buffer
         # Printing is slow, so we'll output them when finished.
-        debug_bs[debug_block_counter][:] = bytes(bs[:30])  
+        debug_bs[debug_block_counter][:] = bytes(bs[:32])  
         debug_block_counter += 1
         if debug_block_counter >= 31:
             state = STOPPED
@@ -344,7 +334,7 @@ def streaming_loop_core_0():
         write_buffer(p1_mv)
 
     if DEBUG:
-        print('streaming_loop_core_0() exited.')
+        print('Streaming_loop_core_0() exited.')
         print('Here are the contents of debug buffer memory:')
         for bs in debug_bs:
             h = binascii.hexlify(bs).decode('utf-8')
@@ -354,13 +344,6 @@ def streaming_loop_core_0():
 def prepare_to_stream(adc_settings):
     '''Configures all the pre-requisities: pins, SPI interface, ADC settings
     circular buffer memory, interrupts and garbage collection.'''
-    global state
-
-    if DEBUG:
-        print('Configuring pins, SPI interface to ADC, and buffer memory.')
-    # This state variable is used everywhere to control program flow and the
-    # location of the current 'cell' in the buffer memory.
-    state = STREAMING
 
     # Hardware pins that will communicate with the ADC and the Raspberry Pi.
     configure_pins()
@@ -375,10 +358,8 @@ def prepare_to_stream(adc_settings):
 
     if DEBUG:
         print('Starting ADC and configuring interrupts.')
-    # We push some settings into the ADC...
+    # Push required settings into the ADC.
     setup_adc(adc_settings)
-    # ...and now tell it to start.
-    start_adc()
 
     # ADC is responsible for sample timing. Every sample, it toggles the DR* pin.
     # An interrupt handler on Pico receives this pulse, so that the data can
@@ -399,32 +380,20 @@ def stream():
         print('Starting streaming loops on both cores.')
     _thread.start_new_thread(streaming_loop_core_1, ())
     streaming_loop_core_0()
-    # runs forever, unless reset pin is activated
+    # runs forever, unless CTRL-C received or reset pin is activated
 
     
 def cleanup():
     '''For debugging, it's useful for the Pico to be returned to a quiescent
     state. This function stops core 1 that can interfere with proper operation
-    of the Thonny IDE. It also disables the ADC prior to a machine reset.'''
-    global state
-
-    # stop core 1 if it's still running
-    if state & STREAMING:
-        state = STOPPED
-
+    of the Thonny IDE.'''
     stop_adc()
     gc.enable()
     configure_interrupts('disable')
 
-    if state & RESET:
-        if DEBUG:
-            print('Reset signal received.')
-            time.sleep(1)
-        machine.reset()
 
-
-# Run from here
-if __name__ == '__main__':
+def main():
+    global state
     try:
         # We can pass configuration variables into the program from main.py
         # via the sys.argv variable.
@@ -438,12 +407,27 @@ if __name__ == '__main__':
             adc_settings = DEFAULT_ADC_SETTINGS
         if DEBUG:
             print('stream.py started.')
+        state = STREAMING
         prepare_to_stream(adc_settings)
         stream()
     except KeyError:
+        # Catch CTRL-C here.
         if DEBUG:
             print('Interrupted.')
+        # Stops Core 1 if it's still running 
+        state = STOPPED
     finally:
+        # If we reach here, state is in STOPPED or RESET mode
         cleanup()
+        if state & RESET:
+            if DEBUG:
+                print('Reset signal received; waiting 10 seconds.')
+                time.sleep(10)
+            machine.reset()
+    
+
+# Run from here
+if __name__ == '__main__':
+    main()
 
 

@@ -31,6 +31,8 @@ transfer_file_to_pico () {
     fi
 }
 
+# Hard reset Pico, since it may be streaming and unresponsive to commands
+$PROGRAM_DIR/pico_control.py --hard_reset
 
 for pico_file in $PICO_FILES; do
     echo "Comparing local versions of files with those currently on Pico"
@@ -52,7 +54,7 @@ for pico_file in $PICO_FILES; do
     fi
 done
 
-# Hard reset Pico, so that we run the new code straightaway
+# Hard reset Pico again, so that we run the new code
 $PROGRAM_DIR/pico_control.py --hard_reset
 
 

@@ -103,10 +103,12 @@ def main():
     # see if the serial interface is up/exists 
     if args.hard_reset:
         hard_reset()
-        time.sleep(0.1)
+        time.sleep(1)
     port_name = find_serial_device()
     if port_name:
         try:
+            # this order of processing allows 'SAVE' command to precede file transfer
+            # in a combined command line
             ser = serial.Serial(port_name)
             if args.ctrl_c:
                 ser.write(b'\x03')

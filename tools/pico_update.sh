@@ -7,25 +7,44 @@ CWD=$(pwd)
 SCRIPT_DIR=$(realpath $(dirname $0))
 PROGRAM_DIR=$(realpath $SCRIPT_DIR/../pqm)
 PICO_DIR=$(realpath $SCRIPT_DIR/../pico)
+PICO_FILES="main.py stream.py"
 
 
-for pico_file in main.py stream.py; do
+get_local_sha256 () {
+    echo $(sha256sum $PICO_DIR/$1 | cut -d ' ' -f 1)
+}
+
+get_pico_sha256 () {
+    echo $($PROGRAM_DIR/pico_control.py --command "SHA256 $1" | cut -d ' ' -f 3 | tr -d '\n')
+}
+
+transfer_file_to_pico () {
+    # $1 name of file to send
+    $file_length=$(ls -l $1 | cut -d ' ' -f 5)
+    $PROGRAM_DIR/pico_control.py --command "SAVE transfer_file $file_length" --send_file "$1"
+    echo "Checking to see if the transfer was successful."
+    sha256_local=$(get_local_sha256 "$pico_file")
+    sha256_transfer=$(get_pico_sha256 "transfer_file")
+    # we only actually overwrite the old file if the transfer checksum matches the source
+    if [[ "$sha256_transfer" == "$sha256_local" ]]; then
+        $PROGRAM_DIR/pico_control.py --command "RENAME transfer_file $pico_file"
+    fi
+}
+
+
+for pico_file in $PICO_FILES; do
     echo "Comparing local versions of files with those currently on Pico"
-    version_local=$(sha256sum $PICO_DIR/$pico_file | cut -d ' ' -f 1)
-    version_pico=$($PROGRAM_DIR/pico_control.py --command "SHA256 $pico_file" | cut -d ' ' -f 3 | tr -d '\n')
-    echo $pico_file:
-    echo $version_local
-    echo $version_pico
-    if [[ "$version_pico" == "$version_local" ]]; then
-        echo "Same version local and Pico, no need to update."
+    sha256_local=$(get_local_sha256 "$pico_file")
+    sha256_pico=$(get_pico_sha256 "$pico_file")
+    if [[ "$sha256_pico" == "$sha256_local" ]]; then
+        echo "$pico_file: same version local and Pico, no need to update."
     else
-	echo "Different versions, updating Pico..."
-	file_length=$(ls -l $PICO_DIR/$pico_file | cut -d ' ' -f 5)
-	echo $file_length
-	$PROGRAM_DIR/pico_control.py --command "SAVE $pico_file $file_length"
-        $PROGRAM_DIR/pico_control.py --send_file "$PICO_DIR/$pico_file"
-        version_pico=$($PROGRAM_DIR/pico_control.py --command "SHA256 $pico_file" | cut -d ' ' -f 3 | tr -d '\n')
-	if [ "$version_pico" == "$version_local" ]; then
+	echo "$pico_file: file versions are different, updating Pico..."
+        # Copy the new file over
+        transfer_file_to_pico "$PICO_DIR/$pico_file"
+        # Check if the copied file is good
+        sha256_final=$(get_pico_sha256 "$pico_file")
+        if [[ "$sha256_final" == "$sha256_local" ]]; then
             echo "Update succeeded."
 	else
             echo "Update failed, unfortunately."
@@ -33,7 +52,7 @@ for pico_file in main.py stream.py; do
     fi
 done
 
-# Hard reset Pico, so that we run the new code
+# Hard reset Pico, so that we run the new code straightaway
 $PROGRAM_DIR/pico_control.py --hard_reset
 
 

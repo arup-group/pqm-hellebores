@@ -266,12 +266,11 @@ def streaming_loop_core_1():
     for m in range(0, BUFFER_SIZE*8, 8):
         cells_mv.append(memoryview(acq_mv[m:m+8]))
 
+    # Tell the ADC to enter 'continuous capture' mode.
+    start_adc()    
     # Make a local note of the state value, so that we can detect when
     # it changes
     p_state = state
-    # Tell the ADC to enter 'continuous capture' mode. We do this as late as
-    # possible so that we are ready to read when the first sample is ready
-    start_adc()    
     while state & STREAMING:
         # check to see if state has changed
         if state != p_state:
@@ -298,13 +297,13 @@ def streaming_loop_core_0():
     debug_bs = [ bytearray(32) for i in range(debug_blocks) ]
     debug_block_counter = 0
 
-    def _write_buffer_normal(bs):
+    def _transfer_buffer_normal(bs):
         pins['buffer_led'].on()
         # write out the selected portion of buffer as raw bytes
         sys.stdout.buffer.write(bs)
         pins['buffer_led'].off()
 
-    def _write_buffer_debug(bs):
+    def _transfer_buffer_debug(bs):
         nonlocal debug_block_counter
         global state
         pins['buffer_led'].on()
@@ -316,22 +315,29 @@ def streaming_loop_core_0():
             state = STOPPED
         pins['buffer_led'].off()
 
-    # select the writing function once at runtime
+    # select the transfer function once at runtime
     if DEBUG:
-        write_buffer = _write_buffer_debug
+        transfer_buffer = _transfer_buffer_debug
     else:
-        write_buffer = _write_buffer_normal
+        transfer_buffer = _transfer_buffer_normal
 
+    # It's important that we don't try to read the buffer if
+    # there is a risk that the other core might start writing
+    # to it. Therefore wait here until the buffer pointer
+    # actually crosses into the start of page 0.
+    while state & STREAMING:
+        if state == 0b0 | STREAMING:
+            break
     # Now loop...
     while state & STREAMING:
         # wait while Core 1 is writing to page 0
         while (state & PAGE_TEST) == WRITING_PAGE0:
             continue
-        write_buffer(p0_mv)
+        transfer_buffer(p0_mv)
         # wait while Core 1 is writing to page 1
         while (state & PAGE_TEST) == WRITING_PAGE1:
             continue
-        write_buffer(p1_mv)
+        transfer_buffer(p1_mv)
 
     if DEBUG:
         print('Streaming_loop_core_0() exited.')

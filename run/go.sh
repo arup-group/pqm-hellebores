@@ -84,10 +84,9 @@ echo "Measurement source: $READER"
 # pipelines moving.
 ####
 
-# Reset the Pico, and start streaming
+# Reset the Pico, flush out serial buffer that may be in an inconsistent state and start streaming
 if $real_hardware; then
-    ./pico_control.py --hard_reset
-    sleep 1
+    ./pico_control.py --command "CAT main.py" --hard_reset > /dev/null
     ./pico_control.py --command "START stream.py" --no_response
 fi
 

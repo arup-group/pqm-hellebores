@@ -321,13 +321,6 @@ def streaming_loop_core_0():
     else:
         transfer_buffer = _transfer_buffer_normal
 
-    # It's important that we don't try to read the buffer if
-    # there is a risk that the other core might start writing
-    # to it. Therefore wait here until the buffer pointer
-    # actually crosses into the start of page 0.
-    while state & STREAMING:
-        if state == 0b0 | STREAMING:
-            break
     # Now loop...
     while state & STREAMING:
         # wait while Core 1 is writing to page 0
@@ -361,6 +354,9 @@ def prepare_to_stream(adc_settings):
     # allow read/write access to a block of memory. acq_mv is declared a
     # global variable so it can be reached by both CPU cores.
     configure_buffer_memory()
+
+    # Remediate lingering stdout buffer state after device reset
+    sys.stdout.flush()
 
     if DEBUG:
         print('Starting ADC and configuring interrupts.')

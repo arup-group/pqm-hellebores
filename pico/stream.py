@@ -94,31 +94,31 @@ def configure_adc_spi_interface():
 
 
 def set_adc_register(reg, bs):
-    '''Write, and in DEBUG mode verify, a value into selected register of the
-    ADC.'''
+    '''Write, and in DEBUG mode verify, values into selected register of the ADC.'''
     # The actual address byte leads with binary 01 and ends with the read/write
     # bit (1 or 0). The five bits in the middle are the 'register' address inside
     # the ADC.
     addr = 0x40 | (reg << 1)
 
-    # Activate the CS* pin to communicate with the ADC
-    pins['cs_adc'].low()
     # for writing, make sure lowest bit is cleared, hence & 0b11111110
-    spi_adc_interface.write(bytes([addr & 0b11111110]) + bs) 
+    pins['cs_adc'].low()
+    if DEBUG:
+        print("Writing: " + " ".join(hex(b) for b in bs))
+    spi_adc_interface.write(bytes([addr & 0b11111110]) + bs)
     pins['cs_adc'].high()
+ 
+    # Read out the values for verification in DEBUG mode only
     if DEBUG:
         pins['cs_adc'].low()
         # for reading, make sure lowest bit is set, hence | 0b00000001
         spi_adc_interface.write(bytes([addr | 0b00000001])) 
         obs = spi_adc_interface.read(len(bs))
         pins['cs_adc'].high()
-        print("Verify: " + " ".join(hex(b) for b in obs))
+        print("Verifying: " + " ".join(hex(b) for b in obs))
  
 
 def reset_adc():
     '''Cycles the hardware reset pin of the ADC.'''
-    # deselect the ADC
-    pins['cs_adc'].high()
     # cycle the reset pin
     pins['reset_adc'].low()
     pins['reset_adc'].high()
@@ -130,6 +130,14 @@ def setup_adc(adc_settings):
     behaviour of all the settings configured here.'''
     reset_adc()
     
+    # Set the phase configuration register 0x0a
+    # Has the side effect of resetting the ADCs, in case of input overload or system reset
+    # that can lock the ADC output codes (see datasheet section 5.5)
+    bs = [0x00, 0x00, 0x00]
+    if DEBUG:
+        print('PHASE register.')
+    set_adc_register(0x0a, bytes(bs)) 
+
     # Set the gain configuration register 0x0b
     # 3 bits per channel (12 LSB in all)
     # XXXXXXXX XXXX---- --------
@@ -144,8 +152,8 @@ def setup_adc(adc_settings):
     gain_bits = (g3 << 9) + (g2 << 6) + (g1 << 3) + g0
     bs = [0x00, gain_bits >> 8, gain_bits & 0b11111111]
     if DEBUG:
-        print('Setting gain register at 0b to 0x{:02x} 0x{:02x} 0x{:02x}'.format(*bs))
-    set_adc_register(0x0b, bytes(bs))
+        print('GAIN register.')
+    set_adc_register(0x0b, bytes(bs)) 
 
     # Set the status and communication register 0x0c
     # required bytes are:
@@ -156,8 +164,8 @@ def setup_adc(adc_settings):
     # 0x0f = 0b00001111: 1111 DRSTATUS data ready status bits for individual channels  
     bs = [0x88, 0x00, 0x0f]
     if DEBUG:
-        print('Setting status and communication register STATUSCOM at 0c to 0x{:02x} 0x{:02x} 0x{:02x}'.format(*bs))
-    set_adc_register(0x0c, bytes(bs))
+        print('STATUSCOM register.')
+    set_adc_register(0x0c, bytes(bs)) 
 
     # Set the configuration register CONFIG0 at 0x0d
     # 1st byte sets various ADC modes
@@ -178,17 +186,17 @@ def setup_adc(adc_settings):
     except KeyError:
         bs = [0x24, osr_table['7.812k'], 0x50]
     if DEBUG:
-        print('Setting configuration register CONFIG0 at 0d to 0x{:02x} 0x{:02x} 0x{:02x}'.format(*bs))
-    set_adc_register(0x0d, bytes(bs))
+        print('CONFIG0 register.')
+    set_adc_register(0x0d, bytes(bs)) 
 
     # Set the configuration register CONFIG1 at 0x0e
     bs = [0x00, 0x00, 0x00]
     if DEBUG:
-        print('Setting configuration register CONFIG1 at 0e to 0x{:02x} 0x{:02x} 0x{:02x}'.format(*bs))
-    set_adc_register(0x0e, bytes(bs))
-    
-    
+        print('CONFIG1 register.')
+    set_adc_register(0x0e, bytes(bs)) 
+
  
+
 def configure_interrupts(mode='enable'):
     '''Two interrupt handlers are set up, one for the DR* pin, for notifying Pico
     that new data is ready for reading from the ADC, and a reset command from the
@@ -230,7 +238,8 @@ def configure_buffer_memory():
     # 2 bytes per channel, 4 channels
     # we use a memoryview to allow this to be sub-divided into cells and
     # pages in the streaming loops
-    acq_mv = memoryview(bytearray(BUFFER_SIZE * 8))
+    acq = bytearray(BUFFER_SIZE * 8)
+    acq_mv = memoryview(acq)
 
 
 def start_adc():
@@ -354,9 +363,6 @@ def prepare_to_stream(adc_settings):
     # allow read/write access to a block of memory. acq_mv is declared a
     # global variable so it can be reached by both CPU cores.
     configure_buffer_memory()
-
-    # Remediate lingering stdout buffer state after device reset
-    sys.stdout.flush()
 
     if DEBUG:
         print('Starting ADC and configuring interrupts.')

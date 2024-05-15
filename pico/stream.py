@@ -35,27 +35,30 @@ DEFAULT_ADC_SETTINGS = { 'gains': ['1x', '1x', '1x', '1x'], 'sample_rate': '7.81
 BUFFER_SIZE = 128
 
 # For performance optimisation, we hold synchronisation information shared between
-# the two CPU cores in a single 'state' variable that is 10 bits wide
+# the two CPU cores in a single 'state' variable that is 11 bits wide
 # The following mask definitions enable us to perform certain assignments and tests
 # on the state variable efficiently.
-STOPPED           = const(0b0000000000)      # tells both cores to exit
-RESET             = const(0b0100000000)      # initiate a machine reset
-STREAMING         = const(0b1000000000)      # fast ADC streaming using both cores
+STOPPED           = const(0b00000000000)      # tells both cores to exit
+RESET             = const(0b00100000000)      # initiate a machine reset
+OVERLOAD          = const(0b01000000000)      # drop and restart streaming loops
+STREAMING         = const(0b10000000000)      # fast ADC streaming using both cores
 
 # LSB 0yyyyyyy:  sample pointer 0 to 127
 # bit-and the state variable with SAMPLE_MASK to remove the mode bits, to access 
 # just the buffer pointer
-# bit-and the state variable with WRAP_MASK after incrementing it, to make the pointer circular
-SAMPLE_MASK       = const(0b0001111111)      # mask to return just the cell pointer
-WRAP_MASK         = const(0b1101111111)      # pointer increment from 127 wraps round to 0
+# bit-and the state variable with WRAP_MASK after incrementing it, to make the
+# pointer circular
+SAMPLE_MASK       = const(0b00001111111)      # mask to return just the cell pointer
+WRAP_MASK         = const(0b11101111111)      # pointer increment from 127 wraps round to 0
 
-# The following three constants are used to test whether a page boundary has been crossed, and therefore
-# time to output the next page of sample buffer. The state variable is bit-anded with the PAGE_TEST
-# mask and the result checked against STREAMING_PAGE0 and STREAMING_PAGE1 respectively. The test
-# also breaks the waiting loop if a mode other than STREAMING is selected.
-PAGE_TEST         = const(0b1001000000)      # test page number and streaming flag
-WRITING_PAGE0     = const(0b1000000000)      # bit6==0: cell pointer is in range 0-63, ie page 0
-WRITING_PAGE1     = const(0b1001000000)      # bit6==1: cell pointer is in range 64-127, ie page 1
+# The following three constants are used to test whether a page boundary has been
+# crossed, and therefore time to output the next page of sample buffer. The state
+# variable is bit-anded with the PAGE_TEST mask and the result checked against
+# STREAMING_PAGE0 and STREAMING_PAGE1 respectively. The test also breaks the waiting
+# loop if a mode other than STREAMING is selected.
+PAGE_TEST         = const(0b10001000000)      # test page number and streaming flag
+WRITING_PAGE0     = const(0b10000000000)      # bit6==0: pointer in range 0-63, ie page 0
+WRITING_PAGE1     = const(0b10001000000)      # bit6==1: pointer in range 64-127, ie page 1
 
 
 def configure_pins():
@@ -100,21 +103,21 @@ def set_adc_register(reg, bs):
     # the ADC.
     addr = 0x40 | (reg << 1)
 
-    # for writing, make sure lowest bit is cleared, hence & 0b11111110
     pins['cs_adc'].low()
+    # for writing, make sure lowest bit is cleared, hence & 0b11111110
     if DEBUG:
         print("Writing: " + " ".join(hex(b) for b in bs))
     spi_adc_interface.write(bytes([addr & 0b11111110]) + bs)
     pins['cs_adc'].high()
- 
+
     # Read out the values for verification in DEBUG mode only
+    # for reading, make sure lowest bit is set, hence | 0b00000001
     if DEBUG:
         pins['cs_adc'].low()
-        # for reading, make sure lowest bit is set, hence | 0b00000001
         spi_adc_interface.write(bytes([addr | 0b00000001])) 
         obs = spi_adc_interface.read(len(bs))
-        pins['cs_adc'].high()
         print("Verifying: " + " ".join(hex(b) for b in obs))
+    pins['cs_adc'].high()
  
 
 def reset_adc():
@@ -122,22 +125,21 @@ def reset_adc():
     # cycle the reset pin
     pins['reset_adc'].low()
     pins['reset_adc'].high()
-    time.sleep(0.1)
+
+
+def clear_adc_overload():
+    '''This is called if the streaming code detects ADC codes at out-of-range
+    values that then latch in the ADC output. Assigning to the PHASE register
+    resets the ADCs to allow them to resume operation (datasheet section 5.5).'''
+    bs = bytes([0x00, 0x00, 0x00])
+    if DEBUG:
+        print('PHASE register.')
+    set_adc_register(0x0a, bs) 
 
 
 def setup_adc(adc_settings):
     '''Setup the MCP3912 ADC. Refer to MCP3912 datasheet for detailed description of
     behaviour of all the settings configured here.'''
-    reset_adc()
-    
-    # Set the phase configuration register 0x0a
-    # Has the side effect of resetting the ADCs, in case of input overload or system reset
-    # that can lock the ADC output codes (see datasheet section 5.5)
-    bs = [0x00, 0x00, 0x00]
-    if DEBUG:
-        print('PHASE register.')
-    set_adc_register(0x0a, bytes(bs)) 
-
     # Set the gain configuration register 0x0b
     # 3 bits per channel (12 LSB in all)
     # XXXXXXXX XXXX---- --------
@@ -150,10 +152,10 @@ def setup_adc(adc_settings):
     except KeyError:
         g3, g2, g1, g0 = [ G[k] for k in ['1x', '1x', '1x', '1x'] ]
     gain_bits = (g3 << 9) + (g2 << 6) + (g1 << 3) + g0
-    bs = [0x00, gain_bits >> 8, gain_bits & 0b11111111]
+    bs = bytes([0x00, gain_bits >> 8, gain_bits & 0b11111111])
     if DEBUG:
         print('GAIN register.')
-    set_adc_register(0x0b, bytes(bs)) 
+    set_adc_register(0x0b, bs) 
 
     # Set the status and communication register 0x0c
     # required bytes are:
@@ -162,15 +164,15 @@ def setup_adc(adc_settings):
     # generated, 0 WIDTH_CRC is 16 bit, 00 WIDTH_DATA is 16 bits.
     # 0x00 = 0b00000000: 0 EN_CRCCOM CRC is disabled, 0 EN_INT CRC interrupt is disabled
     # 0x0f = 0b00001111: 1111 DRSTATUS data ready status bits for individual channels  
-    bs = [0x88, 0x00, 0x0f]
+    bs = bytes([0x88, 0x00, 0x0f])
     if DEBUG:
         print('STATUSCOM register.')
-    set_adc_register(0x0c, bytes(bs)) 
+    set_adc_register(0x0c, bs) 
 
     # Set the configuration register CONFIG0 at 0x0d
     # 1st byte sets various ADC modes
     # 2nd byte sets sampling rate via over-sampling ratio (OSR), possible OSR settings
-    # are as follows:
+    # are as per the table:
     # 0x00 = 32:  31.25 kSa/s
     # 0x20 = 64:  15.625 kSa/s
     # 0x40 = 128:  7.8125 kSa/s
@@ -180,20 +182,21 @@ def setup_adc(adc_settings):
     # 0xc0 = 2048:   488 Sa/s
     # 0xe0 = 4096:   244 Sa/s
     # 3rd byte sets temperature coefficient (leave as default 0x50)
-    osr_table = { '244':0xe0, '488':0xc0, '976':0xa0, '1.953k':0x80, '3.906k':0x60, '7.812k':0x40, '15.625k':0x20, '31.250k':0x00 }
+    osr_table = { '244':0xe0, '488':0xc0, '976':0xa0, '1.953k':0x80,
+                  '3.906k':0x60, '7.812k':0x40, '15.625k':0x20, '31.250k':0x00 }
     try:
-        bs = [0x24, osr_table[adc_settings['sample_rate']], 0x50]
+        bs = bytes([0x24, osr_table[adc_settings['sample_rate']], 0x50])
     except KeyError:
-        bs = [0x24, osr_table['7.812k'], 0x50]
+        bs = bytes([0x24, osr_table['7.812k'], 0x50])
     if DEBUG:
         print('CONFIG0 register.')
-    set_adc_register(0x0d, bytes(bs)) 
+    set_adc_register(0x0d, bs) 
 
     # Set the configuration register CONFIG1 at 0x0e
-    bs = [0x00, 0x00, 0x00]
+    bs = bytes([0x00, 0x00, 0x00])
     if DEBUG:
         print('CONFIG1 register.')
-    set_adc_register(0x0e, bytes(bs)) 
+    set_adc_register(0x0e, bs)
 
  
 
@@ -222,8 +225,12 @@ def configure_interrupts(mode='enable'):
         # and for the RESET* pin so that the reset works even within a blocking
         # function (eg serial write). We defer the actual hardware reset until
         # cleanup has happened, including core 1 exiting
-        pins['dr_adc'].irq(trigger = Pin.IRQ_FALLING, handler = adc_read_handler, hard=True)
-        pins['reset_me'].irq(trigger = Pin.IRQ_FALLING, handler = lambda _: set_mode(RESET), hard=True)
+        pins['dr_adc'].irq(trigger = Pin.IRQ_FALLING,
+                           handler = adc_read_handler,
+                           hard=True)
+        pins['reset_me'].irq(trigger = Pin.IRQ_FALLING,
+                             handler = lambda _: set_mode(RESET),
+                             hard=True)
 
     elif mode == 'disable':
         pins['dr_adc'].irq(handler = None)
@@ -262,6 +269,7 @@ def stop_adc():
     pins['cs_adc'].high()
 
 
+
 ########################################################
 ######### STREAMING LOOP FOR CORE 1 STARTS HERE
 ########################################################
@@ -272,11 +280,9 @@ def streaming_loop_core_1():
     # The SPI read instruction will write into these memory slices directly.
     cells_mv = []
     # 8 bytes each cell, stepping 8 bytes
-    for m in range(0, BUFFER_SIZE*8, 8):
+    for m in range(0, len(acq_mv), 8):
         cells_mv.append(memoryview(acq_mv[m:m+8]))
 
-    # Tell the ADC to enter 'continuous capture' mode.
-    start_adc()    
     # Make a local note of the state value, so that we can detect when
     # it changes
     p_state = state
@@ -288,7 +294,6 @@ def streaming_loop_core_1():
             spi_adc_interface.readinto(cells_mv[state & SAMPLE_MASK])
             # save the new state
             p_state = state
-    stop_adc()
     if DEBUG:
         print('Streaming_loop_core_1() exited')
 
@@ -296,15 +301,20 @@ def streaming_loop_core_1():
 ########################################################
 def streaming_loop_core_0(): 
     '''Prints data from memory to stdout in 'half-buffer' chunks.'''
+    global acq_mv
+
     # Create memoryviews of each half of the circular buffer (ie two pages)
-    half_mem = BUFFER_SIZE // 2 * 8
+    half_mem = len(acq_mv) // 2
     p0_mv = memoryview(acq_mv[:half_mem])
     p1_mv = memoryview(acq_mv[half_mem:])
 
-    # This memory is only actually used in debug mode
-    debug_blocks = 32
-    debug_bs = [ bytearray(32) for i in range(debug_blocks) ]
-    debug_block_counter = 0
+    # Zero the entire buffer, in case we are re-entering following an overload
+    for i in range(len(acq_mv)):
+        acq_mv[i] = 0x00
+ 
+    # We record some chunks of data in debug mode
+    debug_data = [ bytearray(32) for i in range(32) ]
+    debug_counter = 0
 
     def _transfer_buffer_normal(bs):
         pins['buffer_led'].on()
@@ -313,14 +323,14 @@ def streaming_loop_core_0():
         pins['buffer_led'].off()
 
     def _transfer_buffer_debug(bs):
-        nonlocal debug_block_counter
+        nonlocal debug_data, debug_counter
         global state
         pins['buffer_led'].on()
         # We capture the first four samples of each buffer
         # Printing is slow, so we'll output them when finished.
-        debug_bs[debug_block_counter][:] = bytes(bs[:32])  
-        debug_block_counter += 1
-        if debug_block_counter >= 31:
+        debug_data[debug_counter][:] = bs[:32]
+        debug_counter += 1
+        if debug_counter >= 31:
             state = STOPPED
         pins['buffer_led'].off()
 
@@ -329,6 +339,12 @@ def streaming_loop_core_0():
         transfer_buffer = _transfer_buffer_debug
     else:
         transfer_buffer = _transfer_buffer_normal
+    
+    def overload_check(mv):
+        global state
+        if (mv[-2:] == b'\x7f\xff') or (mv[-2:] == b'\x80\x00'):
+            # set the OVERLOAD flag and clear STREAMING
+            state = OVERLOAD
 
     # Now loop...
     while state & STREAMING:
@@ -340,13 +356,14 @@ def streaming_loop_core_0():
         while (state & PAGE_TEST) == WRITING_PAGE1:
             continue
         transfer_buffer(p1_mv)
+        overload_check(acq_mv)
 
     if DEBUG:
         print('Streaming_loop_core_0() exited.')
         print('Here are the contents of debug buffer memory:')
-        for bs in debug_bs:
-            h = binascii.hexlify(bs).decode('utf-8')
-            print(f'{h[0:8]} {h[8:16]} {h[16:24]} {h[24:32]}')
+        for bs in debug_data:
+            hs = binascii.hexlify(bs).decode('utf-8')
+            print(f'{hs[0:16]} {hs[16:32]} {hs[32:48]} {hs[48:64]}')
 
 
 def prepare_to_stream(adc_settings):
@@ -365,8 +382,9 @@ def prepare_to_stream(adc_settings):
     configure_buffer_memory()
 
     if DEBUG:
-        print('Starting ADC and configuring interrupts.')
+        print('Configuring ADC and interrupts.')
     # Push required settings into the ADC.
+    reset_adc()
     setup_adc(adc_settings)
 
     # ADC is responsible for sample timing. Every sample, it toggles the DR* pin.
@@ -386,16 +404,18 @@ def stream():
     in two pages.'''
     if DEBUG:
         print('Starting streaming loops on both cores.')
-    _thread.start_new_thread(streaming_loop_core_1, ())
-    streaming_loop_core_0()
     # runs forever, unless CTRL-C received or reset pin is activated
-
+    while state & STREAMING:
+        # Tell the ADC to enter 'continuous capture' mode.
+        start_adc()    
+        _thread.start_new_thread(streaming_loop_core_1, ())
+        streaming_loop_core_0()
+        stop_adc()
     
+
 def cleanup():
     '''For debugging, it's useful for the Pico to be returned to a quiescent
-    state. This function stops core 1 that can interfere with proper operation
-    of the Thonny IDE.'''
-    stop_adc()
+    state.'''
     gc.enable()
     configure_interrupts('disable')
 
@@ -417,13 +437,20 @@ def main():
             print('stream.py started.')
         state = STREAMING
         prepare_to_stream(adc_settings)
-        stream()
+        while state & STREAMING:
+            stream()
+            # if we exit streaming due to overload, try to recover
+            if state & OVERLOAD:
+                clear_adc_overload()
+                state = STREAMING
+ 
     except KeyError:
         # Catch CTRL-C here.
         if DEBUG:
             print('Interrupted.')
         # Stops Core 1 if it's still running 
         state = STOPPED
+
     finally:
         # If we reach here, state is in STOPPED or RESET mode
         cleanup()

@@ -32,11 +32,13 @@ DEFAULT_ADC_SETTINGS = { 'gains': ['1x', '1x', '1x', '1x'], 'sample_rate': '7.81
 # The buffer size is measured in 'samples' or number of cells.
 # However note the underlying memory size in bytes
 # is BUFFER_SIZE * 8 because we have 4 measurement channels and 2 bytes per channel.
-BUFFER_SIZE = 128
+BUFFER_SIZE = const(128)
+BUFFER_MEMORY_SIZE = const(1024)
+HALF_BUFFER_MEMORY_SIZE = const(512)
 
 # For performance optimisation, we hold synchronisation information shared between
 # the two CPU cores in a single 'state' variable that is 11 bits wide
-# The following mask definitions enable us to perform certain assignments and tests
+# The following bit masks enable us to perform certain assignments and tests
 # on the state variable efficiently.
 STOPPED           = const(0b00000000000)      # tells both cores to exit
 RESET             = const(0b00100000000)      # initiate a machine reset
@@ -237,25 +239,56 @@ def configure_interrupts(mode='enable'):
         pins['reset_me'].irq(handler = None)
 
 
+class Debug_cache:
+
+    def __init__(self):
+        self.cache_pointer = 0
+        self.cache = [ bytearray(32) for i in range(32) ]
+ 
+    def reset(self):
+        self.cache_pointer = 0
+
+    def save_snip(self, bs):
+        self.cache[self.cache_pointer][:] = bs[:32]
+        self.cache_pointer += 1
+   
+    def is_full(self):
+        if self.cache_pointer >= 31:
+            return True
+        else:
+            return False
+
+    def print_cache(self):
+        print('Here are the contents of debug buffer memory:')
+        for bs in self.cache:
+            # NB 32 bytes become 64 characters.
+            hs = binascii.hexlify(bs).decode('utf-8')
+            print(f'{hs[0:16]} {hs[16:32]} {hs[32:48]} {hs[48:64]}')
+
+
 def configure_buffer_memory():
     '''Buffer memory is allocated for retaining a cache of samples received from
     the ADC. The memory is referenced by a global variable acq_mv.'''
-    global acq_mv
+    global acq_mv, p0_mv, p1_mv, debug_cache
 
     # 2 bytes per channel, 4 channels
-    # we use a memoryview to allow this to be sub-divided into cells and
-    # pages in the streaming loops
-    acq = bytearray(BUFFER_SIZE * 8)
+    # we use a memoryview to allow this to be sub-divided into pages and
+    # cells
+    acq = bytearray(BUFFER_MEMORY_SIZE)
     acq_mv = memoryview(acq)
+    # Create memoryviews of each half of the buffer (ie two pages)
+    p0_mv = memoryview(acq_mv[:HALF_BUFFER_MEMORY_SIZE])
+    p1_mv = memoryview(acq_mv[HALF_BUFFER_MEMORY_SIZE:])
+    # Create additional buffers for debug cache
+    debug_cache = Debug_cache()
 
 
 def start_adc():
-    '''Tell the ADC to start sampling in multiple-read mode. It's necessary for
-    the CS pin to be held low from this point.'''
+    '''Tell the ADC to read out the ADC registers in multiple-read mode. It's
+    necessary for the CS pin to be held low from this point, for the duration
+    of sampling.'''
     if DEBUG:
         print('Starting the ADC...')
-    # Command ADC to repeatedly refresh ADC registers, by holding CS* low
-    # Pico will successively read the SPI bus each time the DR* pin is activated
     pins['cs_adc'].low()
     spi_adc_interface.write(bytes([0b01000001]))
 
@@ -277,11 +310,9 @@ def streaming_loop_core_1():
     '''Watches for change in state variable (caused the by interrupt handler)
     and reads new data from the ADC into memory.'''
     # Create a memoryview reference into each sample or slice of the buffer.
+    # 8 bytes each cell, stepping 8 bytes.
     # The SPI read instruction will write into these memory slices directly.
-    cells_mv = []
-    # 8 bytes each cell, stepping 8 bytes
-    for m in range(0, len(acq_mv), 8):
-        cells_mv.append(memoryview(acq_mv[m:m+8]))
+    cells_mv = [ memoryview(acq_mv[m:m+8]) for m in range(0, BUFFER_MEMORY_SIZE, 8) ]
 
     # Make a local note of the state value, so that we can detect when
     # it changes
@@ -299,22 +330,16 @@ def streaming_loop_core_1():
 
 
 ########################################################
+######### STREAMING LOOP FOR CORE 0 STARTS HERE
+########################################################
 def streaming_loop_core_0(): 
     '''Prints data from memory to stdout in 'half-buffer' chunks.'''
-    global acq_mv
+    global state
 
-    # Create memoryviews of each half of the circular buffer (ie two pages)
-    half_mem = len(acq_mv) // 2
-    p0_mv = memoryview(acq_mv[:half_mem])
-    p1_mv = memoryview(acq_mv[half_mem:])
-
-    # Zero the entire buffer, in case we are re-entering following an overload
-    for i in range(len(acq_mv)):
-        acq_mv[i] = 0x00
- 
-    # We record some chunks of data in debug mode
-    debug_data = [ bytearray(32) for i in range(32) ]
-    debug_counter = 0
+    def adc_overloaded(bs):
+        '''If overloaded the ADC codes will latch to one of these
+        two values.'''
+        return (bs == b'\x80\x00') or (bs == b'\x7f\xff')
 
     def _transfer_buffer_normal(bs):
         pins['buffer_led'].on()
@@ -323,29 +348,19 @@ def streaming_loop_core_0():
         pins['buffer_led'].off()
 
     def _transfer_buffer_debug(bs):
-        nonlocal debug_data, debug_counter
         global state
         pins['buffer_led'].on()
-        # We capture the first four samples of each buffer
-        # Printing is slow, so we'll output them when finished.
-        debug_data[debug_counter][:] = bs[:32]
-        debug_counter += 1
-        if debug_counter >= 31:
+        debug_cache.save_snip(bs)
+        if debug_cache.is_full():
             state = STOPPED
         pins['buffer_led'].off()
 
-    # select the transfer function once at runtime
+    # select the transfer function we are going to use from now on
     if DEBUG:
         transfer_buffer = _transfer_buffer_debug
     else:
         transfer_buffer = _transfer_buffer_normal
     
-    def overload_check(mv):
-        global state
-        if (mv[-2:] == b'\x7f\xff') or (mv[-2:] == b'\x80\x00'):
-            # set the OVERLOAD flag and clear STREAMING
-            state = OVERLOAD
-
     # Now loop...
     while state & STREAMING:
         # wait while Core 1 is writing to page 0
@@ -356,14 +371,16 @@ def streaming_loop_core_0():
         while (state & PAGE_TEST) == WRITING_PAGE1:
             continue
         transfer_buffer(p1_mv)
-        overload_check(acq_mv)
+        # check the final sample of the buffer for overload codes
+        if adc_overloaded(p1_mv[-2:]):
+            # set the OVERLOAD flag and clear STREAMING
+            # this bit-banging preserves the current cell reference
+            # which will continue to be incremented in the ISR
+            state = state | OVERLOAD & ~STREAMING & WRAP_MASK
 
     if DEBUG:
         print('Streaming_loop_core_0() exited.')
-        print('Here are the contents of debug buffer memory:')
-        for bs in debug_data:
-            hs = binascii.hexlify(bs).decode('utf-8')
-            print(f'{hs[0:16]} {hs[16:32]} {hs[32:48]} {hs[48:64]}')
+        debug_cache.print_cache()
 
 
 def prepare_to_stream(adc_settings):
@@ -385,6 +402,7 @@ def prepare_to_stream(adc_settings):
         print('Configuring ADC and interrupts.')
     # Push required settings into the ADC.
     reset_adc()
+    clear_adc_overload()    # NB The reset process can cause the ADCs to latch
     setup_adc(adc_settings)
 
     # ADC is responsible for sample timing. Every sample, it toggles the DR* pin.
@@ -404,9 +422,11 @@ def stream():
     in two pages.'''
     if DEBUG:
         print('Starting streaming loops on both cores.')
-    # runs forever, unless CTRL-C received or reset pin is activated
     while state & STREAMING:
-        # Tell the ADC to enter 'continuous capture' mode.
+        # runs forever, unless:
+        #     CTRL-C:             STOPPED mode
+        #     reset_me pin:       RESET mode
+        #     ADC overloaded:     OVERLOAD mode
         start_adc()    
         _thread.start_new_thread(streaming_loop_core_1, ())
         streaming_loop_core_0()
@@ -426,7 +446,7 @@ def main():
         # We can pass configuration variables into the program from main.py
         # via the sys.argv variable.
         # sys.argv = [ 'stream.py', '1x', '1x', '1x', '1x', '7.812k' ]
-        # The variables are set into the adc_settings dictionary.
+        # The variables are loaded into the adc_settings dictionary.
         # adc_settings = { 'gains': ['1x', '1x', '1x', '1x'], 'sample_rate': '7.812k' }
         if len(sys.argv) == 6:
             _, g0, g1, g2, g3, sample_rate = sys.argv
@@ -439,12 +459,13 @@ def main():
         prepare_to_stream(adc_settings)
         while state & STREAMING:
             stream()
-            # if we exit streaming due to overload, try to recover
+            # if we exited streaming due to OVERLOAD, try to recover
             if state & OVERLOAD:
+                gc.collect()
                 clear_adc_overload()
-                state = STREAMING
+                state = state | STREAMING & ~OVERLOAD & WRAP_MASK
  
-    except KeyError:
+    except KeyboardInterrupt:
         # Catch CTRL-C here.
         if DEBUG:
             print('Interrupted.')

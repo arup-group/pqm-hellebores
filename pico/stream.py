@@ -13,15 +13,21 @@ import sys
 import binascii
 from micropython import const
 
+########################################################
+######### Configuration constants
+########################################################
+# Some constants are defined with the const() compilation hint to optimise performance.
 
-# some constants are defined with the const() compilation hint to optimise performance
 # SPI_CLOCK_RATE is a configurable clock speed for comms on the SPI bus between
-# Pico and ADC
+# Pico and ADC. Its setting is independent from the sampling rate, but needs to be
+# fast enough to complete communications in the period between successive samples.
 SPI_CLOCK_RATE = 8000000 
  
 # NB set the DEBUG flag to True when testing the code inside the Thonny REPL.
-# this reduces the sample rate and the amount of data that is output to screen, and
-# it prints some diagnostic progress info as the code proceeds
+# This maintains code paths as much as possible, but outputs progress and diagnostic
+# information. Instead of pushing sample data to stdout, it caches snips of sample
+# data in a dedicated buffer and exits the program after a few cycles to then print
+# it out.
 DEBUG = const(False)
 
 # These adc settings can be adjusted via comms from the Pi via command line arguments
@@ -30,8 +36,8 @@ DEFAULT_ADC_SETTINGS = { 'gains': ['1x', '1x', '1x', '1x'], 'sample_rate': '7.81
 # Buffer memory -- number of samples cached in Pico memory.
 # Buffer size is a power of two, to allow divide by two and bit masks to work easily
 # The buffer size is measured in 'samples' or number of cells.
-# However note the underlying memory size in bytes
-# is BUFFER_SIZE * 8 because we have 4 measurement channels and 2 bytes per channel.
+# However note the underlying memory size in bytes is BUFFER_SIZE * 8 because we
+# have 4 measurement channels and 2 bytes per channel.
 BUFFER_SIZE = const(128)
 BUFFER_MEMORY_SIZE = const(1024)
 HALF_BUFFER_MEMORY_SIZE = const(512)
@@ -56,7 +62,7 @@ WRAP_MASK         = const(0b11101111111)      # pointer increment from 127 wraps
 # The following three constants are used to test whether a page boundary has been
 # crossed, and therefore time to output the next page of sample buffer. The state
 # variable is bit-anded with the PAGE_TEST mask and the result checked against
-# STREAMING_PAGE0 and STREAMING_PAGE1 respectively. The test also breaks the waiting
+# STREAMING_PAGE0 and STREAMING_PAGE1 respectively. This test also quits the waiting
 # loop if a mode other than STREAMING is selected.
 PAGE_TEST         = const(0b10001000000)      # test page number and streaming flag
 WRITING_PAGE0     = const(0b10000000000)      # bit6==0: pointer in range 0-63, ie page 0
@@ -78,7 +84,7 @@ def configure_pins():
         'reset_adc'   : Pin(5, Pin.OUT, value=1),   # hardware reset of ADC commanded from Pico (active low)
         'dr_adc'      : Pin(4, Pin.IN),             # data ready from ADC to Pico (active low)
         'reset_me'    : Pin(14, Pin.IN),            # reset and restart Pico (active low)
-        'mode_select' : Pin(26, Pin.IN)             # switch between streaming (LOW) and command mode (HIGH)
+        'mode_select' : Pin(26, Pin.IN)             # NOT USED
     }
     
 
@@ -86,6 +92,18 @@ def configure_adc_spi_interface():
     '''Sets up the Pico SPI interface using selected hardware pins. This will be
     used to communicate with the ADC.'''
     global spi_adc_interface
+    # The SPI interface is set up in mode 0, with non-inverted clock polarity.
+    # This means that data is input (sampled) on the first rising edge of the
+    # clock pulse, and output (asserted) on the falling edge of the clock pulse.
+    # The quiescent state of the clock ('polarity') is low.
+    # SPI messages begin and end when the chip select (CS*) pin is set low
+    # and high.
+    # Example: transferring the byte 100d or 01100100b in both directions.
+    #
+    # CS*     -----------___________________-----------
+    # SCK     _____________-_-_-_-_-_-_-_-_____________
+    # SDI     ______________----____--_________________
+    # SDO     ________________----____--_______________
 
     spi_adc_interface = machine.SPI(0,
                                     baudrate   = SPI_CLOCK_RATE,
@@ -104,40 +122,36 @@ def set_adc_register(reg, bs):
     # bit (1 or 0). The five bits in the middle are the 'register' address inside
     # the ADC.
     addr = 0x40 | (reg << 1)
-
-    pins['cs_adc'].low()
     # for writing, make sure lowest bit is cleared, hence & 0b11111110
+    pins['cs_adc'].low()
     if DEBUG:
-        print("Writing: " + " ".join(hex(b) for b in bs))
+        print('Writing: ' + ' '.join(hex(b) for b in bs))
     spi_adc_interface.write(bytes([addr & 0b11111110]) + bs)
     pins['cs_adc'].high()
 
-    # Read out the values for verification in DEBUG mode only
     # for reading, make sure lowest bit is set, hence | 0b00000001
     if DEBUG:
         pins['cs_adc'].low()
         spi_adc_interface.write(bytes([addr | 0b00000001])) 
         obs = spi_adc_interface.read(len(bs))
-        print("Verifying: " + " ".join(hex(b) for b in obs))
+        print('Verifying: ' + ' '.join(hex(b) for b in obs))
     pins['cs_adc'].high()
  
 
 def reset_adc():
     '''Cycles the hardware reset pin of the ADC.'''
-    # cycle the reset pin
     pins['reset_adc'].low()
     pins['reset_adc'].high()
 
 
 def clear_adc_overload():
-    '''This is called if the streaming code detects ADC codes at out-of-range
-    values that then latch in the ADC output. Assigning to the PHASE register
-    resets the ADCs to allow them to resume operation (datasheet section 5.5).'''
+    '''ADC codes at out-of-range values latch in the ADC output. Assigning to the
+    PHASE register resets the ADCs to allow them to resume operation (datasheet
+    section 5.5).'''
     bs = bytes([0x00, 0x00, 0x00])
     if DEBUG:
         print('PHASE register.')
     set_adc_register(0x0a, bs) 
-
 
 def setup_adc(adc_settings):
     '''Setup the MCP3912 ADC. Refer to MCP3912 datasheet for detailed description of
@@ -228,11 +242,9 @@ def configure_interrupts(mode='enable'):
         # function (eg serial write). We defer the actual hardware reset until
         # cleanup has happened, including core 1 exiting
         pins['dr_adc'].irq(trigger = Pin.IRQ_FALLING,
-                           handler = adc_read_handler,
-                           hard=True)
+                           handler = adc_read_handler, hard=True)
         pins['reset_me'].irq(trigger = Pin.IRQ_FALLING,
-                             handler = lambda _: set_mode(RESET),
-                             hard=True)
+                           handler = lambda _: set_mode(RESET), hard=True)
 
     elif mode == 'disable':
         pins['dr_adc'].irq(handler = None)
@@ -249,21 +261,20 @@ class Debug_cache:
         self.cache_pointer = 0
 
     def save_snip(self, bs):
-        self.cache[self.cache_pointer][:] = bs[:32]
-        self.cache_pointer += 1
-   
-    def is_full(self):
-        if self.cache_pointer >= 31:
+        if self.cache_pointer <= 31:
+            self.cache[self.cache_pointer][:] = bs[:32]
+            self.cache_pointer += 1
             return True
         else:
-            return False
-
-    def print_cache(self):
-        print('Here are the contents of debug buffer memory:')
+            return False   
+   
+    def as_text(self):
+        text_out = ''
         for bs in self.cache:
             # NB 32 bytes become 64 characters.
             hs = binascii.hexlify(bs).decode('utf-8')
-            print(f'{hs[0:16]} {hs[16:32]} {hs[32:48]} {hs[48:64]}')
+            text_out += f'{hs[0:16]} {hs[16:32]} {hs[32:48]} {hs[48:64]}\n'
+        return text_out
 
 
 def configure_buffer_memory():
@@ -350,8 +361,8 @@ def streaming_loop_core_0():
     def _transfer_buffer_debug(bs):
         global state
         pins['buffer_led'].on()
-        debug_cache.save_snip(bs)
-        if debug_cache.is_full():
+        # saves snips until the debug cache is full
+        if debug_cache.save_snip(bs) == False:
             state = STOPPED
         pins['buffer_led'].off()
 
@@ -363,34 +374,33 @@ def streaming_loop_core_0():
     
     # Now loop...
     while state & STREAMING:
-        # wait while Core 1 is writing to page 0
+        # Wait while Core 1 is writing to page 0.
         while (state & PAGE_TEST) == WRITING_PAGE0:
             continue
         transfer_buffer(p0_mv)
-        # wait while Core 1 is writing to page 1
+        # Wait while Core 1 is writing to page 1.
         while (state & PAGE_TEST) == WRITING_PAGE1:
             continue
         transfer_buffer(p1_mv)
-        # check the final sample of the buffer for overload codes
+        # Check the final sample of the buffer for overload codes.
         if adc_overloaded(p1_mv[-2:]):
-            # set the OVERLOAD flag and clear STREAMING
-            # this bit-banging preserves the current cell reference
-            # which will continue to be incremented in the ISR
+            # Set the OVERLOAD flag and clear STREAMING.
+            # Preserves the current cell reference which will continue to
+            # be incremented in the ISR
             state = state | OVERLOAD & ~STREAMING & WRAP_MASK
 
     if DEBUG:
         print('Streaming_loop_core_0() exited.')
-        debug_cache.print_cache()
+        print('Here are the contents of debug buffer memory:')
+        print(debug_cache.as_text())
 
 
 def prepare_to_stream(adc_settings):
     '''Configures all the pre-requisities: pins, SPI interface, ADC settings
     circular buffer memory, interrupts and garbage collection.'''
 
-    # Hardware pins that will communicate with the ADC and the Raspberry Pi.
+    # Pin and SPI library setup
     configure_pins()
-
-    # Interface to the ADC uses SPI protocol
     configure_adc_spi_interface()
 
     # Buffer memory is set up in a memoryview called acq_mv. Memoryview objects
@@ -469,7 +479,7 @@ def main():
         # Catch CTRL-C here.
         if DEBUG:
             print('Interrupted.')
-        # Stops Core 1 if it's still running 
+        # Stop Core 1 if it's still running 
         state = STOPPED
 
     finally:

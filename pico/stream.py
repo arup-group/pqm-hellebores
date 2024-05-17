@@ -346,11 +346,13 @@ def streaming_loop_core_1():
 def streaming_loop_core_0(): 
     '''Prints data from memory to stdout in 'half-buffer' chunks.'''
     global state
+    # reference to last cell of buffer, for testing overload
+    last_cell_mv = memoryview(acq_mv[-2:])
 
-    def adc_overloaded(bs):
+    def adc_overloaded():
         '''If overloaded the ADC codes will latch to one of these
         two values.'''
-        return (bs == b'\x80\x00') or (bs == b'\x7f\xff')
+        return (last_cell_mv == b'\x80\x00') or (last_cell_mv == b'\x7f\xff')
 
     def _transfer_buffer_normal(bs):
         pins['buffer_led'].on()
@@ -383,7 +385,7 @@ def streaming_loop_core_0():
             continue
         transfer_buffer(p1_mv)
         # Check the final sample of the buffer for overload codes.
-        if adc_overloaded(p1_mv[-2:]):
+        if adc_overloaded():
             # Set the OVERLOAD flag and clear STREAMING.
             # Preserves the current cell reference which will continue to
             # be incremented in the ISR

@@ -23,7 +23,7 @@ import copy
 from settings import Settings
 
 
-WINDOW_SIZE = (600, 450)
+WINDOW_SIZE = (600, 500)
 FONT = 'font/RobotoMono-Medium.ttf'
 FONT_SIZE = 12
 SLIDER_SIZE = 60
@@ -45,10 +45,10 @@ def generate_samples(parameters):
     """Generates a block of n samples to bring us up to date wrt to system clock."""
     global st, sample_index, time_zero
 
-    def scale(scale_factor, sample):
+    def scale(scale_factor, sample, offset):
         """convert to 16 bit integer. Note that after conversion, negative
            numbers are expressed in 2s complement form."""
-        return int(scale_factor*sample) & 0xffff
+        return int(scale_factor*sample + offset) & 0xffff
 
     # figure out how many new samples we need to generate
     new_time_mark = time.time()*1000.0
@@ -75,10 +75,11 @@ def generate_samples(parameters):
             # hardware scaling factors for each channel as per below
             # [4.07e-07, 2.44e-05, 0.00122, 0.0489]
             # to simulate the hardware, we scale the signals by the reciprocal of the scaling factor
-            c3 = scale(1./0.0489, sample(sample_index, v))
-            c2 = scale(1./0.00122, sample(sample_index, i))
-            c1 = scale(1./2.44e-05, sample(sample_index, i))
-            c0 = scale(1./4.07e-07, sample(sample_index, el))
+            offset = parameters.get('offset')
+            c3 = scale(1./0.0489, sample(sample_index, v), offset)
+            c2 = scale(1./0.00122, sample(sample_index, i), offset)
+            c1 = scale(1./2.44e-05, sample(sample_index, i), offset)
+            c0 = scale(1./4.07e-07, sample(sample_index, el), offset)
             # update the running total
             sample_index = sample_index + 1
             # output samples in order of leakage current, low range current, full range current, voltage
@@ -93,38 +94,44 @@ class Parameters:
     """Holds the fixed and variable parameters that include the coefficients for the sample generator."""
     # labels for the individual parameters -- used to form dictionary lookups
     # for all the parameters that follow below
-    labels     = ['freq','v1','v3','v5','v_ph3','v_ph5',
+    labels     = ['offset','freq','v1','v3','v5','v_ph3','v_ph5',
                   'i1','i3','i5','i_ph1','i_ph3','i_ph5',
                   'el','el_ph']
 
     # preset settings that can be recalled by push button
     presets = {
-        'One':    [ 50, 230, 0, 0, 0, 0,
+        'One':    [ 0, 50, 230, 0, 0, 0, 0,
                     2, 0.5, 0.3, 30, -60, 180,
                     0.0003, 90 ],
-        'Two':    [ 50.05, 230, 0, 0, 0, 0,
+        'Two':    [ 0, 50.05, 230, 0, 0, 0, 0,
                     1, 0.5, 0.3, -30, -60, 180,
                     0.0002, 90 ],
-        'Three':  [ 49.98, 230, 0, 0, 0, 0,
+        'Three':  [ 0, 49.98, 230, 0, 0, 0, 0,
                     0.5, 0.2, 0.1, 30, -60, 180,
                     0.0002, 90 ],
-        'Four':   [ 60.1, 120, 0, 0, 0, 0,
+        'Four':   [ 0, 60.1, 120, 0, 0, 0, 0,
                     1, 0.5, 0.3, 90, 60, -90,
                     0.0001, 90 ],
+        'Over+':  [ 32767, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0,
+                    0, 0 ],
+        'Over-':  [ -32768, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0,
+                    0, 0 ]
         }
      
     # a flag to show whether the sliders are horizontal or vertical
-    directions = ['h','v','v','v','h','h',
+    directions = ['h','h','v','v','v','h','h',
                   'v','v','v','h','h','h',
                   'v','h']
 
     # the minimum and maximum values that correspond to a slider range
-    ranges     = [ (30,70), (100,300), (0,100), (0,100), (-180,180), (-180,180),
+    ranges     = [ (-32768,32767),(30,70), (100,300), (0,100), (0,100), (-180,180), (-180,180),
                    (0,5), (0,5), (0,5), (-180,180), (-180,180), (-180,180),
                    (0,0.010), (-180,180) ]
 
     # when displaying parameters as text, we round off to a fixed number of decimal places
-    rounding   = [ 2, 1, 1, 1, 0, 0,
+    rounding   = [ 0, 2, 1, 1, 1, 0, 0,
                    1, 1, 1, 0, 0, 0,
                    4, 0 ]
 
@@ -134,19 +141,19 @@ class Parameters:
         self.directions_lookup = dict(zip(self.labels, self.directions))
         self.rounding_lookup = dict(zip(self.labels, self.rounding))
         self.load_presets('One')
- 
+
     def load_presets(self, preset_name):
         """create new current settings from preset settings"""
-        new_settings = copy.deepcopy(self.presets[preset_name])
-        self.settings_lookup = dict(zip(self.labels, new_settings))
+        new_setting = copy.deepcopy(self.presets[preset_name])
+        self.periodic_settings_lookup = dict(zip(self.labels, new_setting))
 
     # setter and getter for individual parameters
     def set(self, ref, value):
-        self.settings_lookup[ref] = value
+        self.periodic_settings_lookup[ref] = value
 
     def get(self, ref):
         # return a tuple of both the physical parameter and the slider parameter
-        return self.settings_lookup[ref]
+        return self.periodic_settings_lookup[ref]
 
     def get_as_slider_position(self, ref):
         """convert the setting to a slider position"""
@@ -168,7 +175,7 @@ class Parameters:
             value = low + (high - low) * slider_position/SLIDER_SIZE
         elif slider_direction == 'v':
             value = high - (high - low) * slider_position/SLIDER_SIZE
-        self.settings_lookup[ref] = round(value, self.rounding_lookup[ref])
+        self.periodic_settings_lookup[ref] = round(value, self.rounding_lookup[ref])
 
 
 def setup_ui(screen, parameters):
@@ -183,7 +190,7 @@ def setup_ui(screen, parameters):
                              show_value_on_right_side=False, edit=False)
 
     supply = thorpy.TitleBox('Supply',
-                [ sliders['freq'],
+                [ sliders['offset'], sliders['freq'],
                   thorpy.Group([sliders['v1'], sliders['v3'], sliders['v5']], mode='h'),
                   thorpy.Group([sliders['v_ph3'], sliders['v_ph5']], mode='v') ])
 
@@ -199,7 +206,8 @@ def setup_ui(screen, parameters):
 
     def set_text(text, parameters):
         p = parameters
-        new_text = f"freq    : {p.get('freq')}\n" \
+        new_text = f"offset    : {p.get('offset')}\n" \
+                   + f"freq    : {p.get('freq')}\n" \
                    + f"voltage : {p.get('v1')} (0)," \
                    + f" {p.get('v3')} ({p.get('v_ph3')})," \
                    + f" {p.get('v5')} ({p.get('v_ph5')})\n" \
@@ -233,7 +241,9 @@ def setup_ui(screen, parameters):
     buttons_ui = thorpy.Group([ thorpy.Button('One'),
                                 thorpy.Button('Two'),
                                 thorpy.Button('Three'),
-                                thorpy.Button('Four') ], mode='h')
+                                thorpy.Button('Four'),
+                                thorpy.Button('Over+'),
+                                thorpy.Button('Over-') ], mode='h')
    
     for button in buttons_ui.get_children():
         button.set_size((50, 30))

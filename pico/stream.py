@@ -97,13 +97,14 @@ def configure_adc_spi_interface():
     # clock pulse, and output (asserted) on the falling edge of the clock pulse.
     # The quiescent state of the clock ('polarity') is low.
     # SPI messages begin and end when the chip select (CS*) pin is set low
-    # and high.
-    # Example: transferring the byte 100d or 01100100b in both directions.
+    # and high. Note that the sending device does not know the clock speed and 
+    # will assert the first bit immediately the CS* is activated.
+    # Example: transferring the byte 201d or 11001001b in both directions.
     #
-    # CS*     -----------___________________-----------
-    # SCK     _____________-_-_-_-_-_-_-_-_____________
-    # SDI     ______________----____--_________________
-    # SDO     ______________----____--_________________
+    # CS*     ----__________________________------
+    # SCK     _____________-_-_-_-_-_-_-_-________
+    # SDI     ____________----____--____--________
+    # SDO     _____-----------____--____--________
 
     spi_adc_interface = machine.SPI(0,
                                     baudrate   = SPI_CLOCK_RATE,
@@ -280,7 +281,7 @@ class Debug_cache:
 def configure_buffer_memory():
     '''Buffer memory is allocated for retaining a cache of samples received from
     the ADC. The memory is referenced by a global variable acq_mv.'''
-    global acq_mv, p0_mv, p1_mv, debug_cache
+    global acq_mv, p0_mv, p1_mv, last_cell_mv, debug_cache
 
     # 2 bytes per channel, 4 channels
     # we use a memoryview to allow this to be sub-divided into pages and
@@ -290,6 +291,8 @@ def configure_buffer_memory():
     # Create memoryviews of each half of the buffer (ie two pages)
     p0_mv = memoryview(acq_mv[:HALF_BUFFER_MEMORY_SIZE])
     p1_mv = memoryview(acq_mv[HALF_BUFFER_MEMORY_SIZE:])
+    # reference to last cell of buffer, for testing overload
+    last_cell_mv = memoryview(acq_mv[-2:])
     # Create additional buffers for debug cache
     debug_cache = Debug_cache()
 
@@ -324,18 +327,22 @@ def streaming_loop_core_1():
     # 8 bytes each cell, stepping 8 bytes.
     # The SPI read instruction will write into these memory slices directly.
     cells_mv = [ memoryview(acq_mv[m:m+8]) for m in range(0, BUFFER_MEMORY_SIZE, 8) ]
+    # p_state is a local cache of the state variable, so that we can detect when
+    # it changes value
+    p_state = 0
 
-    # Make a local note of the state value, so that we can detect when
-    # it changes
-    p_state = state
-    while state & STREAMING:
-        # check to see if state has changed
-        if state != p_state:
-            # read out from the ADC *immediately*
-            # SAMPLE_MASK masks the mode bits, just leaving the array index
-            spi_adc_interface.readinto(cells_mv[state & SAMPLE_MASK])
-            # save the new state
-            p_state = state
+    # If we go into overload, we stay in an outer loop, standing by, but doing
+    # nothing while core 0 attempts to restore operation.
+    while state & (STREAMING | OVERLOAD):
+        # Inner loop, we do actual sampling here.
+        while state & STREAMING:
+            # Check to see if state has changed
+            if state != p_state:
+                # read out from the ADC *immediately*
+                # SAMPLE_MASK masks the mode bits, just leaving the array index
+                spi_adc_interface.readinto(cells_mv[state & SAMPLE_MASK])
+                # save the new state
+                p_state = state
     if DEBUG:
         print('Streaming_loop_core_1() exited')
 
@@ -346,13 +353,6 @@ def streaming_loop_core_1():
 def streaming_loop_core_0(): 
     '''Prints data from memory to stdout in 'half-buffer' chunks.'''
     global state
-    # reference to last cell of buffer, for testing overload
-    last_cell_mv = memoryview(acq_mv[-2:])
-
-    def adc_overloaded():
-        '''If overloaded the ADC codes will latch to one of these
-        two values.'''
-        return (last_cell_mv == b'\x80\x00') or (last_cell_mv == b'\x7f\xff')
 
     def _transfer_buffer_normal(bs):
         pins['buffer_led'].on()
@@ -375,21 +375,29 @@ def streaming_loop_core_0():
         transfer_buffer = _transfer_buffer_normal
     
     # Now loop...
-    while state & STREAMING:
-        # Wait while Core 1 is writing to page 0.
-        while (state & PAGE_TEST) == WRITING_PAGE0:
-            continue
-        transfer_buffer(p0_mv)
-        # Wait while Core 1 is writing to page 1.
-        while (state & PAGE_TEST) == WRITING_PAGE1:
-            continue
-        transfer_buffer(p1_mv)
-        # Check the final sample of the buffer for overload codes.
-        if adc_overloaded():
-            # Set the OVERLOAD flag and clear STREAMING.
-            # Preserves the current cell reference which will continue to
-            # be incremented in the ISR
-            state = state | OVERLOAD & ~STREAMING & WRAP_MASK
+    while state & (STREAMING | OVERLOAD):
+        start_adc()
+        # Inner loop, this is where we push data to stdout from the buffer
+        while state & STREAMING:
+            # Wait while Core 1 is writing to page 0.
+            while (state & PAGE_TEST) == WRITING_PAGE0:
+                continue
+            transfer_buffer(p0_mv)
+            # Wait while Core 1 is writing to page 1.
+            while (state & PAGE_TEST) == WRITING_PAGE1:
+                continue
+            transfer_buffer(p1_mv)
+            # If overloaded the ADC will latch to one of these overload codes.
+            if (last_cell_mv == b'\x80\x00') or (last_cell_mv == b'\x7f\xff'):
+                # Set the OVERLOAD flag and clear STREAMING.
+                # Preserves the current cell reference which will continue to
+                # be incremented in the ISR
+                state = state | OVERLOAD & ~STREAMING & WRAP_MASK
+        # Tell the ADC to clear overload
+        stop_adc()
+        clear_adc_overload()
+        # Switch back from OVERLOAD to STREAMING state
+        state = state | STREAMING & ~OVERLOAD & WRAP_MASK
 
     if DEBUG:
         print('Streaming_loop_core_0() exited.')
@@ -434,16 +442,13 @@ def stream():
     in two pages.'''
     if DEBUG:
         print('Starting streaming loops on both cores.')
-    while state & STREAMING:
-        # runs forever, unless:
-        #     CTRL-C:             STOPPED mode
-        #     reset_me pin:       RESET mode
-        #     ADC overloaded:     OVERLOAD mode
-        start_adc()    
-        _thread.start_new_thread(streaming_loop_core_1, ())
-        streaming_loop_core_0()
-        stop_adc()
-    
+    # Core 0 and 1 loops will stay running in STREAMING and OVERLOAD states.
+    _thread.start_new_thread(streaming_loop_core_1, ())
+    streaming_loop_core_0()
+    # runs forever, unless:
+    #     CTRL-C:             STOPPED mode
+    #     reset_me pin:       RESET mode
+        
 
 def cleanup():
     '''For debugging, it's useful for the Pico to be returned to a quiescent
@@ -469,14 +474,8 @@ def main():
             print('stream.py started.')
         state = STREAMING
         prepare_to_stream(adc_settings)
-        while state & STREAMING:
-            stream()
-            # if we exited streaming due to OVERLOAD, try to recover
-            if state & OVERLOAD:
-                gc.collect()
-                clear_adc_overload()
-                state = state | STREAMING & ~OVERLOAD & WRAP_MASK
- 
+        stream()
+
     except KeyboardInterrupt:
         # Catch CTRL-C here.
         if DEBUG:

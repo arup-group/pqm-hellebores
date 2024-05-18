@@ -329,7 +329,7 @@ def streaming_loop_core_1():
     cells_mv = [ memoryview(acq_mv[m:m+8]) for m in range(0, BUFFER_MEMORY_SIZE, 8) ]
     # p_state is a local cache of the state variable, so that we can detect when
     # it changes value
-    p_state = 0
+    p_state = state
 
     # If we go into overload, we stay in an outer loop, standing by, but doing
     # nothing while core 0 attempts to restore operation.
@@ -375,29 +375,28 @@ def streaming_loop_core_0():
         transfer_buffer = _transfer_buffer_normal
     
     # Now loop...
-    while state & (STREAMING | OVERLOAD):
-        start_adc()
-        # Inner loop, this is where we push data to stdout from the buffer
-        while state & STREAMING:
-            # Wait while Core 1 is writing to page 0.
-            while (state & PAGE_TEST) == WRITING_PAGE0:
-                continue
-            transfer_buffer(p0_mv)
-            # Wait while Core 1 is writing to page 1.
-            while (state & PAGE_TEST) == WRITING_PAGE1:
-                continue
-            transfer_buffer(p1_mv)
-            # If overloaded the ADC will latch to one of these overload codes.
-            if (last_cell_mv == b'\x80\x00') or (last_cell_mv == b'\x7f\xff'):
-                # Set the OVERLOAD flag and clear STREAMING.
-                # Preserves the current cell reference which will continue to
-                # be incremented in the ISR
-                state = state | OVERLOAD & ~STREAMING & WRAP_MASK
-        # Tell the ADC to clear overload
-        stop_adc()
-        clear_adc_overload()
-        # Switch back from OVERLOAD to STREAMING state
-        state = state | STREAMING & ~OVERLOAD & WRAP_MASK
+    while state & STREAMING:
+        # Wait while Core 1 is writing to page 0.
+        while (state & PAGE_TEST) == WRITING_PAGE0:
+            continue
+        transfer_buffer(p0_mv)
+        # Wait while Core 1 is writing to page 1.
+        while (state & PAGE_TEST) == WRITING_PAGE1:
+            continue
+        transfer_buffer(p1_mv)
+        # If overloaded the ADC will latch to one of these overload codes.
+        if (last_cell_mv == b'\x80\x00') or (last_cell_mv == b'\x7f\xff'):
+            # Set the OVERLOAD flag and clear STREAMING.
+            # Preserves the current cell reference which will continue to
+            # be incremented in the ISR, but core 1 will pause sampling...
+            state = state & SAMPLE_MASK | OVERLOAD
+            # Tell the ADC to clear overload
+            stop_adc()
+            clear_adc_overload()
+            start_adc()
+            # Now switch back from OVERLOAD to STREAMING state
+            state = state & SAMPLE_MASK | STREAMING
+
 
     if DEBUG:
         print('Streaming_loop_core_0() exited.')
@@ -442,17 +441,19 @@ def stream():
     in two pages.'''
     if DEBUG:
         print('Starting streaming loops on both cores.')
+    start_adc()
     # Core 0 and 1 loops will stay running in STREAMING and OVERLOAD states.
     _thread.start_new_thread(streaming_loop_core_1, ())
     streaming_loop_core_0()
     # runs forever, unless:
     #     CTRL-C:             STOPPED mode
     #     reset_me pin:       RESET mode
-        
+    
 
 def cleanup():
     '''For debugging, it's useful for the Pico to be returned to a quiescent
     state.'''
+    stop_adc()
     gc.enable()
     configure_interrupts('disable')
 

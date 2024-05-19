@@ -26,9 +26,10 @@ def find_serial_device():
     for port in ports:
         description = port.description
         if 'board in fs mode' in description.lower() or 'serial' in description.lower():
-            print(f'Found {port.description}.', file=sys.stderr)
             port_name = port.device
             break
+    if port_name == None:
+        print(f'Unable to find Pico on available serial ports.', file=sys.stderr)
     return port_name
  
 

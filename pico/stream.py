@@ -323,6 +323,8 @@ def stop_adc():
 def streaming_loop_core_1():
     '''Watches for change in state variable (caused the by interrupt handler)
     and reads new data from the ADC into memory.'''
+    global state
+
     # Create a memoryview reference into each sample or slice of the buffer.
     # 8 bytes each cell, stepping 8 bytes.
     # The SPI read instruction will write into these memory slices directly.

@@ -130,10 +130,9 @@ def process_command(command_string):
         program_file = arguments[0]
         try:
             if len(sys.argv) == 0:
-                # we can't assign to sys.argv, but we can extend it
+                # We can't assign to sys.argv, but we can extend it.
+                # This allows us to pass command line arguments to the exec'd program. 
                 sys.argv.extend(arguments)
-            print(f'Starting {program_file} with sys.argv = {sys.argv}.')
-            # sys is the only variable we export to the next process
             execfile(program_file)
             command_status = f'Program {program_file} exited normally.'
         except:

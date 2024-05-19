@@ -32,6 +32,8 @@ transfer_file_to_pico () {
 }
 
 # Hard reset Pico, since it may be streaming and unresponsive to commands
+echo "***** UPDATE PICO UTILITY *****"
+echo "Resetting Pico."
 $PROGRAM_DIR/pico_control.py --hard_reset
 
 for pico_file in $PICO_FILES; do
@@ -42,19 +44,20 @@ for pico_file in $PICO_FILES; do
         echo "$pico_file: same version local and Pico, no need to update."
     else
 	echo "$pico_file: file versions are different, updating Pico..."
-        # Copy the new file over
+	echo "$pico_file: copying new file over..."
         transfer_file_to_pico "$PICO_DIR/$pico_file"
-        # Check if the copied file is good
+	echo "$pico_file: checking if the copied file is good."
         sha256_final=$(get_pico_sha256 "$pico_file")
         if [[ "$sha256_final" == "$sha256_local" ]]; then
-            echo "Update succeeded."
+            echo "$pico_file: update succeeded."
 	else
-            echo "Update failed, unfortunately."
+            echo "$pico_file: update failed, unfortunately."
 	fi
     fi
 done
 
 # Hard reset Pico again, so that we run the new code
+echo "Resetting Pico."
 $PROGRAM_DIR/pico_control.py --hard_reset
 
 

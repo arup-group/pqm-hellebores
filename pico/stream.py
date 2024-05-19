@@ -327,14 +327,13 @@ def streaming_loop_core_1():
     # 8 bytes each cell, stepping 8 bytes.
     # The SPI read instruction will write into these memory slices directly.
     cells_mv = [ memoryview(acq_mv[m:m+8]) for m in range(0, BUFFER_MEMORY_SIZE, 8) ]
-    # p_state is a local cache of the state variable, so that we can detect when
-    # it changes value
-    p_state = state
 
-    # If we go into overload, we stay in an outer loop, standing by, but doing
-    # nothing while core 0 attempts to restore operation.
-    while state & (STREAMING | OVERLOAD):
-        # Inner loop, we do actual sampling here.
+    while state & STREAMING:
+        start_adc()
+        # p_state is a local cache of the state variable, so that we can
+        # detect when it changes value
+        p_state = state
+        # Inner loop -- speed critical -- we do actual sampling here.
         while state & STREAMING:
             # Check to see if state has changed
             if state != p_state:
@@ -343,6 +342,14 @@ def streaming_loop_core_1():
                 spi_adc_interface.readinto(cells_mv[state & SAMPLE_MASK])
                 # save the new state
                 p_state = state
+        # The inner loop will drop out here if Core 0 switches us into OVERLOAD.
+        if state & OVERLOAD:
+            # Tell the ADC to clear overload
+            stop_adc()
+            clear_adc_overload()
+            # Now switch back from OVERLOAD to STREAMING mode
+            state = state & SAMPLE_MASK | STREAMING
+
     if DEBUG:
         print('Streaming_loop_core_1() exited')
 
@@ -375,7 +382,7 @@ def streaming_loop_core_0():
         transfer_buffer = _transfer_buffer_normal
     
     # Now loop...
-    while state & STREAMING:
+    while state & (STREAMING | OVERLOAD):
         # Wait while Core 1 is writing to page 0.
         while (state & PAGE_TEST) == WRITING_PAGE0:
             continue
@@ -388,15 +395,10 @@ def streaming_loop_core_0():
         if (last_cell_mv == b'\x80\x00') or (last_cell_mv == b'\x7f\xff'):
             # Set the OVERLOAD flag and clear STREAMING.
             # Preserves the current cell reference which will continue to
-            # be incremented in the ISR, but core 1 will pause sampling...
+            # be incremented in the ISR...
             state = state & SAMPLE_MASK | OVERLOAD
-            # Tell the ADC to clear overload
-            stop_adc()
-            clear_adc_overload()
-            start_adc()
-            # Now switch back from OVERLOAD to STREAMING state
-            state = state & SAMPLE_MASK | STREAMING
-
+            # We now continue to transfer data, expecting Core 1 to clear
+            # the overload state before we get here again.
 
     if DEBUG:
         print('Streaming_loop_core_0() exited.')

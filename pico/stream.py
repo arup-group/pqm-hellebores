@@ -333,7 +333,7 @@ def streaming_loop_core_1():
     global state
 
     start_adc()
-    while state & STREAMING:
+    while state & (STREAMING | OVERLOAD):
         # p_state is a local cache of the state variable, so that we can
         # detect when it changes value
         p_state = state
@@ -354,6 +354,10 @@ def streaming_loop_core_1():
             start_adc()
             # Switch back from OVERLOAD to STREAMING mode
             state = state & SAMPLE_MASK | STREAMING
+            # There can be a race condition where the ISR reads and writes
+            # either side of this instruction thus leaving it in OVERLOAD
+            # state. Consequently, we allow OVERLOAD in the outer loop even
+            # though it should not occur.
 
     if DEBUG:
         print('Streaming_loop_core_1() exited')

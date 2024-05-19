@@ -281,20 +281,25 @@ class Debug_cache:
 def configure_buffer_memory():
     '''Buffer memory is allocated for retaining a cache of samples received from
     the ADC. The memory is referenced by a global variable acq_mv.'''
-    global acq_mv, p0_mv, p1_mv, last_cell_mv, debug_cache
+    global p0_mv, p1_mv, cells_mv, last_cell_mv
 
     # 2 bytes per channel, 4 channels
-    # we use a memoryview to allow this to be sub-divided into pages and
-    # cells
     acq = bytearray(BUFFER_MEMORY_SIZE)
+    # we make a memoryview to allow this to be sub-divided into pages and
+    # cells
     acq_mv = memoryview(acq)
-    # Create memoryviews of each half of the buffer (ie two pages)
+    # Create memoryviews of each half of the buffer (ie two pages).
+    # This is used in the Core 0 loop to output one half of the memory while new
+    # samples are read into the other half.
     p0_mv = memoryview(acq_mv[:HALF_BUFFER_MEMORY_SIZE])
     p1_mv = memoryview(acq_mv[HALF_BUFFER_MEMORY_SIZE:])
-    # reference to last cell of buffer, for testing overload
+    # Create a memoryview reference into each sample or slice of the buffer.
+    # 8 bytes each cell, stepping 8 bytes.
+    # This is used in the Core 1 loop to step through the memory sample by sample,
+    # without needing to make an intermediate copy.
+    cells_mv = [ memoryview(acq_mv[m:m+8]) for m in range(0, BUFFER_MEMORY_SIZE, 8) ]
+    # For testing ADC overload, make a reference to the last cell of buffer.
     last_cell_mv = memoryview(acq_mv[-2:])
-    # Create additional buffers for debug cache
-    debug_cache = Debug_cache()
 
 
 def start_adc():
@@ -325,11 +330,6 @@ def streaming_loop_core_1():
     and reads new data from the ADC into memory.'''
     global state
 
-    # Create a memoryview reference into each sample or slice of the buffer.
-    # 8 bytes each cell, stepping 8 bytes.
-    # The SPI read instruction will write into these memory slices directly.
-    cells_mv = [ memoryview(acq_mv[m:m+8]) for m in range(0, BUFFER_MEMORY_SIZE, 8) ]
-
     while state & STREAMING:
         start_adc()
         # p_state is a local cache of the state variable, so that we can
@@ -349,7 +349,7 @@ def streaming_loop_core_1():
             # Tell the ADC to clear overload
             stop_adc()
             clear_adc_overload()
-            # Now switch back from OVERLOAD to STREAMING mode
+            # Switch back from OVERLOAD to STREAMING mode
             state = state & SAMPLE_MASK | STREAMING
 
     if DEBUG:
@@ -362,6 +362,9 @@ def streaming_loop_core_1():
 def streaming_loop_core_0(): 
     '''Prints data from memory to stdout in 'half-buffer' chunks.'''
     global state
+
+    # Create local debug cache for memorising a few sampling loops
+    debug_cache = Debug_cache()
 
     def _transfer_buffer_normal(bs):
         pins['buffer_led'].on()
@@ -393,7 +396,8 @@ def streaming_loop_core_0():
         while (state & PAGE_TEST) == WRITING_PAGE1:
             continue
         transfer_buffer(p1_mv)
-        # If overloaded the ADC will latch to one of these overload codes.
+        # If overloaded the ADC will latch on all channels to one of
+        # these overload codes.
         if (last_cell_mv == b'\x80\x00') or (last_cell_mv == b'\x7f\xff'):
             # Set the OVERLOAD flag and clear STREAMING.
             # Preserves the current cell reference which will continue to

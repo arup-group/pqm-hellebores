@@ -332,8 +332,8 @@ def streaming_loop_core_1():
     and reads new data from the ADC into memory.'''
     global state
 
+    start_adc()
     while state & STREAMING:
-        start_adc()
         # p_state is a local cache of the state variable, so that we can
         # detect when it changes value
         p_state = state
@@ -351,6 +351,7 @@ def streaming_loop_core_1():
             # Tell the ADC to clear overload
             stop_adc()
             clear_adc_overload()
+            start_adc()
             # Switch back from OVERLOAD to STREAMING mode
             state = state & SAMPLE_MASK | STREAMING
 

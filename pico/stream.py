@@ -105,6 +105,7 @@ def configure_adc_spi_interface():
     # SCK     _____________-_-_-_-_-_-_-_-________
     # SDI     ____________----____--____--________
     # SDO     _____-----------____--____--________
+    #                      1 1 0 0 1 0 0 1
 
     spi_adc_interface = machine.SPI(0,
                                     baudrate   = SPI_CLOCK_RATE,
@@ -153,6 +154,7 @@ def clear_adc_overload():
     if DEBUG:
         print('PHASE register.')
     set_adc_register(0x0a, bs) 
+
 
 def setup_adc(adc_settings):
     '''Setup the MCP3912 ADC. Refer to MCP3912 datasheet for detailed description of
@@ -280,7 +282,8 @@ class Debug_cache:
 
 def configure_buffer_memory():
     '''Buffer memory is allocated for retaining a cache of samples received from
-    the ADC. The memory is referenced by a global variable acq_mv.'''
+    the ADC. The memory is referenced by various memoryview objects that point to
+    different portions of it.'''
     global p0_mv, p1_mv, cells_mv, last_cell_mv
 
     # 2 bytes per channel, 4 channels
@@ -319,7 +322,6 @@ def stop_adc():
     if DEBUG:
         print('Stopping the ADC...')
     pins['cs_adc'].high()
-
 
 
 ########################################################
@@ -420,9 +422,10 @@ def prepare_to_stream(adc_settings):
     configure_pins()
     configure_adc_spi_interface()
 
-    # Buffer memory is set up in a memoryview called acq_mv. Memoryview objects
-    # allow read/write access to a block of memory. acq_mv is declared a
-    # global variable so it can be reached by both CPU cores.
+    # Buffer memory is set up in various memoryview structures that point to
+    # an underlying bytearray that holds a buffer of ADC samples. These
+    # objects are declared global so that the memory can be reached by both
+    # CPU cores.
     configure_buffer_memory()
 
     if DEBUG:
@@ -449,8 +452,7 @@ def stream():
     in two pages.'''
     if DEBUG:
         print('Starting streaming loops on both cores.')
-    start_adc()
-    # Core 0 and 1 loops will stay running in STREAMING and OVERLOAD states.
+    # These loops will both stay running in STREAMING and OVERLOAD states.
     _thread.start_new_thread(streaming_loop_core_1, ())
     streaming_loop_core_0()
     # runs forever, unless:
@@ -468,6 +470,7 @@ def cleanup():
 
 def main():
     global state
+    
     try:
         # We can pass configuration variables into the program from main.py
         # via the sys.argv variable.

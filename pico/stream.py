@@ -333,7 +333,7 @@ def streaming_loop_core_1():
     global state
 
     start_adc()
-    while state & (STREAMING | OVERLOAD):
+    while state & STREAMING:
         # p_state is a local cache of the state variable, so that we can
         # detect when it changes value
         p_state = state
@@ -356,8 +356,9 @@ def streaming_loop_core_1():
             state = state & SAMPLE_MASK | STREAMING
             # There can be a race condition where the ISR reads and writes
             # either side of this instruction thus leaving it in OVERLOAD
-            # state. Consequently, we allow OVERLOAD in the outer loop even
-            # though it should not occur.
+            # state. We make the STREAMING assignment a second time, just to
+            # be sure:
+            state = state & SAMPLE_MASK | STREAMING
 
     if DEBUG:
         print('Streaming_loop_core_1() exited')
@@ -394,7 +395,7 @@ def streaming_loop_core_0():
         transfer_buffer = _transfer_buffer_normal
     
     # Now loop...
-    while state & (STREAMING | OVERLOAD):
+    while state & STREAMING:
         # Wait while Core 1 is writing to page 0.
         while (state & PAGE_TEST) == WRITING_PAGE0:
             continue
@@ -410,8 +411,10 @@ def streaming_loop_core_0():
             # Preserves the current cell reference which will continue to
             # be incremented in the ISR...
             state = state & SAMPLE_MASK | OVERLOAD
-            # We now continue to transfer data, expecting Core 1 to clear
-            # the overload state before we get here again.
+            # We now wait for Core 1 to clear the overload state before
+            # resuming the streaming loop.
+            while state & OVERLOAD:
+                continue
 
     if DEBUG:
         print('Streaming_loop_core_0() exited.')

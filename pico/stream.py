@@ -42,31 +42,25 @@ BUFFER_SIZE = const(128)
 BUFFER_MEMORY_SIZE = const(1024)
 HALF_BUFFER_MEMORY_SIZE = const(512)
 
-# For performance optimisation, we hold synchronisation information shared between
-# the two CPU cores in a single 'state' variable that is 11 bits wide
-# The following bit masks enable us to perform certain assignments and tests
-# on the state variable efficiently.
-STOPPED           = const(0b00000000000)      # tells both cores to exit
-RESET             = const(0b00100000000)      # initiate a machine reset
-OVERLOAD          = const(0b01000000000)      # drop and restart streaming loops
-STREAMING         = const(0b10000000000)      # fast ADC streaming using both cores
+# Operation modes used to control program flow on both CPU cores, in the 'mode'
+# global variable.
+STOPPED           = const(0)      # tells both cores to exit
+RESET             = const(1)      # initiate a machine reset
+OVERLOAD          = const(2)      # perform an overload recovery on the ADC
+STREAMING         = const(3)      # fast ADC streaming using both cores
 
 # LSB 0yyyyyyy:  sample pointer 0 to 127
-# bit-and the state variable with SAMPLE_MASK to remove the mode bits, to access 
-# just the buffer pointer
-# bit-and the state variable with WRAP_MASK after incrementing it, to make the
+# bit-and the mode variable with WRAP_MASK after incrementing it, to make the
 # pointer circular
-SAMPLE_MASK       = const(0b00001111111)      # mask to return just the cell pointer
-WRAP_MASK         = const(0b11101111111)      # pointer increment from 127 wraps round to 0
+WRAP_MASK         = const(0b01111111)      # pointer increment from 127 wraps round to 0
 
 # The following three constants are used to test whether a page boundary has been
-# crossed, and therefore time to output the next page of sample buffer. The state
+# crossed, and therefore time to output the next page of sample buffer. The cell
 # variable is bit-anded with the PAGE_TEST mask and the result checked against
-# STREAMING_PAGE0 and STREAMING_PAGE1 respectively. This test also quits the waiting
-# loop if a mode other than STREAMING is selected.
-PAGE_TEST         = const(0b10001000000)      # test page number and streaming flag
-WRITING_PAGE0     = const(0b10000000000)      # bit6==0: pointer in range 0-63, ie page 0
-WRITING_PAGE1     = const(0b10001000000)      # bit6==1: pointer in range 64-127, ie page 1
+# WRITING_PAGE0 and WRITING_PAGE1 respectively.
+PAGE_TEST         = const(0b01000000)      # test page number and streaming flag
+WRITING_PAGE0     = const(0b00000000)      # bit6==0: pointer in range 0-63, ie page 0
+WRITING_PAGE1     = const(0b01000000)      # bit6==1: pointer in range 64-127, ie page 1
 
 
 def configure_pins():
@@ -95,7 +89,7 @@ def configure_adc_spi_interface():
     # The SPI interface is set up in mode 0, with non-inverted clock polarity.
     # This means that data is input (sampled) on the first rising edge of the
     # clock pulse, and output (asserted) on the falling edge of the clock pulse.
-    # The quiescent state of the clock ('polarity') is low.
+    # The quiescent mode of the clock ('polarity') is low.
     # SPI messages begin and end when the chip select (CS*) pin is set low
     # and high. Note that the sending device does not know the clock speed and 
     # will assert the first bit immediately the CS* is activated.
@@ -219,26 +213,26 @@ def setup_adc(adc_settings):
 
  
 
-def configure_interrupts(mode='enable'):
+def configure_interrupts(command='enable'):
     '''Two interrupt handlers are set up, one for the DR* pin, for notifying Pico
     that new data is ready for reading from the ADC, and a reset command from the
     Pi, to help with run-time error recovery.'''
 
     # Interrupt handler for data ready pin (this pin is commanded from the ADC)
     def adc_read_handler(_):
-        global state
+        global cell
         # 'anding' the pointer with a bit mask that has binary '0' in the bit above the
         # largest buffer pointer makes the buffer pointer circulate to zero without needing
         # an 'if' conditional: this means the instruction executes in constant time
-        state = (state + 1) & WRAP_MASK
+        cell = (cell + 1) & WRAP_MASK
 
     # we need this helper function, because we can't easily assign to global variable
     # within a lambda expression
     def set_mode(required_mode):
-        global state
-        state = required_mode
+        global mode
+        mode = required_mode
 
-    if mode == 'enable':
+    if command == 'enable':
         # Bind pin transitions to interrupt handlers.
         # We use hard interrupt for the DR* pin to maintain tight timing,
         # and for the RESET* pin so that the reset works even within a blocking
@@ -249,7 +243,7 @@ def configure_interrupts(mode='enable'):
         pins['reset_me'].irq(trigger = Pin.IRQ_FALLING,
                            handler = lambda _: set_mode(RESET), hard=True)
 
-    elif mode == 'disable':
+    elif command == 'disable':
         pins['dr_adc'].irq(handler = None)
         pins['reset_me'].irq(handler = None)
 
@@ -301,8 +295,9 @@ def configure_buffer_memory():
     # This is used in the Core 1 loop to step through the memory sample by sample,
     # without needing to make an intermediate copy.
     cells_mv = [ memoryview(acq_mv[m:m+8]) for m in range(0, BUFFER_MEMORY_SIZE, 8) ]
-    # For testing ADC overload, make a reference to the last cell of buffer.
-    last_cell_mv = memoryview(acq_mv[-2:])
+    # For testing ADC overload, make a reference to the last cell of each page.
+    p0_last_cell_mv = memoryview(p0_mv[-2:])
+    p1_last_cell_mv = memoryview(p1_mv[-2:])
 
 
 def start_adc():
@@ -328,37 +323,31 @@ def stop_adc():
 ######### STREAMING LOOP FOR CORE 1 STARTS HERE
 ########################################################
 def streaming_loop_core_1():
-    '''Watches for change in state variable (caused the by interrupt handler)
+    '''Watches for change in mode variable (caused the by interrupt handler)
     and reads new data from the ADC into memory.'''
-    global state
+    global mode
 
     start_adc()
-    while state & STREAMING:
-        # p_state is a local cache of the state variable, so that we can
+    while mode == STREAMING:
+        # p_cell is a local cache of the cell variable, so that we can
         # detect when it changes value
-        p_state = state
+        p_cell = cell
         # Inner loop -- speed critical -- we do actual sampling here.
-        while state & STREAMING:
-            # Check to see if state has changed
-            if state != p_state:
+        while mode == STREAMING:
+            # Check to see if cell has changed
+            if cell != p_cell:
                 # read out from the ADC *immediately*
-                # SAMPLE_MASK masks the mode bits, just leaving the array index
-                spi_adc_interface.readinto(cells_mv[state & SAMPLE_MASK])
-                # save the new state
-                p_state = state
+                spi_adc_interface.readinto(cells_mv[cell])
+                # save the new cell pointer value
+                p_cell = cell
         # The inner loop will drop out here if Core 0 switches us into OVERLOAD.
-        if state & OVERLOAD:
+        if mode == OVERLOAD:
             # Tell the ADC to clear overload
             stop_adc()
             clear_adc_overload()
             start_adc()
             # Switch back from OVERLOAD to STREAMING mode
-            state = state & SAMPLE_MASK | STREAMING
-            # There can be a race condition where the ISR reads and writes
-            # either side of this instruction thus leaving it in OVERLOAD
-            # state. We make the STREAMING assignment a second time, just to
-            # be sure:
-            state = state & SAMPLE_MASK | STREAMING
+            mode = STREAMING
 
     if DEBUG:
         print('Streaming_loop_core_1() exited')
@@ -369,7 +358,6 @@ def streaming_loop_core_1():
 ########################################################
 def streaming_loop_core_0(): 
     '''Prints data from memory to stdout in 'half-buffer' chunks.'''
-    global state
 
     # Create local debug cache for memorising a few sampling loops
     debug_cache = Debug_cache()
@@ -381,11 +369,11 @@ def streaming_loop_core_0():
         pins['buffer_led'].off()
 
     def _transfer_buffer_debug(bs):
-        global state
+        global mode
         pins['buffer_led'].on()
         # saves snips until the debug cache is full
         if debug_cache.save_snip(bs) == False:
-            state = STOPPED
+            mode = STOPPED
         pins['buffer_led'].off()
 
     # select the transfer function we are going to use from now on
@@ -394,27 +382,30 @@ def streaming_loop_core_0():
     else:
         transfer_buffer = _transfer_buffer_normal
     
-    # Now loop...
-    while state & STREAMING:
-        # Wait while Core 1 is writing to page 0.
-        while (state & PAGE_TEST) == WRITING_PAGE0:
-            continue
-        transfer_buffer(p0_mv)
-        # Wait while Core 1 is writing to page 1.
-        while (state & PAGE_TEST) == WRITING_PAGE1:
-            continue
-        transfer_buffer(p1_mv)
+    def overload_test(mv):
+        global mode
         # If overloaded the ADC will latch on all channels to one of
         # these overload codes.
-        if (last_cell_mv == b'\x80\x00') or (last_cell_mv == b'\x7f\xff'):
-            # Set the OVERLOAD flag and clear STREAMING.
-            # Preserves the current cell reference which will continue to
-            # be incremented in the ISR...
-            state = state & SAMPLE_MASK | OVERLOAD
-            # We now wait for Core 1 to clear the overload state before
-            # resuming the streaming loop.
-            while state & OVERLOAD:
+        if (mv == b'\x80\x00') or (mv == b'\x7f\xff'):
+            # Set OVERLOAD mode.
+            mode = OVERLOAD
+            # We now wait for Core 1 to clear the overload mode before
+            # returning to the streaming loop.
+            while mode == OVERLOAD:
                 continue
+
+    # Now loop...
+    while mode == STREAMING:
+        # Wait while Core 1 is writing to page 0.
+        while (cell & PAGE_TEST) == WRITING_PAGE0:
+            continue
+        transfer_buffer(p0_mv)
+        overload_test(p0_last_cell_mv)
+        # Wait while Core 1 is writing to page 1.
+        while (cell & PAGE_TEST) == WRITING_PAGE1:
+            continue
+        transfer_buffer(p1_mv)
+        overload_test(p1_last_cell_mv)
 
     if DEBUG:
         print('Streaming_loop_core_0() exited.')
@@ -460,7 +451,7 @@ def stream():
     in two pages.'''
     if DEBUG:
         print('Starting streaming loops on both cores.')
-    # These loops will both stay running in STREAMING and OVERLOAD states.
+    # These loops will both stay running in STREAMING and OVERLOAD modes.
     _thread.start_new_thread(streaming_loop_core_1, ())
     streaming_loop_core_0()
     # runs forever, unless:
@@ -470,14 +461,14 @@ def stream():
 
 def cleanup():
     '''For debugging, it's useful for the Pico to be returned to a quiescent
-    state.'''
+    mode.'''
     stop_adc()
     gc.enable()
     configure_interrupts('disable')
 
 
 def main():
-    global state
+    global mode, cell
     
     try:
         # We can pass configuration variables into the program from main.py
@@ -492,7 +483,8 @@ def main():
             adc_settings = DEFAULT_ADC_SETTINGS
         if DEBUG:
             print('stream.py started.')
-        state = STREAMING
+        mode = STREAMING
+        cell = 0
         prepare_to_stream(adc_settings)
         stream()
 
@@ -501,12 +493,12 @@ def main():
         if DEBUG:
             print('Interrupted.')
         # Stop Core 1 if it's still running 
-        state = STOPPED
+        mode = STOPPED
 
     finally:
-        # If we reach here, state is in STOPPED or RESET mode
+        # If we reach here, mode is in STOPPED or RESET mode
         cleanup()
-        if state & RESET:
+        if mode == RESET:
             if DEBUG:
                 print('Reset signal received; waiting 10 seconds.')
                 time.sleep(10)

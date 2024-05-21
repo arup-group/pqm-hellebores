@@ -278,7 +278,7 @@ def configure_buffer_memory():
     '''Buffer memory is allocated for retaining a cache of samples received from
     the ADC. The memory is referenced by various memoryview objects that point to
     different portions of it.'''
-    global p0_mv, p1_mv, cells_mv, last_cell_mv
+    global p0_mv, p1_mv, cells_mv, p0_last_cell_mv, p1_last_cell_mv
 
     # 2 bytes per channel, 4 channels
     acq = bytearray(BUFFER_MEMORY_SIZE)

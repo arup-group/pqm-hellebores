@@ -329,11 +329,13 @@ def streaming_loop_core_1():
     global mode
 
     start_adc()
-    while mode == STREAMING:
+    # The overload state may start at any time, so we have to include it in the
+    # loop test here.
+    while mode == STREAMING | OVERLOAD:
         # p_cell is a local cache of the cell variable, so that we can
         # detect when it changes value
         p_cell = cell
-        # Inner loop -- speed critical -- we do actual sampling here.
+        # Inner loop -- speed critical -- we do sampling here, nothing else.
         while mode == STREAMING:
             # Check to see if cell has changed
             if cell != p_cell:
@@ -341,7 +343,7 @@ def streaming_loop_core_1():
                 spi_adc_interface.readinto(cells_mv[cell])
                 # save the new cell pointer value
                 p_cell = cell
-        # The inner loop will drop out here if Core 0 switches us into OVERLOAD.
+        # If Core 0 has switched us into OVERLOAD mode, we deal with it here.
         if mode == OVERLOAD:
             # Tell the ADC to clear overload
             stop_adc()

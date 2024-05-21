@@ -333,7 +333,7 @@ def streaming_loop_core_1():
     while flags & STREAMING:
         # p_cell is a local cache of the cell variable, so that we can
         # detect when it changes value
-        p_cell = cell
+        cell_p = cell
         # Inner loop -- speed critical -- we do sampling here, nothing else.
         while flags == STREAMING:
             # read out from the ADC *immediately* if the cell variable has changed

@@ -42,16 +42,15 @@ BUFFER_SIZE = const(128)
 BUFFER_MEMORY_SIZE = const(1024)
 HALF_BUFFER_MEMORY_SIZE = const(512)
 
-# Operation modes used to control program flow on both CPU cores, in the 'mode'
-# global variable.
-STOPPED           = const(0)      # tells both cores to exit
-RESET             = const(1)      # initiate a machine reset
-OVERLOAD          = const(2)      # perform an overload recovery on the ADC
-STREAMING         = const(3)      # fast ADC streaming using both cores
+# flags: operation flags used to control program flow on both CPU cores.
+STOP              = const(0b0001)          # tells both cores to exit
+RESET             = const(0b0010)          # initiate a machine reset
+OVERLOAD          = const(0b0100)          # perform an overload recovery on the ADC
+STREAMING         = const(0b1000)          # fast ADC streaming using both cores
 
-# LSB 0yyyyyyy:  sample pointer 0 to 127
-# bit-and the mode variable with WRAP_MASK after incrementing it, to make the
-# pointer circular
+# cell:  sample pointer 0 to 127.
+# Bit-and the cell variable with WRAP_MASK after incrementing it, to make the
+# pointer circular.
 WRAP_MASK         = const(0b01111111)      # pointer increment from 127 wraps round to 0
 
 # The following three constants are used to test whether a page boundary has been
@@ -78,7 +77,7 @@ def configure_pins():
         'reset_adc'   : Pin(5, Pin.OUT, value=1),   # hardware reset of ADC commanded from Pico (active low)
         'dr_adc'      : Pin(4, Pin.IN),             # data ready from ADC to Pico (active low)
         'reset_me'    : Pin(14, Pin.IN),            # reset and restart Pico (active low)
-        'mode_select' : Pin(26, Pin.IN)             # NOT USED
+        'flags_select' : Pin(26, Pin.IN)             # NOT USED
     }
     
 
@@ -228,9 +227,9 @@ def configure_interrupts(command='enable'):
 
     # we need this helper function, because we can't easily assign to global variable
     # within a lambda expression
-    def set_mode(required_mode):
-        global mode
-        mode = required_mode
+    def set_flags(required_flags):
+        global flags
+        flags = required_flags
 
     if command == 'enable':
         # Bind pin transitions to interrupt handlers.
@@ -241,7 +240,7 @@ def configure_interrupts(command='enable'):
         pins['dr_adc'].irq(trigger = Pin.IRQ_FALLING,
                            handler = adc_read_handler, hard=True)
         pins['reset_me'].irq(trigger = Pin.IRQ_FALLING,
-                           handler = lambda _: set_mode(RESET), hard=True)
+                           handler = lambda _: set_flags(RESET), hard=True)
 
     elif command == 'disable':
         pins['dr_adc'].irq(handler = None)
@@ -324,33 +323,35 @@ def stop_adc():
 ########################################################
 def streaming_loop_core_1():
     '''Watches for change in cell variable (incremented by the interrupt handler)
-    and reads new data from the ADC into memory. Also watches for change in mode
+    and reads new data from the ADC into memory. Also watches for change in flags
     variable to enable clean exit or recovery from OVERLOAD condition.'''
-    global mode
+    global flags
 
     start_adc()
     # The overload state may start at any time, so we have to include it in the
     # loop test here.
-    while mode == STREAMING | OVERLOAD:
+    while flags & STREAMING:
         # p_cell is a local cache of the cell variable, so that we can
         # detect when it changes value
         p_cell = cell
         # Inner loop -- speed critical -- we do sampling here, nothing else.
-        while mode == STREAMING:
+        while flags & STREAMING:
             # Check to see if cell has changed
             if cell != p_cell:
                 # read out from the ADC *immediately*
                 spi_adc_interface.readinto(cells_mv[cell])
                 # save the new cell pointer value
                 p_cell = cell
-        # If Core 0 has switched us into OVERLOAD mode, we deal with it here.
-        if mode == OVERLOAD:
-            # Tell the ADC to clear overload
+        # If Core 0 has raised OVERLOAD flag, we deal with it here.
+        if flags & OVERLOAD:
+            # Tell the ADC to clear overload.
+            # Note that while we skip data acquisition while we work through
+            # these steps, the cell index counter continues to increment.
             stop_adc()
             clear_adc_overload()
             start_adc()
-            # Switch back from OVERLOAD to STREAMING mode
-            mode = STREAMING
+            # Clear OVERLOAD flag 
+            flags = STREAMING
 
     if DEBUG:
         print('Streaming_loop_core_1() exited')
@@ -372,11 +373,11 @@ def streaming_loop_core_0():
         pins['buffer_led'].off()
 
     def _transfer_buffer_debug(bs):
-        global mode
+        global flags
         pins['buffer_led'].on()
         # saves snips until the debug cache is full
         if debug_cache.save_snip(bs) == False:
-            mode = STOPPED
+            flags = STOP
         pins['buffer_led'].off()
 
     # select the transfer function we are going to use from now on
@@ -386,19 +387,15 @@ def streaming_loop_core_0():
         transfer_buffer = _transfer_buffer_normal
     
     def overload_test(mv):
-        global mode
+        global flags
         # If overloaded the ADC will latch on all channels to one of
         # these overload codes.
         if (mv == b'\x80\x00') or (mv == b'\x7f\xff'):
-            # Set OVERLOAD mode.
-            mode = OVERLOAD
-            # We now wait for Core 1 to clear the overload mode before
-            # returning to the streaming loop.
-            while mode == OVERLOAD:
-                continue
+            # Raise OVERLOAD flag.
+            flags = flags | OVERLOAD
 
     # Now loop...
-    while mode == STREAMING:
+    while flags & STREAMING:
         # Wait while Core 1 is filling up page 0.
         while (cell & PAGE_TEST) == WRITING_PAGE0:
             continue
@@ -456,12 +453,12 @@ def stream():
     in two pages.'''
     if DEBUG:
         print('Starting streaming loops on both cores.')
-    # These loops will both stay running in STREAMING and OVERLOAD modes.
+    # These loops will both stay running while the STREAMING flag is raised.
     _thread.start_new_thread(streaming_loop_core_1, ())
     streaming_loop_core_0()
     # runs forever, unless:
-    #     CTRL-C:             STOPPED mode
-    #     reset_me pin:       RESET mode
+    #     CTRL-C:             STOP flag raised.
+    #     reset_me pin:       RESET flag raised.
     
 
 def cleanup():
@@ -473,7 +470,7 @@ def cleanup():
 
 
 def main():
-    global mode, cell
+    global flags, cell
     
     try:
         # We can pass configuration variables into the program from main.py
@@ -488,7 +485,7 @@ def main():
             adc_settings = DEFAULT_ADC_SETTINGS
         if DEBUG:
             print('stream.py started.')
-        mode = STREAMING
+        flags = STREAMING
         cell = 0
         prepare_to_stream(adc_settings)
         stream()
@@ -498,14 +495,14 @@ def main():
         if DEBUG:
             print('Interrupted.')
         # Stop Core 1 if it's still running 
-        mode = STOPPED
+        flags = STOP
 
     finally:
-        # If we reach here, mode is in STOPPED or RESET mode
+        # If we reach here, STOP or RESET flags are raised.
         cleanup()
-        if mode == RESET:
+        if flags & RESET:
             if DEBUG:
-                print('Reset signal received; waiting 10 seconds.')
+                print('Reset flag raised; waiting 10 seconds before proceeding.')
                 time.sleep(10)
             machine.reset()
     

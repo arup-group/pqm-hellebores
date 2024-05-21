@@ -278,7 +278,7 @@ def configure_buffer_memory():
     '''Buffer memory is allocated for retaining a cache of samples received from
     the ADC. The memory is referenced by various memoryview objects that point to
     different portions of it.'''
-    global p0_mv, p1_mv, cells_mv, p0_last_cell_mv, p1_last_cell_mv
+    global p0_mv, p1_mv, p0_last_cell_mv, p1_last_cell_mv, cells_mv
 
     # 2 bytes per channel, 4 channels
     acq = bytearray(BUFFER_MEMORY_SIZE)
@@ -290,15 +290,15 @@ def configure_buffer_memory():
     # samples are read into the other half.
     p0_mv = memoryview(acq_mv[:HALF_BUFFER_MEMORY_SIZE])
     p1_mv = memoryview(acq_mv[HALF_BUFFER_MEMORY_SIZE:])
+    # For testing ADC overload, make a reference to the last cell of each page.
+    p0_last_cell_mv = memoryview(p0_mv[-2:])
+    p1_last_cell_mv = memoryview(p1_mv[-2:])
     # Create a memoryview reference into each sample or slice of the buffer.
     # 8 bytes each cell, stepping 8 bytes.
     # This is used in the Core 1 loop to step through the memory sample by sample,
     # without needing to make an intermediate copy.
     cells_mv = [ memoryview(acq_mv[m:m+8]) for m in range(0, BUFFER_MEMORY_SIZE, 8) ]
-    # For testing ADC overload, make a reference to the last cell of each page.
-    p0_last_cell_mv = memoryview(p0_mv[-2:])
-    p1_last_cell_mv = memoryview(p1_mv[-2:])
-
+ 
 
 def start_adc():
     '''Tell the ADC to read out the ADC registers in multiple-read mode. It's
@@ -323,8 +323,9 @@ def stop_adc():
 ######### STREAMING LOOP FOR CORE 1 STARTS HERE
 ########################################################
 def streaming_loop_core_1():
-    '''Watches for change in mode variable (caused the by interrupt handler)
-    and reads new data from the ADC into memory.'''
+    '''Watches for change in cell variable (incremented by the interrupt handler)
+    and reads new data from the ADC into memory. Also watches for change in mode
+    variable to enable clean exit or recovery from OVERLOAD condition.'''
     global mode
 
     start_adc()
@@ -396,12 +397,12 @@ def streaming_loop_core_0():
 
     # Now loop...
     while mode == STREAMING:
-        # Wait while Core 1 is writing to page 0.
+        # Wait while Core 1 is filling up page 0.
         while (cell & PAGE_TEST) == WRITING_PAGE0:
             continue
         transfer_buffer(p0_mv)
         overload_test(p0_last_cell_mv)
-        # Wait while Core 1 is writing to page 1.
+        # Wait while Core 1 is filling up page 1.
         while (cell & PAGE_TEST) == WRITING_PAGE1:
             continue
         transfer_buffer(p1_mv)
@@ -435,8 +436,10 @@ def prepare_to_stream(adc_settings):
     setup_adc(adc_settings)
 
     # ADC is responsible for sample timing. Every sample, it toggles the DR* pin.
-    # An interrupt handler on Pico receives this pulse, so that the data can
-    # be processed.
+    # An interrupt handler on Pico receives this pulse, calling adc_read_handler(),
+    # so that the data can be retrieved.
+    # DR*     ----_------------_------------_-----
+    #             irq          irq          irq
     configure_interrupts()
 
     # We don't want garbage collection pauses while streaming, so we disable the

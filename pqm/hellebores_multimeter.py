@@ -63,7 +63,7 @@ class Multimeter:
         button_setup = [
             ('Run/Stop', self.app_actions.start_stop),
             ('Mode', lambda: self.app_actions.set_updater('mode')), 
-            ('Range', lambda: self.app_actions.set_updater('current_range')), 
+            ('Range', lambda: self.app_actions.set_updater('current_sensitivity')), 
             ('Options', lambda: self.app_actions.set_updater('options'))
             ]
         buttons = [ configure_button(BUTTON_SIZE, bt, bf) for bt, bf in button_setup ]

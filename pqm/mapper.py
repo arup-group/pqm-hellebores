@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
 
+                                                   
+#  _ __ ___   __ _ _ __  _ __   ___ _ __ _ __  _   _ 
+# | '_ ` _ \ / _` | '_ \| '_ \ / _ \ '__| '_ \| | | |
+# | | | | | | (_| | |_) | |_) |  __/ | _| |_) | |_| |
+# |_| |_| |_|\__,_| .__/| .__/ \___|_|(_) .__/ \__, |
+#                 |_|   |_|             |_|    |___/ 
+# 
 # Convert values into display coordinates, where the display is 800x480 pixels
 # (graphics to be 700x480 to leave space for ui buttons)
 # therefore the x axis (time) from 0 to 699, the vertical axis y (voltage, current etc) from 0 to 479 pixels.

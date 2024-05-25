@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
 
+
+#  _        _                                   
+# | |_ _ __(_) __ _  __ _  ___ _ __ _ __  _   _ 
+# | __| '__| |/ _` |/ _` |/ _ \ '__| '_ \| | | |
+# | |_| |  | | (_| | (_| |  __/ | _| |_) | |_| |
+#  \__|_|  |_|\__, |\__, |\___|_|(_) .__/ \__, |
+#             |___/ |___/          |_|    |___/ 
+#
 # Monitors signal and detects signal event eg voltage crossing zero
 # Offsets time axis with respect to the trigger (trigger time is t=0)
 

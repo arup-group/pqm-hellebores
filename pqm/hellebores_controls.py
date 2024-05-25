@@ -85,11 +85,16 @@ def create_mode(app_actions):
         e.hand_cursor = False    
     return mode
 
-def create_current_range(app_actions):
+def create_current_sensitivity(st, app_actions):
     """Range controls dialog"""
+
+    def set_current_sensitivity(required_sensitivity):
+        st.current_sensor = required_sensitivity
+        st.send_to_all()
+ 
     button_done = configure_button(BUTTON_SIZE, 'Done', lambda: app_actions.set_updater('back'))
-    button_full = configure_button(BUTTON_WIDE_SIZE, 'Full', lambda: app_actions.set_current_range('full'))
-    button_low = configure_button(BUTTON_WIDE_SIZE, 'Low', lambda: app_actions.set_current_range('low'))
+    button_full = configure_button(BUTTON_WIDE_SIZE, 'Full', lambda: set_current_sensitivity('full'))
+    button_low = configure_button(BUTTON_WIDE_SIZE, 'Low', lambda: set_current_sensitivity('low'))
 
     current_range = thorpy.TitleBox(
         text='Current range', children=[

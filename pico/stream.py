@@ -328,10 +328,10 @@ def streaming_loop_core_1():
     global flags
 
     start_adc()
-    # The overload state may start at any time, so we have to allow for it in the
-    # loop test here by using a flag filter.
+    # The overload flag may be raised by Core 0 at any time, so we have to allow
+    # for it in the loop test here by using a flag filter.
     while flags & STREAMING:
-        # p_cell is a local cache of the cell variable, so that we can
+        # cell_p is a local cache of the cell variable, so that we can
         # detect when it changes value
         cell_p = cell
         # Inner loop -- speed critical -- we do sampling here, nothing else.
@@ -481,7 +481,7 @@ def main():
         else:
             adc_settings = DEFAULT_ADC_SETTINGS
         if DEBUG:
-            print('stream.py started.')
+            print(f'stream.py started with parameters {adc_settings}.')
         flags = STREAMING
         cell = 0
         prepare_to_stream(adc_settings)
@@ -491,7 +491,7 @@ def main():
         # Catch CTRL-C here.
         if DEBUG:
             print('Interrupted.')
-        # Stop Core 1 if it's still running 
+        # Stop Core 1.
         flags = STOP
 
     finally:

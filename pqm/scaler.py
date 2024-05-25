@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
 
+
+#                _                       
+#  ___  ___ __ _| | ___ _ __ _ __  _   _ 
+# / __|/ __/ _` | |/ _ \ '__| '_ \| | | |
+# \__ \ (_| (_| | |  __/ | _| |_) | |_| |
+# |___/\___\__,_|_|\___|_|(_) .__/ \__, |
+#                           |_|    |___/ 
+# 
 # Convert incoming integer samples to floating point and apply scaling factors 
 
 import sys

@@ -32,7 +32,7 @@ if os.name == 'nt':
 # Measurements-1 (summary)
 # Measurements-2 (harmonics)
 # rollback NOT IMPLEMENTED
-# About (including software version, kernel version, uuid of Pi and Pico)
+# About (including software version, kernel version, sha256 of Pi and Pico)
 
 # The instance of this class will hold all the user interface states or 'groups'
 # that can be displayed together with the currently active selection
@@ -71,17 +71,14 @@ class UI_groups:
 
         # control groups that overlay the main group when adjusting settings
         self.elements['mode'] = create_mode(app_actions)
-        self.elements['current_range'] = create_current_range(app_actions)
+        self.elements['current_sensitivity'] = create_current_sensitivity(st, app_actions)
         self.elements['vertical'] = create_vertical(st, app_actions)
         self.elements['horizontal'] = create_horizontal(st, app_actions)
         self.elements['trigger'] = create_trigger(st, waveform, app_actions)
         self.elements['options'] = create_options(waveform, app_actions)
 
-        for k in ['mode', 'current_range', 'vertical', 'horizontal', 'trigger', 'options']:
+        for k in ['mode', 'current_sensitivity', 'vertical', 'horizontal', 'trigger', 'options']:
             self.elements[k].set_topright(*SETTINGS_BOX_POSITION)
-
-    def set_current_range(self, required_range):
-        self.current_range = required_range
 
     def refresh(self, buffer, screen):
         """dispatch to the refresh method of the element group currently selected."""
@@ -92,7 +89,10 @@ class UI_groups:
             # but just one frame if in stopped mode
             self.instruments[self.mode].refresh(buffer, 1, screen, self.elements['datetime'])
         else:
+            # if it's not a waveform display, include a small delay in screen update time to
+            # save CPU.
             self.instruments[self.mode].refresh(buffer, screen, self.elements['datetime'])
+            time.sleep(0.1)
 
     def draw_texts(self, capturing):
         self.instruments[self.mode].draw_texts(capturing)

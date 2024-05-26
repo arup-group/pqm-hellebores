@@ -235,7 +235,7 @@ class Sample_Buffer:
                 analysis_items = l.split()
                 if len(analysis_items) > 0:
                     self.cs = analysis_items
-                    sys.stdout.write('.')
+                    sys.stdout.write(l)
                     sys.stdout.flush()
             except:
                 print('hellebores.py: Sample_Buffer.load_analysis()'

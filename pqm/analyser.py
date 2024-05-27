@@ -7,7 +7,8 @@ import sys
 
 
 class Analyser:
-    """Proceed by calling load_data_frame, calculate, get_results on an instance.""" 
+    """Create an instance with the sample rate, then call load_data_frame, calculate,
+    get_results in that order.""" 
 
     def __init__(self, sample_rate):
         self.sample_rate = sample_rate
@@ -63,7 +64,7 @@ class Analyser:
     def period_and_frequency(self):
         # look for rising edge of voltage, and count the number of periods
         crossover_times = [ self.timestamps[i] for i in np.arange(0, self.size-1) \
-                if self.voltages[i] <= 0.0 and self.voltages[i+1] >= 0.0 ]
+                if self.voltages[i] < 0.0 and self.voltages[i+1] >= 0.0 ]
         n = len(crossover_times) - 1
         try:
             # work out the time for one period
@@ -78,7 +79,7 @@ class Analyser:
         try:
             shift = 10**decimal_places
             result = round(value*shift)/shift 
-        except (ZeroDivisionError, OverflowError):
+        except (OverflowError, ValueError):
             result = 0
         return result
 
@@ -99,27 +100,45 @@ class Analyser:
         self.results['rms_voltage']                  = self.round_to(self.rms(self.voltages), 3)
         self.results['rms_current']                  = self.round_to(self.rms(self.currents), 5)
         self.results['rms_leakage_current']          = self.round_to(self.rms(self.leakage_currents), 7)
-        self.results['crest_factor_voltage']         = self.round_to(self.results['max_abs_voltage'] / self.results['rms_voltage'], 3)
-        self.results['crest_factor_current']         = self.round_to(self.results['max_abs_current'] / self.results['rms_current'], 3)
-        self.results['mean_volt_ampere']             = self.round_to(self.results['rms_voltage'] * self.results['rms_current'], 3)
-        self.results['power_factor']                 = self.round_to(self.results['mean_power'] / self.results['mean_volt_ampere'], 3)
+        self.results['mean_volt_ampere']             = self.round_to(self.results['rms_voltage']
+                                                              * self.results['rms_current'], 3)
+        try:
+            self.results['crest_factor_voltage']     = self.round_to(self.results['max_abs_voltage']
+                                                              / self.results['rms_voltage'], 3)
+            self.results['crest_factor_current']     = self.round_to(self.results['max_abs_current']
+                                                              / self.results['rms_current'], 3)
+            self.results['power_factor']             = self.round_to(self.results['mean_power']
+                                                              / self.results['mean_volt_ampere'], 3)
+        except ZeroDivisionError:
+            self.results['crest_factor_voltage']     = 0.0
+            self.results['crest_factor_current']     = 0.0
+            self.results['power_factor']             = 0.0
 
     def power_quality(self):
         """Relies on other results: call after averages and period_and_frequency."""
         fft_voltages = self.fft(self.voltages)
-        fft_currents = self.fft(self.currents)
+        try:
+            fft_currents = self.fft(self.currents)
+        except:
+            print('failed on fft currents')
         nominal_frequency = round(self.results['frequency'])
         harmonic_frequencies = [ nominal_frequency * h for h in range(0, 51) ]
         # save harmonic magnitudes as percentages of rms quantity to 1dp
-        self.results['harmonic_voltage_percentages'] = [ self.round_to(m/self.results['rms_voltage']*100, 1) \
+        try:
+            self.results['harmonic_voltage_percentages'] = [ self.round_to(m/self.results['rms_voltage']*100, 1) \
                 for f,m in fft_voltages if f in harmonic_frequencies ]
-        self.results['harmonic_current_percentages'] = [ self.round_to(m/self.results['rms_current']*100, 1) \
+        except (ZeroDivisionError, OverflowError, ValueError):
+            self.results['harmonic_voltage_percentages'] = [0.0]
+        try:
+            self.results['harmonic_current_percentages'] = [ self.round_to(m/self.results['rms_current']*100, 1) \
                 for f,m in fft_currents if f in harmonic_frequencies ]
-        
+        except (ZeroDivisionError, OverflowError, ValueError):
+            self.results['harmonic_current_percentages'] = [0.0]
+
     def calculate(self):
-        self.averages()
-        self.period_and_frequency()
-        self.power_quality()
+            self.averages()
+            self.period_and_frequency()
+            self.power_quality()
 
     def load_data_frame(self, data_frame):
         self.data_frame = data_frame

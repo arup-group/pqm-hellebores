@@ -116,23 +116,32 @@ class Analyser:
 
     def power_quality(self):
         """Relies on other results: call after averages and period_and_frequency."""
+        # The fft calculation initially contains every frequency component at the resolution of the
+        # fft, not just the harmonic frequencies. Therefore we find the harmonic frequencies, and then
+        # filter the fft result.
         fft_voltages = self.fft(self.voltages)
-        try:
-            fft_currents = self.fft(self.currents)
-        except:
-            print('failed on fft currents')
+        fft_currents = self.fft(self.currents)
         nominal_frequency = round(self.results['frequency'])
         harmonic_frequencies = [ nominal_frequency * h for h in range(0, 51) ]
-        # save harmonic magnitudes as percentages of rms quantity to 1dp
         try:
-            self.results['harmonic_voltage_percentages'] = [ self.round_to(m/self.results['rms_voltage']*100, 1) \
-                for f,m in fft_voltages if f in harmonic_frequencies ]
-        except (ZeroDivisionError, OverflowError, ValueError):
+            # harmonic voltages
+            hvs = [ m for f,m in fft_voltages if f in harmonic_frequencies ]
+            thdv = math.sqrt(sum([ m*m for m in hvs[2:] ])) / hvs[1]
+            self.results['total_harmonic_distortion_voltage_percentage'] = self.round_to(thdv*100, 1)
+            self.results['harmonic_voltage_percentages'] = \
+                    [ self.round_to(m/self.results['rms_voltage']*100, 1) for m in hvs ] 
+        except (ZeroDivisionError, OverflowError, ValueError, IndexError):
+            self.results['total_harmonic_distortion_voltage_percentage'] = 0.0
             self.results['harmonic_voltage_percentages'] = [0.0]
         try:
-            self.results['harmonic_current_percentages'] = [ self.round_to(m/self.results['rms_current']*100, 1) \
-                for f,m in fft_currents if f in harmonic_frequencies ]
-        except (ZeroDivisionError, OverflowError, ValueError):
+            # harmonic currents
+            his = [ m for f,m in fft_currents if f in harmonic_frequencies ]
+            thdi = math.sqrt(sum([ m*m for m in his[2:] ])) / his[1]
+            self.results['total_harmonic_distortion_current_percentage'] = self.round_to(thdi*100, 1) 
+            self.results['harmonic_current_percentages'] = \
+                    [ self.round_to(m/self.results['rms_current']*100, 1) for m in his ] 
+        except (ZeroDivisionError, OverflowError, ValueError, IndexError):
+            self.results['total_harmonic_distortion_current_percentage'] = 0.0
             self.results['harmonic_current_percentages'] = [0.0]
 
     def calculate(self):

@@ -89,10 +89,11 @@ class UI_groups:
             # but just one frame if in stopped mode
             self.instruments[self.mode].refresh(buffer, 1, screen, self.elements['datetime'])
         else:
-            # if it's not a waveform display, include a small delay in screen update time to
-            # save CPU.
+            # If it's not a waveform display, include a small delay in screen update time to
+            # save CPU. Not too long, otherwise calculation buffer over-fills and there are
+            # errors in the results.
             self.instruments[self.mode].refresh(buffer, screen, self.elements['datetime'])
-            time.sleep(0.1)
+            time.sleep(0.02)
 
     def draw_texts(self, capturing):
         self.instruments[self.mode].draw_texts(capturing)

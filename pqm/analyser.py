@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
 
+#                    _                                 
+#   __ _ _ __   __ _| |_   _ ___  ___ _ __ _ __  _   _ 
+#  / _` | '_ \ / _` | | | | / __|/ _ \ '__| '_ \| | | |
+# | (_| | | | | (_| | | |_| \__ \  __/ | _| |_) | |_| |
+#  \__,_|_| |_|\__,_|_|\__, |___/\___|_|(_) .__/ \__, |
+#                      |___/              |_|    |___/ 
+# 
+
 import math
 import numpy as np
 import settings
@@ -14,8 +22,33 @@ class Analyser:
         self.sample_rate = sample_rate
         self.data_frame = None
         self.size = 0
-        self.blackman_window = np.blackman(0)  # empty to begin with
+        self.fft_window = np.blackman(0)  # empty to begin with
         self.results = {}
+
+    def create_fft_window(self, n_points):
+        # Blackman, Flattop or Rectangular
+        # Blackman is compromise, minimises spectral leakage however doesn't have the
+        # best amplitude accuracy.
+        # Flattop maintains amplitude accuracy the best, but suffers from spectral
+        # leakage introduced near DC (although 0 Hz bin itself is accurate). Solution
+        # -- set near DC frequency bins to zero.
+        # Rectangular is simple but has poor accuracy as soon as frequency drifts from
+        # non-integer number of cycles per frame.
+        window = 'flattop'
+        if window == 'blackman':
+            fft_window = np.blackman(n_points)
+        elif window == 'flattop':
+            a0 = 0.21557895
+            a1 = 0.41663158
+            a2 = 0.277263158
+            a3 = 0.083578947
+            a4 = 0.006947368
+            fft_window = np.array([ a0 - a1*math.cos(2*math.pi*n/n_points)
+                + a2*math.cos(4*math.pi*n/n_points) - a3*math.cos(6*math.pi*n/n_points)
+                + a4*math.cos(8*math.pi*n/n_points) for n in range(n_points) ])
+        else:
+            fft_window = np.array([ 1.0 for n in range(n_points) ])
+        return fft_window
 
     def apply_filters(self):
         self.timestamps = self.data_frame[:,0]
@@ -25,18 +58,20 @@ class Analyser:
         self.leakage_currents = self.data_frame[:,4]
     
     def fft(self, samples):
+        """Returns a list of tupes of (harmonic frequency, magnitude) starting from h0 (DC),
+        up to h50. Automatically adapts to signals of different fundamental frequency."""
         fft_size = samples.shape[0]
         root2 = math.sqrt(2)
-        # regenerate the blackman window if it is the wrong size for the current data
+        # regenerate the window function if it is the wrong size for the current data
         # frame
-        if self.blackman_window.shape != fft_size:
-            self.blackman_window = np.blackman(fft_size)
-            self.blackman_window_average = np.mean(self.blackman_window)
+        if self.fft_window.shape != fft_size:
+            self.fft_window = self.create_fft_window(fft_size)
+            self.fft_window_average = np.mean(self.fft_window)
 
         # calculate the fft coefficients
-        fft_out = np.fft.rfft(np.multiply(samples, self.blackman_window), norm='forward')
+        fft_out = np.fft.rfft(np.multiply(samples, self.fft_window), norm='forward')
     
-        # extract a list of the frequencies of the fft bins
+        # determine a list of the frequencies of the fft bins
         bins = np.fft.rfftfreq(fft_size, 1/self.sample_rate)
     
         # all the amplitude cooefficients need to be adjusted for the window
@@ -45,15 +80,22 @@ class Analyser:
         # frequency part of the fft, not included in the rfft, and the /root2 to
         # account for the fact that we want to display rms amplitudes, not peak
         # amplitudes
-        mags = [ v * root2 / self.blackman_window_average for v in np.abs(fft_out) ]
-        # however, the dc cooefficient does not need the 2/root2 term, so we
-        # remove that here
+        mags = [ v * root2 / self.fft_window_average for v in np.abs(fft_out) ]
+        # We've found that the magnitude coefficients near to DC are erroneous when the flattop
+        # window function is used, so we set them to zero here.
+        for i in [1,2,3,4]:
+            mags[i] = 0.0
+        # Note that we didn't zero the DC (0 Hz) coefficient. However, the dc cooefficient does
+        # not need the 2/root2 term, because it has energy from both positive and negative frequency.
+        # So we correct for that...
         mags[0] = mags[0] / root2
-        # phases not currently used for anything!
-        phases = np.angle(fft_out)
-        # filter for integer frequency bins only
-        harmonics = [ (round(f), m) for f, m in zip(bins, mags) if (frac := f % 1) <0.1 or frac>0.9 ]
-        return harmonics
+        # phases not currently used for anything, but here's how to get them if required!
+        # phases = np.angle(fft_out)
+        # filter for bins that are harmonics of the fundamental frequency of the signal
+        base_frequency = self.results['frequency']
+        harmonic_frequencies = [ round(base_frequency*h*2)/2 for h in range(0,51) ]
+        harmonic_tuples = [ (f,m) for f,m in zip(bins, mags) if f in harmonic_frequencies ]
+        return harmonic_tuples
 
     def rms(self, df):
         sum_of_squares = np.sum(np.square(df))
@@ -84,22 +126,14 @@ class Analyser:
         return result
 
     def averages(self):
-        self.results['mean_power']                   = self.round_to(np.mean(self.powers), 3)
-        self.results['max_voltage']                  = self.round_to(np.max(self.voltages), 3)
-        self.results['max_current']                  = self.round_to(np.max(self.currents), 5)
-        self.results['max_power']                    = self.round_to(np.max(self.powers), 3)
-        self.results['max_leakage_current']          = self.round_to(np.max(self.leakage_currents), 7)
-        self.results['min_voltage']                  = self.round_to(np.min(self.voltages), 3)
-        self.results['min_current']                  = self.round_to(np.min(self.currents), 5)
-        self.results['min_power']                    = self.round_to(np.min(self.powers), 3)
-        self.results['min_leakage_current']          = self.round_to(np.min(self.leakage_currents), 7)
-        self.results['max_abs_voltage']              = self.round_to(np.max(np.abs(self.voltages)), 3)
-        self.results['max_abs_current']              = self.round_to(np.max(np.abs(self.currents)), 5)
-        self.results['max_abs_power']                = self.round_to(np.max(np.abs(self.powers)), 3)
-        self.results['max_abs_leakage_current']      = self.round_to(np.max(np.abs(self.leakage_currents)), 7)
         self.results['rms_voltage']                  = self.round_to(self.rms(self.voltages), 3)
+        self.results['max_abs_voltage']              = self.round_to(np.max(np.abs(self.voltages)), 3)
         self.results['rms_current']                  = self.round_to(self.rms(self.currents), 5)
+        self.results['max_abs_current']              = self.round_to(np.max(np.abs(self.currents)), 5)
         self.results['rms_leakage_current']          = self.round_to(self.rms(self.leakage_currents), 7)
+        self.results['max_abs_leakage_current']      = self.round_to(np.max(np.abs(self.leakage_currents)), 7)
+        self.results['mean_power']                   = self.round_to(np.mean(self.powers), 3)
+        self.results['max_abs_power']                = self.round_to(np.max(np.abs(self.powers)), 3)
         self.results['mean_volt_ampere']             = self.round_to(self.results['rms_voltage']
                                                               * self.results['rms_current'], 3)
         try:
@@ -121,11 +155,9 @@ class Analyser:
         # filter the fft result.
         fft_voltages = self.fft(self.voltages)
         fft_currents = self.fft(self.currents)
-        nominal_frequency = round(self.results['frequency'])
-        harmonic_frequencies = [ nominal_frequency * h for h in range(0, 51) ]
         try:
             # harmonic voltages
-            hvs = [ m for f,m in fft_voltages if f in harmonic_frequencies ]
+            hvs = [ m for f,m in fft_voltages ]
             thdv = math.sqrt(sum([ m*m for m in hvs[2:] ])) / hvs[1]
             self.results['total_harmonic_distortion_voltage_percentage'] = self.round_to(thdv*100, 1)
             self.results['harmonic_voltage_percentages'] = \
@@ -135,7 +167,7 @@ class Analyser:
             self.results['harmonic_voltage_percentages'] = [0.0]
         try:
             # harmonic currents
-            his = [ m for f,m in fft_currents if f in harmonic_frequencies ]
+            his = [ m for f,m in fft_currents ]
             thdi = math.sqrt(sum([ m*m for m in his[2:] ])) / his[1]
             self.results['total_harmonic_distortion_current_percentage'] = self.round_to(thdi*100, 1) 
             self.results['harmonic_current_percentages'] = \

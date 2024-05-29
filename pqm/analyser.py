@@ -25,19 +25,17 @@ class Analyser:
         self.fft_window = np.blackman(0)  # empty to begin with
         self.results = {}
 
-    def create_fft_window(self, n_points):
-        # Blackman, Flattop or Rectangular
-        # Blackman is compromise, minimises spectral leakage however doesn't have the
+    def create_fft_window(self, n_points, window_type='flattop'):
+        # window_type = 'blackman', 'flattop' or 'rectangular'
+        # Blackman is compromise, mitigates spectral leakage however doesn't have the
         # best amplitude accuracy.
         # Flattop maintains amplitude accuracy the best, but suffers from spectral
-        # leakage introduced near DC (although 0 Hz bin itself is accurate). Solution
-        # -- set near DC frequency bins to zero.
+        # leakage introduced near DC (although 0 Hz bin itself is accurate).
         # Rectangular is simple but has poor accuracy as soon as frequency drifts from
         # non-integer number of cycles per frame.
-        window = 'flattop'
-        if window == 'blackman':
+        if window_type == 'blackman':
             fft_window = np.blackman(n_points)
-        elif window == 'flattop':
+        elif window_type == 'flattop':
             a0 = 0.21557895
             a1 = 0.41663158
             a2 = 0.277263158
@@ -46,8 +44,12 @@ class Analyser:
             fft_window = np.array([ a0 - a1*math.cos(2*math.pi*n/n_points)
                 + a2*math.cos(4*math.pi*n/n_points) - a3*math.cos(6*math.pi*n/n_points)
                 + a4*math.cos(8*math.pi*n/n_points) for n in range(n_points) ])
-        else:
+        elif window_type == 'rectangular':
             fft_window = np.array([ 1.0 for n in range(n_points) ])
+        else:
+            print('Analyser: create_fft_window() window_type not known, using default.',
+                file=sys.stederr)
+            fft_window = self.create_fft_window(n_points)
         return fft_window
 
     def apply_filters(self):
@@ -58,7 +60,7 @@ class Analyser:
         self.leakage_currents = self.data_frame[:,4]
     
     def fft(self, samples):
-        """Returns a list of tupes of (harmonic frequency, magnitude) starting from h0 (DC),
+        """Returns a list of tuples of (harmonic frequency, magnitude) starting from h0 (DC),
         up to h50. Automatically adapts to signals of different fundamental frequency."""
         fft_size = samples.shape[0]
         root2 = math.sqrt(2)
@@ -74,114 +76,154 @@ class Analyser:
         # determine a list of the frequencies of the fft bins
         bins = np.fft.rfftfreq(fft_size, 1/self.sample_rate)
     
-        # all the amplitude cooefficients need to be adjusted for the window
+        # All the amplitude cooefficients need to be adjusted for the window
         # average amplitude and root2. The root2 term is actually a reduction of
         # 2/root2, the '2' required to account for the energy in the negative
         # frequency part of the fft, not included in the rfft, and the /root2 to
         # account for the fact that we want to display rms amplitudes, not peak
         # amplitudes
         mags = [ v * root2 / self.fft_window_average for v in np.abs(fft_out) ]
-        # We've found that the magnitude coefficients near to DC are erroneous when the flattop
-        # window function is used, so we set them to zero here.
-        for i in [1,2,3,4]:
-            mags[i] = 0.0
-        # Note that we didn't zero the DC (0 Hz) coefficient. However, the dc cooefficient does
-        # not need the 2/root2 term, because it has energy from both positive and negative frequency.
-        # So we correct for that...
+        # The dc cooefficient does not need the 2/root2 term, because it has energy from
+        # both positive and negative frequency. So we correct for that...
         mags[0] = mags[0] / root2
-        # phases not currently used for anything, but here's how to get them if required!
+        # Phases not currently used for anything, but here's how to get them if required!
         # phases = np.angle(fft_out)
-        # filter for bins that are harmonics of the fundamental frequency of the signal
+        # Filter for bins that are harmonics of the fundamental frequency of the signal
         base_frequency = self.results['frequency']
         harmonic_frequencies = [ round(base_frequency*h*2)/2 for h in range(0,51) ]
         harmonic_tuples = [ (f,m) for f,m in zip(bins, mags) if f in harmonic_frequencies ]
         return harmonic_tuples
 
     def rms(self, df):
+        """Determine the RMS average of the array."""
         sum_of_squares = np.sum(np.square(df))
         number_of_samples = df.shape[0]
         rms = math.sqrt(sum_of_squares / number_of_samples)
         return rms
 
-    def period_and_frequency(self):
-        # look for rising edge of voltage, and count the number of periods
-        crossover_times = [ self.timestamps[i] for i in np.arange(0, self.size-1) \
-                if self.voltages[i] < 0.0 and self.voltages[i+1] >= 0.0 ]
-        n = len(crossover_times) - 1
+    def frequency(self):
+        """Determines the fundamental frequency in Hz to three decimal places."""
         try:
-            # work out the time for one period
-            period = (crossover_times[-1] - crossover_times[0]) / 1000.0 / n
+            # look for instances where voltage crosses from negative to positive
+            # and count how many occurred.
+            crossover_instances = [ i for i in np.arange(0, self.size-1) \
+                if self.voltages[i] < 0.0 and self.voltages[i+1] >= 0.0 ]
+            n = len(crossover_instances) - 1
+            # Now determine the exact time when the first and last crossovers
+            # occurred, interpolating between adjacent time samples at those instances
+            # to further increase the time resolution.
+            c0 = crossover_instances[0]
+            cn = crossover_instances[-1]
+            # The 1000.0 factor is because the timestamps are in milliseconds, but the
+            # sample rate is /second
+            t0 = self.timestamps[c0] + (1000.0 * self.voltages[c0]
+                                        / (self.voltages[c0]-self.voltages[c0+1])
+                                        / self.sample_rate)
+            tn = self.timestamps[cn] + (1000.0 * self.voltages[cn]
+                                        / (self.voltages[cn]-self.voltages[cn+1])
+                                        / self.sample_rate)
+            # The overall time period divided by the number of cycles gives us the
+            # period and frequency of the signal.
+            period = (tn-t0) / 1000.0 / n
             frequency = 1.0 / period
         except (IndexError, ZeroDivisionError):
             frequency = 0.0
         self.results['frequency'] = self.round_to(frequency, 3)
 
     def round_to(self, value, decimal_places):
-        # round values to reduce length of output strings
+        """Round values to reduce length of output strings.
+        Zero decimal places is not implemented."""
         try:
             shift = 10**decimal_places
             result = round(value*shift)/shift 
         except (OverflowError, ValueError):
-            result = 0
+            result = value
         return result
 
     def averages(self):
-        self.results['rms_voltage']                  = self.round_to(self.rms(self.voltages), 3)
-        self.results['max_abs_voltage']              = self.round_to(np.max(np.abs(self.voltages)), 3)
-        self.results['rms_current']                  = self.round_to(self.rms(self.currents), 5)
-        self.results['max_abs_current']              = self.round_to(np.max(np.abs(self.currents)), 5)
+        """Calculate average and RMS values of the dataset."""
+        rms_v                                        = self.rms(self.voltages)
+        self.results['rms_voltage']                  = self.round_to(rms_v, 3)
+        maxabs_v                                     = np.max(np.abs(self.voltages))
+        self.results['max_abs_voltage']              = self.round_to(maxabs_v, 3)
+        rms_i                                        = self.rms(self.currents)
+        self.results['rms_current']                  = self.round_to(rms_i, 5)
+        maxabs_i                                     = np.max(np.abs(self.currents))
+        self.results['max_abs_current']              = self.round_to(maxabs_i, 5)
         self.results['rms_leakage_current']          = self.round_to(self.rms(self.leakage_currents), 7)
         self.results['max_abs_leakage_current']      = self.round_to(np.max(np.abs(self.leakage_currents)), 7)
-        self.results['mean_power']                   = self.round_to(np.mean(self.powers), 3)
+        mean_p                                       = np.mean(self.powers)
+        self.results['mean_power']                   = self.round_to(mean_p, 3)
         self.results['max_abs_power']                = self.round_to(np.max(np.abs(self.powers)), 3)
-        self.results['mean_volt_ampere']             = self.round_to(self.results['rms_voltage']
-                                                              * self.results['rms_current'], 3)
+        mean_va                                      = self.round_to(rms_v * rms_i, 3)
+        self.results['mean_volt_ampere']             = mean_va
         try:
-            self.results['crest_factor_voltage']     = self.round_to(self.results['max_abs_voltage']
-                                                              / self.results['rms_voltage'], 3)
-            self.results['crest_factor_current']     = self.round_to(self.results['max_abs_current']
-                                                              / self.results['rms_current'], 3)
-            self.results['power_factor']             = self.round_to(self.results['mean_power']
-                                                              / self.results['mean_volt_ampere'], 3)
+            mean_var                                 = math.sqrt(mean_va**2 - mean_p**2)
+        except ValueError:
+            mean_var                                 = 0.0
+        self.results['mean_volt_ampere_reactive']    = self.round_to(mean_var, 3)
+        try:
+            self.results['crest_factor_voltage']     = self.round_to(maxabs_v / rms_v, 3)
         except ZeroDivisionError:
             self.results['crest_factor_voltage']     = 0.0
+        try:
+            self.results['crest_factor_current']     = self.round_to(maxabs_i / rms_i, 3)
+        except ZeroDivisionError:
             self.results['crest_factor_current']     = 0.0
+        try:
+            self.results['power_factor']             = self.round_to(mean_p / mean_va, 3)
+        except ZeroDivisionError:
             self.results['power_factor']             = 0.0
 
     def power_quality(self):
-        """Relies on other results: call after averages and period_and_frequency."""
-        # The fft calculation initially contains every frequency component at the resolution of the
-        # fft, not just the harmonic frequencies. Therefore we find the harmonic frequencies, and then
-        # filter the fft result.
+        """Power quality calcuation relies on other results: call after averages and frequency."""
         fft_voltages = self.fft(self.voltages)
         fft_currents = self.fft(self.currents)
         try:
-            # harmonic voltages
-            hvs = [ m for f,m in fft_voltages ]
-            thdv = math.sqrt(sum([ m*m for m in hvs[2:] ])) / hvs[1]
+            # convert harmonic voltages to % of RMS value, and calculate THD(v)
+            ms = [ m for f,m in fft_voltages ]
+            thdv = math.sqrt(sum([ m*m for m in ms[2:] ])) / ms[1]
             self.results['total_harmonic_distortion_voltage_percentage'] = self.round_to(thdv*100, 1)
             self.results['harmonic_voltage_percentages'] = \
-                    [ self.round_to(m/self.results['rms_voltage']*100, 1) for m in hvs ] 
+                    [ self.round_to(m/self.results['rms_voltage']*100, 1) for m in ms ] 
         except (ZeroDivisionError, OverflowError, ValueError, IndexError):
             self.results['total_harmonic_distortion_voltage_percentage'] = 0.0
             self.results['harmonic_voltage_percentages'] = [0.0]
         try:
-            # harmonic currents
-            his = [ m for f,m in fft_currents ]
-            thdi = math.sqrt(sum([ m*m for m in his[2:] ])) / his[1]
+            # convert harmonic currents to % of RMS value, and calculate THD(i)
+            ms = [ m for f,m in fft_currents ]
+            thdi = math.sqrt(sum([ m*m for m in ms[2:] ])) / ms[1]
             self.results['total_harmonic_distortion_current_percentage'] = self.round_to(thdi*100, 1) 
             self.results['harmonic_current_percentages'] = \
-                    [ self.round_to(m/self.results['rms_current']*100, 1) for m in his ] 
+                    [ self.round_to(m/self.results['rms_current']*100, 1) for m in ms ] 
         except (ZeroDivisionError, OverflowError, ValueError, IndexError):
             self.results['total_harmonic_distortion_current_percentage'] = 0.0
             self.results['harmonic_current_percentages'] = [0.0]
 
+    def accumulators(self):
+        """Wh, VARh and VAh accumulators."""
+        time_now = time.time()
+        # Get the elapsed time since the last computation, in seconds
+        delta_t = time_now - self.accumulated_time
+        self.accumulated_time = time_now - self.start_time
+        # Keep the accumulators in high resolution integer form
+        self.mws += round(self.results('mean_power') * delta_t * 1000)
+        self.mvas += round(self.results('mean_volt_ampere') * delta_t * 1000)
+        self.mvars += round(self.results('mean_volt_ampere_reactive') * delta_t * 1000)
+        self.results('watt_hour_accumulator') = self.wh
+        self.results('volt_ampere_hour_accumulator') = self.vah
+        self.results('volt_ampere_reactive_hour_accumulator') = self.varh
+
     def calculate(self):
-            self.averages()
-            self.period_and_frequency()
-            self.power_quality()
+        """Perform analysis on a pre-loaded data frame."""
+        self.averages()
+        self.frequency()
+        self.power_quality()
+        self.accumulators()
 
     def load_data_frame(self, data_frame):
+        """Load a data frame into memory, and slice into separate sets for voltage, current
+        etc."""
         self.data_frame = data_frame
         self.size = data_frame.shape[0]
         self.apply_filters()
@@ -220,24 +262,28 @@ class Sample_cache:
 
 def main():
     st = settings.Settings()
-    calculation_interval = int(st.sample_rate)
+    # We will output new calculations once per second.
+    output_interval = int(st.sample_rate)
+    # However, our calculation buffer is 2 seconds in length to increase accuracy.
     cache_size = int(st.sample_rate*2)
+    # The cache is a circular buffer, we can keep pushing data into it.
     cache = Sample_cache(cache_size)
     analyser = Analyser(st.sample_rate)
     # line iterator
     i = 0
     for line in sys.stdin:
-        # Cache every line, and output calculations every 1 second
         cache.put(line.rstrip())
+        # iterator is reset to zero every output interval
         if i == 0:
-            d = cache.as_numpy_array()
-            analyser.load_data_frame(d)
+            # Retrieve the buffer and push it into the analyser instance.
+            df = cache.as_numpy_array()
+            analyser.load_data_frame(df)
             analyser.calculate()
             results = analyser.get_results()
             print(results)
             sys.stdout.flush()
-        # circulate line iterator to zero every calculation interval (1 second)
-        i = (i + 1) % calculation_interval
+        # circulate line iterator to zero every output interval (1 second)
+        i = (i + 1) % output_interval
     print('Finished calculations.', file=sys.stderr)
 
 if __name__ == '__main__':

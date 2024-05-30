@@ -24,6 +24,12 @@ class Analyser:
         self.size = 0
         self.fft_window = np.blackman(0)  # empty to begin with
         self.results = {}
+        # set integer accumulators to zero: time in milliseconds, and energy transfer in
+        # milli-watt-seconds etc
+        self.accumulated_time = 0
+        self.mws = 0
+        self.mvas = 0
+        self.mvars = 0
 
     def create_fft_window(self, n_points, window_type='flattop'):
         # window_type = 'blackman', 'flattop' or 'rectangular'
@@ -202,17 +208,20 @@ class Analyser:
 
     def accumulators(self):
         """Wh, VARh and VAh accumulators."""
-        time_now = time.time()
-        # Get the elapsed time since the last computation, in seconds
-        delta_t = time_now - self.accumulated_time
-        self.accumulated_time = time_now - self.start_time
-        # Keep the accumulators in high resolution integer form
-        self.mws += round(self.results('mean_power') * delta_t * 1000)
-        self.mvas += round(self.results('mean_volt_ampere') * delta_t * 1000)
-        self.mvars += round(self.results('mean_volt_ampere_reactive') * delta_t * 1000)
-        self.results('watt_hour_accumulator') = self.wh
-        self.results('volt_ampere_hour_accumulator') = self.vah
-        self.results('volt_ampere_reactive_hour_accumulator') = self.varh
+        # delta_t in milliseconds
+        # divide by two because the sample data overlaps each calculation (ie each sample participates
+        # twice, so we add half of the contribution each time)
+        delta_t = int(self.size / self.sample_rate / 2 * 1000)
+        self.accumulated_time += delta_t
+        # Keep the accumulators in high resolution integer form, ie 'milliwatt-seconds'.
+        self.mws += round(self.results['mean_power'] * delta_t)
+        self.mvas += round(self.results['mean_volt_ampere'] * delta_t)
+        self.mvars += round(self.results['mean_volt_ampere_reactive'] * delta_t)
+        # For display purposes, convert to 'Watt-hours'
+        self.results['watt_hour_accumulator'] = self.round_to(self.mws / 1000 / 3600, 3)
+        self.results['volt_ampere_hour_accumulator'] = self.round_to(self.mvas / 1000 / 3600, 3)
+        self.results['volt_ampere_reactive_hour_accumulator'] = self.round_to(self.mvars / 1000 / 3600, 3)
+        self.results['hours_accumulator'] = self.round_to(self.accumulated_time / 1000 / 3600, 3)
 
     def calculate(self):
         """Perform analysis on a pre-loaded data frame."""

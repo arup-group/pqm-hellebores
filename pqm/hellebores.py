@@ -16,6 +16,7 @@ import time
 import sys
 import os
 import select
+import json
 
 # local imports
 from settings import Settings
@@ -197,7 +198,7 @@ class Sample_Buffer:
         # working points buffer for four lines, calculation array
         # flag for detecting when pipes are closed (end of file)
         self.ps = [ [],[],[],[] ]           # points
-        self.cs = []                        # calculations
+        self.cs = {}                        # calculations
         self.pipes_ok = True
         # sample buffer history
         # future extension is to use this buffer for electrical event history
@@ -222,6 +223,32 @@ class Sample_Buffer:
         self.ps[2].append((sample[0], sample[3]))
         self.ps[3].append((sample[0], sample[4]))
 
+    def update_analysis_bounds(self):
+        """Keep track of max and min boundaries since sampling started."""
+        try:
+            self.cs['rms_voltage_max'] = max(self.cs['rms_voltage_max'], self.cs['rms_voltage'])
+            self.cs['rms_voltage_min'] = min(self.cs['rms_voltage_min'], self.cs['rms_voltage'])
+            self.cs['rms_current_max'] = max(self.cs['rms_current_max'], self.cs['rms_current'])
+            self.cs['rms_current_min'] = min(self.cs['rms_current_min'], self.cs['rms_current'])
+            self.cs['mean_power_max'] = max(self.cs['mean_power_max'], self.cs['mean_power'])
+            self.cs['mean_power_min'] = min(self.cs['mean_power_min'], self.cs['mean_power'])
+            self.cs['mean_volt_ampere_reactive_max'] = max(self.cs['mean_volt_ampere_reactive_max'], self.cs['mean_volt_ampere_reactive'])
+            self.cs['mean_volt_ampere_reactive_min'] = min(self.cs['mean_volt_ampere_reactive_min'], self.cs['mean_volt_ampere_reactive'])
+            self.cs['mean_volt_ampere_max'] = max(self.cs['mean_volt_ampere_max'], self.cs['mean_volt_ampere'])
+            self.cs['mean_volt_ampere_min'] = min(self.cs['mean_volt_ampere_min'], self.cs['mean_volt_ampere'])
+        except KeyError:
+            # On first call the max/min fields are not set so we initialise them here to the initial analysis values
+            self.cs['rms_voltage_max'] = self.cs['rms_voltage']
+            self.cs['rms_voltage_min'] = self.cs['rms_voltage']
+            self.cs['rms_current_max'] = self.cs['rms_current']
+            self.cs['rms_current_min'] = self.cs['rms_current']
+            self.cs['mean_power_max'] = self.cs['mean_power']
+            self.cs['mean_power_min'] = self.cs['mean_power']
+            self.cs['mean_volt_ampere_reactive_max'] = self.cs['mean_volt_ampere_reactive']
+            self.cs['mean_volt_ampere_reactive_min'] = self.cs['mean_volt_ampere_reactive']
+            self.cs['mean_volt_ampere_max'] = self.cs['mean_volt_ampere']
+            self.cs['mean_volt_ampere_min'] = self.cs['mean_volt_ampere']
+            
     def load_analysis(self, f, capturing):
         # incoming analysis data is optional
         if f and is_data_available(f, 0.0):
@@ -232,16 +259,14 @@ class Sample_Buffer:
                 if l == '':
                     print('Analysis pipe was closed.', file=sys.stderr)
                     self.pipes_ok = False
-                # then break the analysis into tokens
-                analysis_items = l.split()
-                if len(analysis_items) > 0:
-                    self.cs = analysis_items
-                    sys.stdout.write(l)
-                    sys.stdout.flush()
-            except:
+                # then load the analysis into a local dictionary
+                new_analysis = json.loads(l)
+                for (key, value) in new_analysis.items():
+                    self.cs[key] = value
+                self.update_analysis_bounds()
+            except IOError:
                 print('hellebores.py: Sample_Buffer.load_analysis()'
                       ' file reading error.', file=sys.stderr) 
-
 
     def load_waveform(self, f, capturing, wfs):
         # the loop will exit if:

@@ -12,7 +12,7 @@ import math
 import numpy as np
 import settings
 import sys
-
+import json
 
 class Analyser:
     """Create an instance with the sample rate, then call load_data_frame, calculate,
@@ -218,10 +218,10 @@ class Analyser:
         self.mvas += round(self.results['mean_volt_ampere'] * delta_t)
         self.mvars += round(self.results['mean_volt_ampere_reactive'] * delta_t)
         # For display purposes, convert to 'Watt-hours'
-        self.results['watt_hour_accumulator'] = self.round_to(self.mws / 1000 / 3600, 3)
-        self.results['volt_ampere_hour_accumulator'] = self.round_to(self.mvas / 1000 / 3600, 3)
-        self.results['volt_ampere_reactive_hour_accumulator'] = self.round_to(self.mvars / 1000 / 3600, 3)
-        self.results['hours_accumulator'] = self.round_to(self.accumulated_time / 1000 / 3600, 3)
+        self.results['watt_hour'] = self.round_to(self.mws / 1000 / 3600, 3)
+        self.results['volt_ampere_hour'] = self.round_to(self.mvas / 1000 / 3600, 3)
+        self.results['volt_ampere_reactive_hour'] = self.round_to(self.mvars / 1000 / 3600, 3)
+        self.results['hours'] = self.round_to(self.accumulated_time / 1000 / 3600, 3)
 
     def calculate(self):
         """Perform analysis on a pre-loaded data frame."""
@@ -278,9 +278,14 @@ def main():
     # The cache is a circular buffer, we can keep pushing data into it.
     cache = Sample_cache(cache_size)
     analyser = Analyser(st.sample_rate)
-    # line iterator
-    i = 0
-    for line in sys.stdin:
+    # Before actually analysing, seed the cache with data
+    for i in range(cache_size):
+        line = sys.stdin.readline()
+        cache.put(line.rstrip())
+    # Now start the analysis loop
+    i = 0 
+    while True:
+        line = sys.stdin.readline()
         cache.put(line.rstrip())
         # iterator is reset to zero every output interval
         if i == 0:
@@ -288,7 +293,7 @@ def main():
             df = cache.as_numpy_array()
             analyser.load_data_frame(df)
             analyser.calculate()
-            results = analyser.get_results()
+            results = json.dumps(analyser.get_results())
             print(results)
             sys.stdout.flush()
         # circulate line iterator to zero every output interval (1 second)

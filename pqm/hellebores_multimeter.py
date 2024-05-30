@@ -20,6 +20,8 @@ class Multimeter:
     def __init__(self, st, app_actions):
         self.texts = []
         self.st = st
+        # this will contain the text objects to push readings into, keyed by analysis result key
+        self.multimeter_value_objects = {}
         self.app_actions = app_actions
         # create an empty background to draw onto
         self.multimeter_background = pygame.Surface(SCOPE_BOX_SIZE)
@@ -27,9 +29,9 @@ class Multimeter:
         # create the controls
         self.multimeter_controls = self.create_multimeter_controls()
         # create the readings
-        self.multimeter_readings = self.create_multimeter_readings()
+        self.multimeter_display = self.create_multimeter_display()
         # all the elements
-        self.multimeter_elements = [ self.multimeter_controls, self.multimeter_readings ]
+        self.multimeter_elements = [ self.multimeter_controls, self.multimeter_display ]
 
     def set_text(self, item, value):
         self.texts[item].set_text(value)
@@ -45,7 +47,8 @@ class Multimeter:
     def refresh(self, buffer, screen, datetime):
         # display all the readings
         screen.blit(self.multimeter_background, (0,0))
-        self.multimeter_readings.draw()
+        self.update_multimeter_display(buffer.cs)
+        self.multimeter_display.draw()
         datetime.draw()
 
            
@@ -76,8 +79,18 @@ class Multimeter:
         self.texts = control_texts
         return multimeter_controls
 
-    def create_multimeter_readings(self):
-        """Multimeter readings, on main part of screen"""
+    def update_multimeter_display(self, readings):
+        """Takes a set of analysis results and pushes them into the display."""
+        valid_keys = self.multimeter_value_objects.keys()
+        # push readings into display text fields
+        for key in readings:
+            if key in valid_keys:
+                text_object = self.multimeter_value_objects[key][0]
+                padding = self.multimeter_value_objects[key][1]
+                text_object.set_text(f'{readings[key]:7.2f}'.rjust(padding), adapt_parent=False)
+
+    def create_multimeter_display(self):
+        """Multimeter display, on main part of screen"""
         #
         # Voltage /Vrms            Voltage maximum /Vrms            Energy accumulator /kWh
         #                          Voltage minimum /Vrms            Reactive energy accumulator /kVARh
@@ -92,32 +105,56 @@ class Multimeter:
         # Power factor /1          
         #                         
 
-        column_1        = [ ('Voltage rms /V',         300, 58, LARGE_FONT_SIZE, 10),
-                            ('Current rms /A',         300, 58, LARGE_FONT_SIZE, 10),
-                            ('Power /W',               300, 58, LARGE_FONT_SIZE, 10),
-                            ('Reactive power /VAR',    300, 58, LARGE_FONT_SIZE, 10),
-                            ('Apparent power /VA',     300, 58, LARGE_FONT_SIZE, 10) ]
+        column_1        = [ ('rms_voltage', 'Voltage rms /V',
+                                300, 58, LARGE_FONT_SIZE, 8, 10),
+                            ('rms_current', 'Current rms /A',
+                                300, 58, LARGE_FONT_SIZE, 8, 10),
+                            ('mean_power', 'Power /W',
+                                300, 58, LARGE_FONT_SIZE, 8, 10),
+                            ('mean_volt_ampere_reactive', 'Reactive power /VAR',
+                                300, 58, LARGE_FONT_SIZE, 8, 10),
+                            ('mean_volt_ampere', 'Apparent power /VA',
+                                300, 58, LARGE_FONT_SIZE, 8, 10) ]
 
-        column_2        = [ ('Vmax rms /V',            224, 20, FONT_SIZE, 0),
-                            ('Vmin rms /V',            224, 20, FONT_SIZE, 10),
-                            ('Imax rms /A',            224, 20, FONT_SIZE, 0),
-                            ('Imin rms /A',            224, 20, FONT_SIZE, 10),
-                            ('Pmax /W',                224, 20, FONT_SIZE, 0),
-                            ('Pmin /W',                224, 20, FONT_SIZE, 10),
-                            ('RPmax /VAR',             224, 20, FONT_SIZE, 0),
-                            ('RPmin /VAR',             224, 20, FONT_SIZE, 10),
-                            ('APmax /VA',              224, 20, FONT_SIZE, 0),
-                            ('APmin /VA',              224, 20, FONT_SIZE, 10) ]
+        column_2        = [ ('rms_voltage_max', 'Vmax rms /V',
+                                224, 20, FONT_SIZE, 28, 0),
+                            ('rms_voltage_min', 'Vmin rms /V',
+                                224, 20, FONT_SIZE, 28, 10),
+                            ('rms_current_max', 'Imax rms /A',
+                                224, 20, FONT_SIZE, 28, 0),
+                            ('rms_current_min', 'Imin rms /A',
+                                224, 20, FONT_SIZE, 28, 10),
+                            ('mean_power_max', 'Pmax /W',
+                                224, 20, FONT_SIZE, 28, 0),
+                            ('mean_power_min', 'Pmin /W',
+                                224, 20, FONT_SIZE, 28, 10),
+                            ('mean_volt_ampere_reactive_max', 'RPmax /VAR',
+                                224, 20, FONT_SIZE, 28, 0),
+                            ('mean_volt_ampere_reactive_min', 'RPmin /VAR',
+                                224, 20, FONT_SIZE, 28, 10),
+                            ('mean_volt_ampere_max', 'APmax /VA',
+                                224, 20, FONT_SIZE, 28, 0),
+                            ('mean_volt_ampere_min', 'APmin /VA',
+                                224, 20, FONT_SIZE, 28, 10) ]
 
-        column_3        = [ ('Energy /Wh',             224, 20, FONT_SIZE, 0),
-                            ('Reactive energy /VARh',  224, 20, FONT_SIZE, 0),
-                            ('Apparent energy /VAh',   224, 20, FONT_SIZE, 0),
-                            ('Power factor /1',        224, 20, FONT_SIZE, 0),
-                            ('Crest factor /1',        224, 20, FONT_SIZE, 0),
-                            ('Frequency /Hz',          224, 20, FONT_SIZE, 0),
-                            ('THD(v) /%',              224, 20, FONT_SIZE, 0),
-                            ('THD(i) /%',              224, 20, FONT_SIZE, 0),
-                            ('Accumulation time /hr',  224, 20, FONT_SIZE, 0) ]
+        column_3        = [ ('watt_hour', 'Energy /Wh',
+                                224, 20, FONT_SIZE, 28, 0),
+                            ('volt_ampere_reactive_hour', 'Reactive energy /VARh',
+                                224, 20, FONT_SIZE, 28, 0),
+                            ('volt_ampere_hour', 'Apparent energy /VAh',
+                                224, 20, FONT_SIZE, 28, 0),
+                            ('power_factor', 'Power factor /1',
+                                224, 20, FONT_SIZE, 28, 0),
+                            ('crest_factor_current', 'Crest factor /1',
+                                224, 20, FONT_SIZE, 28, 0),
+                            ('frequency', 'Frequency /Hz',
+                                224, 20, FONT_SIZE, 28, 0),
+                            ('total_harmonic_distortion_voltage_percentage', 'THD(v) /%',
+                                224, 20, FONT_SIZE, 28, 0),
+                            ('total_harmonic_distortion_current_percentage', 'THD(i) /%',
+                                224, 20, FONT_SIZE, 28, 0),
+                            ('hours', 'Accumulation time /hr',
+                                224, 20, FONT_SIZE, 28, 0) ]
 
         tp_texts = []
         label_h = 18 
@@ -125,13 +162,13 @@ class Multimeter:
         for column, x in zip([column_1, column_2, column_3], [0, 200, 440]):
             y = 0
             for item in column:
-                text, w, value_h, value_font_size, gap_h = item
+                key, label, w, value_h, value_font_size, pad_size, gap_h = item
                 # create the label
                 if x==0:
                     pad = 36
                 else:
                     pad = 28
-                tp_label = thorpy.Text(text.rjust(pad))
+                tp_label = thorpy.Text(label.rjust(pad))
                 tp_label.set_size((w,label_h))
                 tp_label.set_font_size(label_font_size)
                 tp_label.set_font_color(WHITE)
@@ -139,24 +176,22 @@ class Multimeter:
                 tp_texts.append(tp_label)
                 y = y + label_h
                 # and then initial text for the value
-                if value_font_size == LARGE_FONT_SIZE:
-                    pad = 8
-                else:
-                    pad = 28 
-                tp_value = thorpy.Text('999.999'.rjust(pad))
+                tp_value = thorpy.Text('999.999'.rjust(pad_size))
                 tp_value.set_size((w,value_h))
                 tp_value.set_font_size(value_font_size)
                 tp_value.set_font_color(YELLOW)
                 tp_value.set_topleft(x,y)
                 tp_texts.append(tp_value)
                 y = y + value_h + gap_h
-           
+                # add lookup of multimeter value object, with required text padding, keyed by analysis key
+                self.multimeter_value_objects[key] = (tp_value, pad_size)
+
         multimeter_column_1 = thorpy.Group(tp_texts[:10], mode=None)
         multimeter_column_2 = thorpy.Group(tp_texts[10:30], mode=None)
         multimeter_column_3 = thorpy.Group(tp_texts[30:], mode=None)
-        multimeter = thorpy.Group([multimeter_column_1, multimeter_column_2, multimeter_column_3],
+        multimeter_display = thorpy.Group([multimeter_column_1, multimeter_column_2, multimeter_column_3],
                                    mode='h', gap=0, margins=(0,0))
-        multimeter.set_topleft(*METER_POSITION)
-        return multimeter
+        multimeter_display.set_topleft(*METER_POSITION)
+        return multimeter_display
 
 

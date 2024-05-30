@@ -80,13 +80,13 @@ class Multimeter:
         """Multimeter readings, on main part of screen"""
         #
         # Voltage /Vrms            Voltage maximum /Vrms            Energy accumulator /kWh
-        #                          Voltage minimum /Vrms            Reactive energy accumulator /kVAh
-        # Current /Arms            Current maximum /Arms            Crest factor /1
-        #                          Current minimum /Arms            Frequency /Hz 
-        # Power /W                 Power maximum /W                 THDv /%                         
-        #                          Power minimum /W                 THDi /%
-        # Reactive power /VAR      Reactive power maximum /VAR      Accumulation time /hr 
-        #                          Reactive power minimum /VAR     
+        #                          Voltage minimum /Vrms            Reactive energy accumulator /kVARh
+        # Current /Arms            Current maximum /Arms            Apparent energy accumulator /kVAh
+        #                          Current minimum /Arms            Crest factor /1
+        # Power /W                 Power maximum /W                 Frequency /Hz
+        #                          Power minimum /W                 THDv /%
+        # Reactive power /VAR      Reactive power maximum /VAR      THDi /%
+        #                          Reactive power minimum /VAR      Accumulation time /hr  
         # Apparent power /VA       Apparent power maximum /VA       
         #                          Apparent power minimum /VA       
         # Power factor /1          
@@ -109,8 +109,9 @@ class Multimeter:
                             ('APmax /VA',              224, 20, FONT_SIZE, 0),
                             ('APmin /VA',              224, 20, FONT_SIZE, 10) ]
 
-        column_3        = [ ('Energy /kWh',            224, 20, FONT_SIZE, 0),
-                            ('Reactive energy /kVARh', 224, 20, FONT_SIZE, 0),
+        column_3        = [ ('Energy /Wh',             224, 20, FONT_SIZE, 0),
+                            ('Reactive energy /VARh',  224, 20, FONT_SIZE, 0),
+                            ('Apparent energy /VAh',   224, 20, FONT_SIZE, 0),
                             ('Power factor /1',        224, 20, FONT_SIZE, 0),
                             ('Crest factor /1',        224, 20, FONT_SIZE, 0),
                             ('Frequency /Hz',          224, 20, FONT_SIZE, 0),

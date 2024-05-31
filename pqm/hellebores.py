@@ -91,7 +91,7 @@ class UI_groups:
             self.instruments[self.mode].refresh(buffer, 1, screen, self.elements['datetime'])
         else:
             # If it's not a waveform display, include a small delay in screen update time to
-            # save CPU. Not too long, otherwise calculation buffer over-fills and there are
+            # save CPU. Not too long, otherwise waveform input buffer stalls and there are
             # errors in the results.
             self.instruments[self.mode].refresh(buffer, screen, self.elements['datetime'])
             time.sleep(0.02)

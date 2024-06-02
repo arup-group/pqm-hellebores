@@ -413,6 +413,30 @@ def create_trigger(st, waveform, app_actions):
     update_trigger_status(text_trigger_status)
     return trigger
 
+
+def create_clear(buffer, app_actions):
+    button_done = configure_button(
+        BUTTON_SIZE, 'Done', lambda: app_actions.set_updater('back'))
+    button_clear_maxmin = configure_button(
+        BUTTON_WIDE_SIZE, 'Clear Max/Min', lambda: buffer.clear_analysis_bounds())
+    button_clear_accumulators = configure_button(
+        BUTTON_WIDE_SIZE, 'Clear Accumulators', lambda: buffer.clear_accumulators())
+    
+    clear = thorpy.TitleBox(
+        text='Clear',
+        children=[
+            thorpy.Group(
+                elements=[
+                   button_done,
+                    button_clear_maxmin,
+                    button_clear_accumulators
+                ], mode='v')
+            ])
+    for e in clear.get_all_descendants():
+        e.hand_cursor = False    
+    return clear
+
+
 def create_options(waveform, app_actions):
     """Option controls dialog"""
     def about_box():

@@ -50,7 +50,6 @@ class Multimeter:
         self.update_multimeter_display(buffer.cs)
         self.multimeter_display.draw()
         datetime.draw()
-
            
     def create_multimeter_controls(self):
         """Multimeter controls, on right of screen"""
@@ -67,6 +66,7 @@ class Multimeter:
             ('Run/Stop', self.app_actions.start_stop),
             ('Mode', lambda: self.app_actions.set_updater('mode')), 
             ('Range', lambda: self.app_actions.set_updater('current_sensitivity')), 
+            ('Clear', lambda: self.app_actions.set_updater('clear')),
             ('Options', lambda: self.app_actions.set_updater('options'))
             ]
         buttons = [ configure_button(BUTTON_SIZE, bt, bf) for bt, bf in button_setup ]

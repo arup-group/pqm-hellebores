@@ -44,7 +44,7 @@ class UI_groups:
     # the flag helps to reduce workload of screen refresh when there are overlay menus.
     overlay_dialog_active = False
 
-    def __init__(self, st, waveform, multimeter, app_actions):
+    def __init__(self, st, buffer, waveform, multimeter, app_actions):
         # make a local reference to app_actions and st
         self.app_actions = app_actions
         self.st = st
@@ -77,8 +77,9 @@ class UI_groups:
         self.elements['horizontal'] = create_horizontal(st, app_actions)
         self.elements['trigger'] = create_trigger(st, waveform, app_actions)
         self.elements['options'] = create_options(waveform, app_actions)
+        self.elements['clear'] = create_clear(buffer, app_actions)
 
-        for k in ['mode', 'current_sensitivity', 'vertical', 'horizontal', 'trigger', 'options']:
+        for k in ['mode', 'current_sensitivity', 'vertical', 'horizontal', 'trigger', 'options', 'clear']:
             self.elements[k].set_topright(*SETTINGS_BOX_POSITION)
 
     def refresh(self, buffer, screen):
@@ -110,7 +111,6 @@ class UI_groups:
         else:
             # for longer timebases, we can re-draw every time
             self.app_actions.multi_trace = 1
-
 
     def set_updater(self, elements_group):
         # for 'waveform', 'multimeter', 'voltage_harmonic', 'current_harmonic',
@@ -223,6 +223,19 @@ class Sample_Buffer:
         self.ps[2].append((sample[0], sample[3]))
         self.ps[3].append((sample[0], sample[4]))
 
+    def clear_analysis_bounds(self):
+        for key in ['rms_voltage_max', 'rms_voltage_min', 'rms_current_max', 'rms_current_min',
+                'mean_power_max', 'mean_power_min', 'mean_volt_ampere_reactive_max', 'mean_volt_ampere_reactive_min',
+                'mean_volt_ampere_max', 'mean_volt_ampere_min' ]:
+            try:
+                del self.cs[key]
+            except KeyError:
+                # if the key doesn't actually exist in the dictionary, catch error and continue
+                pass
+
+    def clear_accumulators(self):
+        pass
+
     def update_analysis_bounds(self):
         """Keep track of max and min boundaries since sampling started."""
         try:
@@ -237,7 +250,7 @@ class Sample_Buffer:
             self.cs['mean_volt_ampere_max'] = max(self.cs['mean_volt_ampere_max'], self.cs['mean_volt_ampere'])
             self.cs['mean_volt_ampere_min'] = min(self.cs['mean_volt_ampere_min'], self.cs['mean_volt_ampere'])
         except KeyError:
-            # On first call the max/min fields are not set so we initialise them here to the initial analysis values
+            # If the max/min fields are not set yet then initialise them to the current analysis values
             self.cs['rms_voltage_max'] = self.cs['rms_voltage']
             self.cs['rms_voltage_min'] = self.cs['rms_voltage']
             self.cs['rms_current_max'] = self.cs['rms_current']
@@ -440,18 +453,18 @@ def main():
     st = Settings(other_programs = [ 'scaler.py', 'trigger.py', 'mapper.py' ],
                   reload_on_signal=False)
 
+    # set up a sample buffer object
+    buffer = Sample_Buffer()
+
     # create objects that hold the state of the application and UI
     app_actions  = App_Actions(waveform_stream_name, analysis_stream_name)
     wfs          = WFS_Counter()
     waveform     = Waveform(st, wfs, app_actions)
     multimeter   = Multimeter(st, app_actions)
-    ui           = UI_groups(st, waveform, multimeter, app_actions)
+    ui           = UI_groups(st, buffer, waveform, multimeter, app_actions)
 
     # start up in the waveform mode
     ui.app_actions.set_updater('waveform')
-
-    # set up a sample buffer object
-    buffer = Sample_Buffer()
 
     # main loop
     while True:

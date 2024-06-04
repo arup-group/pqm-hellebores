@@ -13,23 +13,35 @@ import numpy as np
 import settings
 import sys
 import json
+import time
 
 class Analyser:
     """Create an instance with the sample rate, then call load_data_frame, calculate,
     get_results in that order.""" 
 
-    def __init__(self, sample_rate):
-        self.sample_rate = sample_rate
+    def __init__(self, st):
+        self.st = st
+        self.sample_rate = st.sample_rate
         self.data_frame = None
         self.size = 0
         self.fft_window = np.blackman(0)  # empty to begin with
         self.results = {}
-        # set integer accumulators to zero: time in milliseconds, and energy transfer in
-        # milli-watt-seconds etc
+        self.reset_accumulators()
+
+    def reset_accumulators(self):
+        """set integer accumulators to zero: time in milliseconds, and energy transfer in
+        milli-watt-seconds etc."""
         self.accumulated_time = 0
         self.mws = 0
         self.mvas = 0
         self.mvars = 0
+
+    def check_updated_settings(self):
+        if self.st.analysis_start_time == 0:
+            # reset analysis accumulators
+            self.reset_accumulators()
+            self.st.analysis_start_time = time.time()
+            self.st.send_to_all()
 
     def create_fft_window(self, n_points, window_type='flattop'):
         # window_type = 'blackman', 'flattop' or 'rectangular'
@@ -54,11 +66,12 @@ class Analyser:
             fft_window = np.array([ 1.0 for n in range(n_points) ])
         else:
             print('Analyser: create_fft_window() window_type not known, using default.',
-                file=sys.stederr)
+                file=sys.stderr)
             fft_window = self.create_fft_window(n_points)
         return fft_window
 
     def apply_filters(self):
+        """Filter the multi-column data frame into single column slices of the data."""
         self.timestamps = self.data_frame[:,0]
         self.voltages = self.data_frame[:,1]
         self.currents = self.data_frame[:,2]
@@ -268,24 +281,27 @@ class Sample_cache:
         sample_array = np.loadtxt(wrapped_cache, encoding='utf-8')
         return sample_array
 
+def check_updated_settings():
+    global analyser
+    analyser.check_updated_settings()
 
 def main():
-    st = settings.Settings()
+    global analyser
+    st = settings.Settings(lambda: check_updated_settings())
     # We will output new calculations once per second.
     output_interval = int(st.sample_rate)
     # However, our calculation buffer is 2 seconds in length to increase accuracy.
     cache_size = int(st.sample_rate*2)
     # The cache is a circular buffer, we can keep pushing data into it.
     cache = Sample_cache(cache_size)
-    analyser = Analyser(st.sample_rate)
+    analyser = Analyser(st)
     # Before actually analysing, seed the cache with data
     for i in range(cache_size):
         line = sys.stdin.readline()
         cache.put(line.rstrip())
     # Now start the analysis loop
     i = 0 
-    while True:
-        line = sys.stdin.readline()
+    for line in sys.stdin:
         cache.put(line.rstrip())
         # iterator is reset to zero every output interval
         if i == 0:

@@ -1,4 +1,5 @@
 {
+    "analysis_start_time": 0,
     "sample_rate": 7812.5,
     "time_axis_divisions": 10,
     "time_axis_pre_trigger_divisions": 5,

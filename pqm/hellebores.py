@@ -194,7 +194,9 @@ else:
 
 class Sample_Buffer:
 
-    def __init__(self):
+    def __init__(self, st):
+        # local reference to settings
+        self.st = st
         # working points buffer for four lines, calculation array
         # flag for detecting when pipes are closed (end of file)
         self.ps = [ [],[],[],[] ]           # points
@@ -234,7 +236,10 @@ class Sample_Buffer:
                 pass
 
     def clear_accumulators(self):
-        pass
+        """Setitng the analysis_start_time setting to zero triggers a function in analyser.py
+        to reset all the accumulators."""
+        self.st.analysis_start_time = 0
+        self.st.send_to_all()
 
     def update_analysis_bounds(self):
         """Keep track of max and min boundaries since sampling started."""
@@ -450,11 +455,11 @@ def main():
     # the list of 'other programs' is used to send signals when we change
     # settings in this program. We call st.send_to_all() and then
     # these programs are each told to re-read the settings file.
-    st = Settings(other_programs = [ 'scaler.py', 'trigger.py', 'mapper.py' ],
-                  reload_on_signal=False)
+    st = Settings(other_programs = [ 'scaler.py', 'trigger.py', 'mapper.py',\
+            'analyser.py' ], reload_on_signal=False)
 
     # set up a sample buffer object
-    buffer = Sample_Buffer()
+    buffer = Sample_Buffer(st)
 
     # create objects that hold the state of the application and UI
     app_actions  = App_Actions(waveform_stream_name, analysis_stream_name)

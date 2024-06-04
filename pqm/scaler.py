@@ -46,7 +46,7 @@ def main():
     else:
         run_calibrated = True
 
-    # get_factors() function will be called when settings are changed
+    # NB get_factors() function will be called automatically when settings are changed
     st = Settings(lambda run_calibrated=run_calibrated: get_factors(run_calibrated))
     i = 0   # sample index
     get_factors(run_calibrated)

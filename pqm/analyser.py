@@ -115,9 +115,12 @@ class Analyser:
 
     def rms(self, df):
         """Determine the RMS average of the array."""
-        sum_of_squares = np.sum(np.square(df))
-        number_of_samples = df.shape[0]
-        rms = math.sqrt(sum_of_squares / number_of_samples)
+        try:
+            sum_of_squares = np.sum(np.square(df))
+            number_of_samples = df.shape[0]
+            rms = math.sqrt(sum_of_squares / number_of_samples)
+        except ZeroDivisionError:
+            rms = 0.0
         return rms
 
     def frequency(self):
@@ -153,10 +156,12 @@ class Analyser:
         """Round values to reduce length of output strings.
         Zero decimal places is not implemented."""
         try:
+            if math.isnan(value):
+                raise OverflowError
             shift = 10**decimal_places
             result = round(value*shift)/shift 
-        except (OverflowError, ValueError):
-            result = value
+        except (OverflowError, ValueError, ZeroDivisionError):
+            result = 0.0
         return result
 
     def averages(self):
@@ -181,18 +186,9 @@ class Analyser:
         except ValueError:
             mean_var                                 = 0.0
         self.results['mean_volt_ampere_reactive']    = self.round_to(mean_var, 3)
-        try:
-            self.results['crest_factor_voltage']     = self.round_to(maxabs_v / rms_v, 3)
-        except ZeroDivisionError:
-            self.results['crest_factor_voltage']     = 0.0
-        try:
-            self.results['crest_factor_current']     = self.round_to(maxabs_i / rms_i, 3)
-        except ZeroDivisionError:
-            self.results['crest_factor_current']     = 0.0
-        try:
-            self.results['power_factor']             = self.round_to(mean_p / mean_va, 3)
-        except ZeroDivisionError:
-            self.results['power_factor']             = 0.0
+        self.results['crest_factor_voltage']         = self.round_to(maxabs_v / rms_v, 3)
+        self.results['crest_factor_current']         = self.round_to(maxabs_i / rms_i, 3)
+        self.results['power_factor']                 = self.round_to(mean_p / mean_va, 3)
 
     def power_quality(self):
         """Power quality calcuation relies on other results: call after averages and frequency."""
@@ -217,7 +213,7 @@ class Analyser:
                     [ self.round_to(m/self.results['rms_current']*100, 1) for m in ms ] 
         except (ZeroDivisionError, OverflowError, ValueError, IndexError):
             self.results['total_harmonic_distortion_current_percentage'] = 0.0
-            self.results['harmonic_current_percentages'] = [0.0]
+            self.results['harmonic_current_percentages'] = [0.0 for m in ms ]
 
     def accumulators(self):
         """Wh, VARh and VAh accumulators."""

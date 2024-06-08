@@ -32,23 +32,27 @@ ROOT2 = math.sqrt(2)
 
 
 def sample(i, fs):
-    """i is integer sample number, fs is a list of tuples (freqency, magitude, phase)."""
+    """i is integer sample number, fs is a list of tuples (frequency, magnitude, phase).
+    For DC tuple, use (0, m, 0), ie set frequency to zero."""
     global st
     t = i*st.interval/1000.0       # convert iterator to time axis position
     s = 0
     for f in fs:
         freq, mag, ph = f
-        s = s + ROOT2*mag*math.sin(math.pi*(2.*freq*t + ph/180.))
+        if freq == 0:
+            s = s + mag
+        else:
+            s = s + ROOT2*mag*math.sin(math.pi*(2.*freq*t + ph/180.))
     return s
 
 def generate_samples(parameters):
     """Generates a block of n samples to bring us up to date wrt to system clock."""
     global st, sample_index, time_zero
 
-    def scale(scale_factor, sample, offset):
+    def scale(scale_factor, sample, trip):
         """convert to 16 bit integer. Note that after conversion, negative
            numbers are expressed in 2s complement form."""
-        return int(scale_factor*sample + offset) & 0xffff
+        return int(scale_factor*sample + trip) & 0xffff
 
     # figure out how many new samples we need to generate
     new_time_mark = time.time()*1000.0
@@ -62,12 +66,14 @@ def generate_samples(parameters):
     else:
         # retrieve the sample generating coefficients from the current parameters
         f = parameters.get('freq')
-        v = [(f, parameters.get('v1'), 0.0),
-             (f*3, parameters.get('v3'), parameters.get('v_ph3')),
-             (f*5, parameters.get('v5'), parameters.get('v_ph5'))]
-        i = [(f, parameters.get('i1'), parameters.get('i_ph1')),
-             (f*3, parameters.get('i3'), parameters.get('i_ph3')),
-             (f*5, parameters.get('i5'), parameters.get('i_ph5'))]
+        v = [(0.0, parameters.get('v0'), 0.0),
+             (f, parameters.get('v1'), 0.0),
+             (f*3, parameters.get('v3'), parameters.get('v3_ph')),
+             (f*5, parameters.get('v5'), parameters.get('v5_ph'))]
+        i = [(0.0, parameters.get('i0'), 0.0),
+             (f, parameters.get('i1'), parameters.get('i1_ph')),
+             (f*3, parameters.get('i3'), parameters.get('i3_ph')),
+             (f*5, parameters.get('i5'), parameters.get('i5_ph'))]
         el = [(f, parameters.get('el'), parameters.get('el_ph'))] 
     
         # generate new samples to bring us up-to-date with the clock
@@ -75,11 +81,11 @@ def generate_samples(parameters):
             # hardware scaling factors for each channel as per below
             # [4.07e-07, 2.44e-05, 0.00122, 0.0489]
             # to simulate the hardware, we scale the signals by the reciprocal of the scaling factor
-            offset = parameters.get('offset')
-            c3 = scale(1./0.0489, sample(sample_index, v), offset)
-            c2 = scale(1./0.00122, sample(sample_index, i), offset)
-            c1 = scale(1./2.44e-05, sample(sample_index, i), offset)
-            c0 = scale(1./4.07e-07, sample(sample_index, el), offset)
+            trip = parameters.get('trip')
+            c3 = scale(1./0.0489, sample(sample_index, v), trip)
+            c2 = scale(1./0.00122, sample(sample_index, i), trip)
+            c1 = scale(1./2.44e-05, sample(sample_index, i), trip)
+            c0 = scale(1./4.07e-07, sample(sample_index, el), trip)
             # update the running total
             sample_index = sample_index + 1
             # output samples in order of leakage current, low range current, full range current, voltage
@@ -94,45 +100,45 @@ class Parameters:
     """Holds the fixed and variable parameters that include the coefficients for the sample generator."""
     # labels for the individual parameters -- used to form dictionary lookups
     # for all the parameters that follow below
-    labels     = ['offset','freq','v1','v3','v5','v_ph3','v_ph5',
-                  'i1','i3','i5','i_ph1','i_ph3','i_ph5',
+    labels     = ['trip','freq','v0','v1','v3','v5','v3_ph','v5_ph',
+                  'i0', 'i1','i3','i5','i1_ph','i3_ph','i5_ph',
                   'el','el_ph']
 
     # preset settings that can be recalled by push button
     presets = {
-        'One':    [ 0, 50, 230, 0, 0, 0, 0,
-                    2, 0.5, 0.3, 30, -60, 180,
+        'One':    [ 0, 50, 0, 230, 0, 0, 0, 0,
+                    0, 2, 0.5, 0.3, 30, -60, 180,
                     0.0003, 90 ],
-        'Two':    [ 0, 50.05, 230, 0, 0, 0, 0,
-                    1, 0.5, 0.3, -30, -60, 180,
+        'Two':    [ 0, 50.05, 0, 230, 0, 0, 0, 0,
+                    0, 1, 0.5, 0.3, -30, -60, 180,
                     0.0002, 90 ],
-        'Three':  [ 0, 49.98, 230, 0, 0, 0, 0,
-                    0.5, 0.2, 0.1, 30, -60, 180,
+        'Three':  [ 0, 49.98, 0, 230, 0, 0, 0, 0,
+                    0, 0.5, 0.2, 0.1, 30, -60, 180,
                     0.0002, 90 ],
-        'Four':   [ 0, 60.1, 120, 0, 0, 0, 0,
-                    1, 0.5, 0.3, 90, 60, -90,
+        'Four':   [ 0, 60.1, 0, 120, 0, 0, 0, 0,
+                    0, 1, 0.5, 0.3, 90, 60, -90,
                     0.0001, 90 ],
-        'Over+':  [ 32767, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0,
+        'Trip+':  [ 32767, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0,
                     0, 0 ],
-        'Over-':  [ -32768, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0,
+        'Trip-':  [ -32768, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0,
                     0, 0 ]
         }
      
     # a flag to show whether the sliders are horizontal or vertical
-    directions = ['h','h','v','v','v','h','h',
-                  'v','v','v','h','h','h',
+    directions = ['h','h','v','v','v','v','h','h',
+                  'v','v','v','v','h','h','h',
                   'v','h']
 
     # the minimum and maximum values that correspond to a slider range
-    ranges     = [ (-32768,32767),(30,70), (100,300), (0,100), (0,100), (-180,180), (-180,180),
-                   (0,5), (0,5), (0,5), (-180,180), (-180,180), (-180,180),
+    ranges     = [ (-32768,32767),(30,70), (-400,400), (100,300), (0,100), (0,100), (-180,180), (-180,180),
+                   (-5, 5), (0,5), (0,5), (0,5), (-180,180), (-180,180), (-180,180),
                    (0,0.010), (-180,180) ]
 
     # when displaying parameters as text, we round off to a fixed number of decimal places
-    rounding   = [ 0, 2, 1, 1, 1, 0, 0,
-                   1, 1, 1, 0, 0, 0,
+    rounding   = [ 0, 2, 0, 0, 0, 0, 0, 0,
+                   2, 1, 1, 1, 0, 0, 0,
                    4, 0 ]
 
     def __init__(self):
@@ -190,13 +196,13 @@ def setup_ui(screen, parameters):
                              show_value_on_right_side=False, edit=False)
 
     supply = thorpy.TitleBox('Supply',
-                [ sliders['offset'], sliders['freq'],
-                  thorpy.Group([sliders['v1'], sliders['v3'], sliders['v5']], mode='h'),
-                  thorpy.Group([sliders['v_ph3'], sliders['v_ph5']], mode='v') ])
+                [ sliders['freq'],
+                  thorpy.Group([sliders['v0'], sliders['v1'], sliders['v3'], sliders['v5']], mode='h'),
+                  thorpy.Group([sliders['v3_ph'], sliders['v5_ph']], mode='v') ])
 
     load  = thorpy.TitleBox('Load',
-               [ thorpy.Group([sliders['i1'], sliders['i3'], sliders['i5']], mode='h'),
-                 thorpy.Group([sliders['i_ph1'], sliders['i_ph3'], sliders['i_ph5']], mode='v') ])
+               [ thorpy.Group([sliders['i0'], sliders['i1'], sliders['i3'], sliders['i5']], mode='h'),
+                 thorpy.Group([sliders['i1_ph'], sliders['i3_ph'], sliders['i5_ph']], mode='v') ])
 
     earth_leakage = thorpy.TitleBox('Earth Leakage',
                       [ thorpy.Group([sliders['el'], sliders['el_ph']], mode='v') ])
@@ -206,14 +212,14 @@ def setup_ui(screen, parameters):
 
     def set_text(text, parameters):
         p = parameters
-        new_text = f"offset    : {p.get('offset')}\n" \
+        new_text =   f"trip    : {p.get('trip')}\n" \
                    + f"freq    : {p.get('freq')}\n" \
-                   + f"voltage : {p.get('v1')} (0)," \
-                   + f" {p.get('v3')} ({p.get('v_ph3')})," \
-                   + f" {p.get('v5')} ({p.get('v_ph5')})\n" \
-                   + f"current : {p.get('i1')} ({p.get('i_ph1')})," \
-                   + f" {p.get('i3')} ({p.get('i_ph3')})," \
-                   + f" {p.get('i5')} ({p.get('i_ph5')})\n" \
+                   + f"voltage : {p.get('v0')}V DC, {p.get('v1')}V (0)," \
+                   + f" {p.get('v3')}V ({p.get('v3_ph')})," \
+                   + f" {p.get('v5')}V ({p.get('v5_ph')})\n" \
+                   + f"current : {p.get('i0')}A DC, {p.get('i1')}A ({p.get('i1_ph')})," \
+                   + f" {p.get('i3')}A ({p.get('i3_ph')})," \
+                   + f" {p.get('i5')}A ({p.get('i5_ph')})\n" \
                    + f"leakage : {p.get('el')} ({p.get('el_ph')})\n" \
                    + ' '*48         # include a long line so that the dimensions never change
         text.set_value(new_text)
@@ -242,8 +248,8 @@ def setup_ui(screen, parameters):
                                 thorpy.Button('Two'),
                                 thorpy.Button('Three'),
                                 thorpy.Button('Four'),
-                                thorpy.Button('Over+'),
-                                thorpy.Button('Over-') ], mode='h')
+                                thorpy.Button('Trip+'),
+                                thorpy.Button('Trip-') ], mode='h')
    
     for button in buttons_ui.get_children():
         button.set_size((50, 30))

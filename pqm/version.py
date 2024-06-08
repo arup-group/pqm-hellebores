@@ -26,7 +26,7 @@ class Version:
             with open(file, 'r') as f:
                 try:
                     text = text + f.read()
-                except:
+                except IOError:
                     print(f"version.py: Version.readfiles() couldn't read file {file}",
                             file=sys.stderr)
         return text
@@ -51,7 +51,7 @@ class Version:
             version_file = self.resolve_path('.', VERSION_FILE)
             with open(version_file, 'r') as f:
                 version_string = f.read().strip() 
-        except:
+        except IOError:
             print(f"version.py: Version.get_version() couldn't read file {f}",
                     file=sys.stderr)
         return version_string
@@ -63,7 +63,7 @@ class Version:
                 with open(version_file, 'w') as f:
                     f.write(new_version)
                     f.close()
-            except:
+            except IOError:
                 print(f"version.py: Version.set_version() couldn't write file {f}",
                        file=sys.stderr)
 
@@ -78,7 +78,7 @@ class Version:
             if sub < 999:
                 sub = sub + 1
                 self.set_version(f"{major}.{minor}.{sub:003d}{codename}")
-        except:
+        except ValueError:
             print(f"version.py: Version.increment_sub_version() couldn't change version {current_version}",
                     file=sys.stderr)
  
@@ -87,22 +87,17 @@ class Version:
         try:
             result = subprocess.run(['git', 'rev-parse', 'HEAD'], capture_output=True, check=True)
             git_head = result.stdout.decode('utf-8').strip()
-        except:
+        except FileNotFoundError:
             print(f"version.py: Version.git_head() failed to run git command",
                     file=sys.stderr)
         return git_head
 
     def get_temp_dir(self):
-        temp_dir = ''
-        try:
-            temp_from_env = os.getenv('TEMP')
-            if temp_from_env == None:
-                temp_dir = ''
-            else:
-                temp_dir = temp_from_env
-        except:
-            print(f"version.py: Version.get_temp_dir() failed to succeed",
-                    file=sys.stderr)
+        temp_from_env = os.getenv('TEMP')
+        if temp_from_env == None:
+            temp_dir = ''
+        else:
+            temp_dir = temp_from_env
         return temp_dir 
 
 

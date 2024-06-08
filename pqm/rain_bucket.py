@@ -20,7 +20,7 @@ def generate(sample_file):
     try:
         with open(sample_file) as f:
             rain_bucket = f.read().split('\n')
-    except:
+    except (FileNotFoundError, IOError):
         print('rain_bucket.py: error opening or reading sample data file', file=sys.stderr)
         sys.exit(1)
 

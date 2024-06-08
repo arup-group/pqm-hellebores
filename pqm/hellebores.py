@@ -277,6 +277,7 @@ class Sample_Buffer:
                 if l == '':
                     print('Analysis pipe was closed.', file=sys.stderr)
                     self.pipes_ok = False
+                    return
                 # then load the analysis into a local dictionary
                 new_analysis = json.loads(l)
                 for (key, value) in new_analysis.items():

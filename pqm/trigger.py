@@ -56,7 +56,7 @@ class Buffer:
         # to be manipulated other than here.
         try:
             self.buf[self.sp % BUFFER_SIZE] = [ float(w) for w in line.split() ]
-        except:
+        except ValueError:
             print(
                 f"trigger.py, store_line(): Couldn't interpret '{line}'.",
                 file=sys.stderr)

@@ -26,7 +26,7 @@ class Settings():
             identity_file = self.resolve_path(CONFIGURATION_PATH, IDENTITY_FILE)
             with open(identity_file, 'r') as f:
                 identity = f.read().strip()
-        except:
+        except (FileNotFoundError, IOError):
             print('settings.py: using default identity', file=sys.stderr)
             identity = 'PQM-0'
         return identity
@@ -37,7 +37,7 @@ class Settings():
             with open(calibrations_file, 'r') as f:
                 js = json.loads(f.read())
                 cal = js[identity]
-        except:
+        except (FileNotFoundError, IOError):
             print('settings.py: using default calibration', file=sys.stderr)
             cal = { 'offsets': [0.0, 0.0, 0.0, 0.0], \
                       'gains': [1.0, 1.0, 1.0, 1.0] }          
@@ -138,7 +138,7 @@ class Settings():
         try:
             with open(self.sfile, 'r') as f:
                 js = json.loads(f.read())
-        except:
+        except (FileNotFoundError, IOError):
             print(
                 "settings.py, get_settings(): couldn't read settings.json, regenerating...",
                 file=sys.stderr)
@@ -150,7 +150,7 @@ class Settings():
         try:
             with open(self.sfile, 'w') as f:
                 f.write(json.dumps(self.make_json(), indent=4))
-        except:
+        except (PermissionError, IOError):
             print(
                 "settings.py, save_settings(): couldn't write settings.json.",
                 file=sys.stderr)
@@ -207,16 +207,21 @@ class Settings():
         pids = {}
         if other_programs != []:
             for p in psutil.process_iter():
-                try:
-                    pcmd = ' '.join(p.cmdline())
-                    for program in other_programs:
-                        if program in pcmd:
-                            # print(f'Collected PID {p.pid} for {pcmd}', file=sys.stderr)
-                            pids[p.pid] = pcmd
-                except:
-                    # p.cmdline() generates permission errors on some system processes, so
-                    # we ignore them and continue
-                    pass 
+#                try:
+#                    pcmd = ' '.join(p.cmdline())
+#                    for program in other_programs:
+#                        if program in pcmd:
+#                            # print(f'Collected PID {p.pid} for {pcmd}', file=sys.stderr)
+#                            pids[p.pid] = pcmd
+#                except:
+#                    # p.cmdline() generates permission errors on some system processes, so
+#                    # we ignore them and continue
+#                    pass 
+                pcmd = ' '.join(p.cmdline())
+                for program in other_programs:
+                    if program in pcmd:
+                        # print(f'Collected PID {p.pid} for {pcmd}', file=sys.stderr)
+                        pids[p.pid] = pcmd
         return pids.keys()
 
 

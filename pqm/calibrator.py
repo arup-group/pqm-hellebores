@@ -16,13 +16,14 @@ READER_TEST = 'rain_chooser.py'    # use this for testing
 
 
 def is_raspberry_pi():
+    is_pi = False
     try:
         with open('/sys/firmware/devicetree/base/model', 'r') as model:
             if 'raspberry' in model.read().lower():
-                return True
-    except:
+                is_pi = True
+    except (FileNotFoundError, IOError):
         pass
-    return False
+    return is_pi
 
 
 def resolve_path(path, file):
@@ -206,13 +207,8 @@ def calibrate(samples):
 
 def main():
     if ready_to_proceed():
-        try:
-            samples = lines_to_samples(get_lines_from_reader(ADC_SAMPLES))
-            print_results(*calibrate(samples))
-        except:
-            print(f'{os.path.basename(__file__)}, main(): Error caused exit', file=sys.stderr)
-            sys.exit(1)
-
+        samples = lines_to_samples(get_lines_from_reader(ADC_SAMPLES))
+        print_results(*calibrate(samples))
 
 
 if __name__ == '__main__':

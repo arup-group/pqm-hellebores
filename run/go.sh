@@ -90,10 +90,14 @@ if $real_hardware; then
     ./pico_control.py --command "START stream.py 1x 1x 1x 1x 7.812k" --no_response
 fi
 
+# analyser.py needs to run with an increased input pipe buffer, to avoid stalling the sample
+# stream while doing calculations.
+ANALYSER="stdbuf --input=4M nice --adjustment=10 ./analyser.py"
+
 # Plumbing, pipe, pipe, pipe...
 $READER \
     | ./scaler.py \
-        | tee >(./analyser.py | tee $MEASUREMENT_LOG_FILE > $ANALYSIS_PIPE) \
+        | tee >($ANALYSER | tee $MEASUREMENT_LOG_FILE > $ANALYSIS_PIPE) \
             | ./trigger.py | ./mapper.py > $WAVEFORM_PIPE &
 
 ./hellebores.py $WAVEFORM_PIPE $ANALYSIS_PIPE

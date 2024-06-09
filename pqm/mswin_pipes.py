@@ -47,7 +47,7 @@ class Pipe:
                     None
                 )
                 res = win32pipe.SetNamedPipeHandleState(pipe, win32pipe.PIPE_READMODE_MESSAGE, None, None)
-            except (FileNotFoundError, IOError):
+            except (FileNotFoundError, PermissionError, OSError, IOError):
                 print(f"mswin_pipes.open_existing_pipe(): waiting for pipe {pipe_name} to become available.", file=sys.stderr) 
             time.sleep(1.0)
             retries = retries - 1
@@ -71,7 +71,7 @@ class Pipe:
                 None)
             win32pipe.ConnectNamedPipe(pipe, None)
         # need to check which exception is raised when CreateNamedPipe fails
-        except IOError:
+        except (PermissionError, OSError, IOError):
             print(f"mswin_pipes.open_new_pipe(): couldn't open pipe {pipe_name}, quitting.", file=sys.stderr)
             raise SystemExit
         self.pfh = pipe
@@ -130,7 +130,7 @@ def main():
                     p1.writeline(line)
                     p2.writeline(line)
 
-    except IOError:
+    except (SystemExit, OSError, IOError):
         print(f"{sys.argv[0]}: error processing the command {command}.", file=sys.stderr)
         sys.exit(1)
 

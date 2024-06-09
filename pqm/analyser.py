@@ -153,8 +153,8 @@ class Analyser:
         self.results['frequency'] = self.round_to(frequency, 3)
 
     def round_to(self, value, decimal_places):
-        """Round values to reduce length of output strings.
-        Zero decimal places is not implemented."""
+        """Round values to reduce length of output strings. Zero decimal places
+        is not implemented. NaN input values are coerced to zero."""
         try:
             if math.isnan(value):
                 raise OverflowError

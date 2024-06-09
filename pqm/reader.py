@@ -51,7 +51,7 @@ def read_and_print(ser):
 
         except ValueError:
             print('reader.py, read_and_print(): The data was not correct or complete.', file=sys.stderr)
-        except OSError:
+        except (IOError, OSError):
             print('reader.py, read_and_print(): Failed to read from serial port.', file=sys.stderr)
             retries = retries - 1
     print('reader.py, read_and_print(): Read error was persistent, exiting loop.', file=sys.stderr)
@@ -66,7 +66,7 @@ def main():
             ser = serial.Serial(port_name)
             print(f"reader.py, main(): Connected.", file=sys.stderr)
             read_and_print(ser)
-        except OSError:
+        except (serial.serialutil.SerialException, FileNotFoundError, OSError):
             print(f"reader.py, main(): Serial error.", file=sys.stderr)
         finally:
             # make sure we have closed the port if it was opened

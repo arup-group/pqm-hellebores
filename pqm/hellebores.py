@@ -132,7 +132,7 @@ class UI_groups:
             self.overlay_dialog_active = True
         try: 
             self.updater = thorpy.Group(elements=selected_elements, mode=None).get_updater()
-        except:
+        except KeyError:
             print(f"UI_groups.set_updater(): couldn't set or find"
                   f" '{elements_group}' updater object.\n", file=sys.stderr)
         return self.updater
@@ -323,7 +323,7 @@ class Sample_Buffer:
                     self.add_sample(sample)
                 self.xp = sample[0]
                 sample_counter = sample_counter + 1
-            except:
+            except IOError:
                 print('hellebores.py: Sample_Buffer.load_analysis()'
                       ' file reading error.', file=sys.stderr) 
                 break
@@ -372,7 +372,7 @@ class App_Actions:
                 self.analysis_stream = self.open_pipe(analysis_stream_name)
             else:
                 self.analysis_stream = None
-        except:
+        except (PermissionError, FileNotFoundError, OSError):
             print(f"{sys.argv[0]}: App_Actions.open_streams() couldn't open the input streams "
                   f"{waveform_stream_name} and {analysis_stream_name}", file=sys.stderr)
             self.exit_application('error')
@@ -381,7 +381,7 @@ class App_Actions:
         try:
             self.waveform_stream.close()
             self.analysis_stream.close() 
-        except:
+        except OSError:
             print(f"{sys.argv[0]}: App_Actions.close_streams() couldn't close the input streams", file=sys.stderr)
 
 
@@ -408,7 +408,7 @@ class App_Actions:
                        'shutdown': 4 }
         try:
             code = exit_codes[option]
-        except:
+        except KeyError:
             print(f"hellebores.py: App_Actions.exit_application() exit option '{option}'"
                    " isn't implemented, exiting with error code 1.", file=sys.stderr)
             code = 1

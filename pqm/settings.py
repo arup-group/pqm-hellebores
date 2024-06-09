@@ -134,15 +134,19 @@ class Settings():
         return js 
  
  
-    def load_settings(self):
+    def load_settings(self, retries=5):
         try:
             with open(self.sfile, 'r') as f:
                 js = json.loads(f.read())
-        except (FileNotFoundError, IOError):
-            print(
-                "settings.py, get_settings(): couldn't read settings.json, regenerating...",
-                file=sys.stderr)
-            js = json.loads(default_settings)
+        except (json.decoder.JSONDecodeError, FileNotFoundError, IOError):
+            # there may be contention on the file, retry a few times before loading defaults
+            if retries > 0:
+                js = self.load_settings(retries-1)
+            else:
+                print(
+                    "settings.py, get_settings(): couldn't read settings.json, regenerating...",
+                    file=sys.stderr)
+                js = json.loads(default_settings)
         return js
 
 

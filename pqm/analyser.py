@@ -279,35 +279,37 @@ def read_lines(n, cache):
     """Reads n lines from stdin, and stores in the cache."""
     for i in range(n):
         line = sys.stdin.readline().rstrip()
-        if line == '':
-            raise SystemExit
-        else:
-            cache.put(line)
+        cache.put(line)
+    # Test for end of input stream
+    if line == '':
+        raise SystemExit
+    return i
 
 def read_analyse_output(cache, analyser, output_interval):
-    # Before actually analysing, seed the cache with data
-    read_lines(cache.size, cache)
-
-    # Loop through alternating read and calculation processes
+    """Loop through analysis and output processes, interspersed with new data reading
+    to avoid stalling the sample data pipeline at the input."""
+    # Divide the frame of data for each output_interval into 6 blocks of roughly equal size:
+    # the final block will be rounded up.
+    block_size = output_interval // 6
     while True:
+        interval_counter = 0
         # Retrieve a block of calculation data, and load it into the analyser
         analyser.load_data_frame(cache.get_output_array()) 
-        read_lines(500, cache)
+        interval_counter += read_lines(block_size, cache)
         # Analyse the data in steps
-        analyser.averages()
-        read_lines(500, cache)
-        analyser.frequency()
-        read_lines(500, cache)
-        analyser.power_quality()
-        read_lines(500, cache)
-        analyser.accumulators()
-        read_lines(500, cache)
+        calculation_tasks = [ analyser.averages,
+                              analyser.frequency,
+                              analyser.power_quality,
+                              analyser.accumulators ]
+        for task in calculation_tasks:
+            task()
+            interval_counter += read_lines(block_size, cache)
         # Generate the output
-        results = json.dumps(analyser.get_results())
-        print(results)
+        print(json.dumps(analyser.get_results()))
         sys.stdout.flush()
-        read_lines(output_interval-2500, cache)
-
+        # Complete the frame of new data acquisition for the current interval
+        # rounding up this block of data to make exactly one 'output_interval'.
+        read_lines(output_interval - interval_counter, cache)
 
 def main():
     global analyser
@@ -319,6 +321,8 @@ def main():
     # The cache is a circular buffer, we can keep pushing data into it.
     cache = Sample_cache(cache_size)
     analyser = Analyser(st)
+    # Before actually analysing, seed the cache with data
+    read_lines(cache.size, cache)
     # Read, analyse, output loop
     read_analyse_output(cache, analyser, output_interval)
 

@@ -9,6 +9,7 @@ import time
 import sys
 import win32pipe
 import win32file
+import pywintypes
 
 # local
 from settings import Settings
@@ -28,14 +29,13 @@ class Pipe:
     def __enter__(self):
         return self
     
-    def __exit__(self):
+    def __exit__(self, e_type, e_value, e_traceback):
         self.close()
 
-    def open_existing_pipe(self, pipe_name):
+    def open_existing_pipe(self, pipe_name, retries=10):
         """open a pipe for reading using Windows file API"""
         pipe = None
-        retries = 10
-        while pipe == None and retries > 0:
+        if retries > 0:
             try:
                 pipe = win32file.CreateFile(
                     pipe_name,
@@ -47,11 +47,10 @@ class Pipe:
                     None
                 )
                 res = win32pipe.SetNamedPipeHandleState(pipe, win32pipe.PIPE_READMODE_MESSAGE, None, None)
-            except (FileNotFoundError, PermissionError, OSError, IOError):
-                print(f"mswin_pipes.open_existing_pipe(): waiting for pipe {pipe_name} to become available.", file=sys.stderr) 
-            time.sleep(1.0)
-            retries = retries - 1
-        if pipe == None:
+            except (pywintypes.error, FileNotFoundError, PermissionError, OSError, IOError):
+                time.sleep(1.0)
+                pipe = self.open_existing_pipe(pipe_name, retries-1)
+        else:
             print(f"mswin_pipes.open_existing_pipe(): couldn't open pipe {pipe_name}, quitting.", file=sys.stderr)
             raise SystemExit
         self.pfh = pipe
@@ -71,7 +70,7 @@ class Pipe:
                 None)
             win32pipe.ConnectNamedPipe(pipe, None)
         # need to check which exception is raised when CreateNamedPipe fails
-        except (PermissionError, OSError, IOError):
+        except (pywintypes.error, PermissionError, OSError, IOError):
             print(f"mswin_pipes.open_new_pipe(): couldn't open pipe {pipe_name}, quitting.", file=sys.stderr)
             raise SystemExit
         self.pfh = pipe
@@ -119,7 +118,7 @@ def main():
     
         elif command == 'write':
             # open a new pipe for writing then copy data from stdin
-            with Pipe(sys.argv[2], 'w') as p:
+           with Pipe(sys.argv[2], 'w') as p:
                 for line in sys.stdin:
                     p.writeline(line)
                     
@@ -130,7 +129,7 @@ def main():
                     p1.writeline(line)
                     p2.writeline(line)
 
-    except (SystemExit, OSError, IOError):
+    except:
         print(f"{sys.argv[0]}: error processing the command {command}.", file=sys.stderr)
         sys.exit(1)
 

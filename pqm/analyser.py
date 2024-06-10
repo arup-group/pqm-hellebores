@@ -275,6 +275,40 @@ def check_updated_settings():
     global analyser
     analyser.check_updated_settings()
 
+def read_lines(n, cache):
+    """Reads n lines from stdin, and stores in the cache."""
+    for i in range(n):
+        line = sys.stdin.readline().rstrip()
+        if line == '':
+            raise SystemExit
+        else:
+            cache.put(line)
+
+def read_analyse_output(cache, analyser, output_interval):
+    # Before actually analysing, seed the cache with data
+    read_lines(cache.size, cache)
+
+    # Loop through alternating read and calculation processes
+    while True:
+        # Retrieve a block of calculation data, and load it into the analyser
+        analyser.load_data_frame(cache.get_output_array()) 
+        read_lines(500, cache)
+        # Analyse the data in steps
+        analyser.averages()
+        read_lines(500, cache)
+        analyser.frequency()
+        read_lines(500, cache)
+        analyser.power_quality()
+        read_lines(500, cache)
+        analyser.accumulators()
+        read_lines(500, cache)
+        # Generate the output
+        results = json.dumps(analyser.get_results())
+        print(results)
+        sys.stdout.flush()
+        read_lines(output_interval-2500, cache)
+
+
 def main():
     global analyser
     st = settings.Settings(lambda: check_updated_settings())
@@ -285,26 +319,10 @@ def main():
     # The cache is a circular buffer, we can keep pushing data into it.
     cache = Sample_cache(cache_size)
     analyser = Analyser(st)
-    # Before actually analysing, seed the cache with data
-    for i in range(cache_size):
-        line = sys.stdin.readline()
-        cache.put(line.rstrip())
-    # Now start the analysis loop
-    i = 0 
-    for line in sys.stdin:
-        cache.put(line.rstrip())
-        # iterator is reset to zero every output interval
-        if i == 0:
-            # Retrieve the buffer and push it into the analyser instance.
-            df = cache.get_output_array()
-            analyser.load_data_frame(df)
-            analyser.calculate()
-            results = json.dumps(analyser.get_results())
-            print(results)
-            sys.stdout.flush()
-        # circulate line iterator to zero every output interval (1 second)
-        i = (i + 1) % output_interval
-    print('Finished calculations.', file=sys.stderr)
+    # Read, analyse, output loop
+    read_analyse_output(cache, analyser, output_interval)
+
+
 
 if __name__ == '__main__':
     main()

@@ -17,6 +17,7 @@ fi
 grep --ignore-case raspberry '/sys/firmware/devicetree/base/model' &> /dev/null
 if [[ $? -eq 0 ]]; then
     real_hardware=true
+    #READER="stdbuf --output=8M ./reader.py"
     READER="./reader.py"
 else
     real_hardware=false
@@ -92,7 +93,8 @@ fi
 
 # analyser.py needs to run with an increased input pipe buffer, to avoid stalling the sample
 # stream while doing calculations.
-ANALYSER="stdbuf --input=4M nice --adjustment=10 ./analyser.py"
+#ANALYSER="stdbuf --input=4M nice --adjustment=10 ./analyser.py"
+ANALYSER="./analyser.py"
 
 # Plumbing, pipe, pipe, pipe...
 $READER \

@@ -15,6 +15,8 @@ import sys
 import json
 import time
 
+ROOT2 = math.sqrt(2)
+
 class Analyser:
     """Create an instance with the sample rate, then call load_data_frame, calculate,
     get_results in that order.""" 
@@ -71,7 +73,7 @@ class Analyser:
         return fft_window
 
     def apply_filters(self):
-        """Filter the multi-column data frame into single column slices of the data."""
+        """Filter the multi-column data frame into single column array slices of the data."""
         self.timestamps = self.data_frame[:,0]
         self.voltages = self.data_frame[:,1]
         self.currents = self.data_frame[:,2]
@@ -82,45 +84,44 @@ class Analyser:
         """Returns a list of tuples of (harmonic frequency, magnitude) starting from h0 (DC),
         up to h50. Automatically adapts to signals of different fundamental frequency."""
         fft_size = samples.shape[0]
-        root2 = math.sqrt(2)
-        # regenerate the window function if it is the wrong size for the current data
-        # frame
-        if self.fft_window.shape != fft_size:
-            self.fft_window = self.create_fft_window(fft_size)
-            self.fft_window_average = np.mean(self.fft_window)
-
-        # calculate the fft coefficients
-        fft_out = np.fft.rfft(np.multiply(samples, self.fft_window), norm='forward')
-    
-        # determine a list of the frequencies of the fft bins
-        bins = np.fft.rfftfreq(fft_size, 1/self.sample_rate)
-    
+        # Regenerate the window function if it is the wrong size for the current data frame.
         # All the amplitude cooefficients need to be adjusted for the window
         # average amplitude and root2. The root2 term is actually a reduction of
         # 2/root2, the '2' required to account for the energy in the negative
         # frequency part of the fft, not included in the rfft, and the /root2 to
         # account for the fact that we want to display rms amplitudes, not peak
         # amplitudes
-        mags = [ v * root2 / self.fft_window_average for v in np.abs(fft_out) ]
+        if self.fft_window.shape != fft_size:
+            self.fft_window = self.create_fft_window(fft_size)
+            self.bins = np.fft.rfftfreq(fft_size, 1/self.sample_rate)
+            self.magnitude_scale_factor = ROOT2 / np.mean(self.fft_window)
+            
+        # calculate the fft coefficients
+        fft_out = np.fft.rfft(np.multiply(samples, self.fft_window), norm='forward')
+        mags = np.abs(fft_out) * self.magnitude_scale_factor
+
         # The dc cooefficient does not need the 2/root2 term, because it has energy from
         # both positive and negative frequency. So we correct for that...
-        mags[0] = mags[0] / root2
+        mags[0] = mags[0] / ROOT2 
+
         # Phases not currently used for anything, but here's how to get them if required!
         # phases = np.angle(fft_out)
-        # Filter for bins that are harmonics of the fundamental frequency of the signal
+
+        # Selector for bins that are harmonics of the fundamental frequency of the signal
         base_frequency = self.results['frequency']
+        # rounds harmonic frequencies to the nearest 0.5Hz
         harmonic_frequencies = [ round(base_frequency*h*2)/2 for h in range(0,51) ]
-        harmonic_tuples = [ (f,m) for f,m in zip(bins, mags) if f in harmonic_frequencies ]
-        return harmonic_tuples
+
+        # Filter mags for just harmonic magnitudes, using numpy integer indexing
+        harmonic_magnitudes = mags[ np.nonzero([1 if f in harmonic_frequencies else 0 for f in self.bins]) ] 
+        return harmonic_magnitudes
 
     def rms(self, df):
         """Determine the RMS average of the array."""
-        try:
-            sum_of_squares = np.sum(np.square(df))
-            number_of_samples = df.shape[0]
-            rms = math.sqrt(sum_of_squares / number_of_samples)
-        except ZeroDivisionError:
-            rms = 0.0
+        rms = math.sqrt(np.mean(np.square(df)))
+        # catch zero length input arrays
+        if math.isnan(rms):
+            rms = 0.0        
         return rms
 
     def frequency(self):
@@ -153,15 +154,12 @@ class Analyser:
         self.results['frequency'] = self.round_to(frequency, 3)
 
     def round_to(self, value, decimal_places):
-        """Round values to reduce length of output strings. Zero decimal places
-        is not implemented. NaN input values are coerced to zero."""
-        try:
-            if math.isnan(value):
-                raise OverflowError
+        """Round values to reduce length of output strings. NaN input values are coerced to zero."""
+        if math.isnan(value):
+            result = 0.0
+        else:
             shift = 10**decimal_places
             result = round(value*shift)/shift 
-        except (OverflowError, ValueError, ZeroDivisionError):
-            result = 0.0
         return result
 
     def averages(self):
@@ -196,24 +194,22 @@ class Analyser:
         fft_currents = self.fft(self.currents)
         try:
             # convert harmonic voltages to % of RMS value, and calculate THD(v)
-            ms = [ m for f,m in fft_voltages ]
-            thdv = math.sqrt(sum([ m*m for m in ms[2:] ])) / ms[1]
+            thdv = math.sqrt(np.sum(np.square(fft_voltages[2:]))) / fft_voltages[1]
             self.results['total_harmonic_distortion_voltage_percentage'] = self.round_to(thdv*100, 1)
-            self.results['harmonic_voltage_percentages'] = \
-                    [ self.round_to(m/self.results['rms_voltage']*100, 1) for m in ms ] 
+            sf = 100/self.results['rms_voltage']
+            self.results['harmonic_voltage_percentages'] = np.round(fft_voltages*sf, 1).tolist()
         except (ZeroDivisionError, OverflowError, ValueError, IndexError):
             self.results['total_harmonic_distortion_voltage_percentage'] = 0.0
-            self.results['harmonic_voltage_percentages'] = [0.0]
+            self.results['harmonic_voltage_percentages'] = [0.0 for m in fft_voltages ]
         try:
             # convert harmonic currents to % of RMS value, and calculate THD(i)
-            ms = [ m for f,m in fft_currents ]
-            thdi = math.sqrt(sum([ m*m for m in ms[2:] ])) / ms[1]
+            thdi = math.sqrt(np.sum(np.square(fft_currents[2:]))) / fft_currents[1]
             self.results['total_harmonic_distortion_current_percentage'] = self.round_to(thdi*100, 1) 
-            self.results['harmonic_current_percentages'] = \
-                    [ self.round_to(m/self.results['rms_current']*100, 1) for m in ms ] 
+            sf = 100/self.results['rms_current']
+            self.results['harmonic_current_percentages'] = np.round(fft_currents*sf, 1).tolist()
         except (ZeroDivisionError, OverflowError, ValueError, IndexError):
             self.results['total_harmonic_distortion_current_percentage'] = 0.0
-            self.results['harmonic_current_percentages'] = [0.0 for m in ms ]
+            self.results['harmonic_current_percentages'] = [0.0 for m in fft_currents ]
 
     def accumulators(self):
         """Wh, VARh and VAh accumulators."""

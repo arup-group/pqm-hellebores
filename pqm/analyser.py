@@ -255,27 +255,25 @@ class Sample_cache:
     def __init__ (self, size):
         """The size is the size of the cache"""
         # Initialise cache with zeros, so that the first calculation runs without errors
-        self.cache = [ '0.0 0.0 0.0 0.0 0.0' for i in range(size) ]
+        self.input_array = np.zeros((size,5))
+        self.output_array = np.zeros((size,5))
         self.size = size
-        self.ptr = 0
+        self.front_ptr = 0
         
     def put(self, line):
         """Increment the pointer and store a line in the cache."""
-        self.ptr = (self.ptr + 1) % self.size
-        self.cache[self.ptr] = line
- 
-    def get(self, pointer_offset):
-        """Retrieve the line at current pointer minus pointer_offset."""
-        optr = (self.ptr - pointer_offset) % self.size
-        return self.cache[optr]
+        self.front_ptr = (self.front_ptr + 1) % self.size
+        try:
+            self.input_array[self.front_ptr] = line.split()
+        except ValueError:
+            # empty input lines etc
+            self.input_array[self.front_ptr] = (0.0,0.0,0.0,0.0,0.0) 
 
-    def as_numpy_array(self):
-        """Convert the cache into a numpy array. The current self.ptr marks the
-        front of the cache."""
-        rear_ptr = (self.ptr + 1) % self.size
-        wrapped_cache = self.cache[rear_ptr:] + self.cache[:rear_ptr]
-        sample_array = np.loadtxt(wrapped_cache, encoding='utf-8')
-        return sample_array
+    def get_output_array(self):
+        """Convert the circular input cache into an output array ordered from rear_ptr to front_ptr."""
+        self.rear_ptr = (self.front_ptr + 1) % self.size
+        np.concatenate((self.input_array[self.rear_ptr:], self.input_array[:self.rear_ptr]), out=self.output_array)
+        return self.output_array
 
 def check_updated_settings():
     global analyser
@@ -302,7 +300,7 @@ def main():
         # iterator is reset to zero every output interval
         if i == 0:
             # Retrieve the buffer and push it into the analyser instance.
-            df = cache.as_numpy_array()
+            df = cache.get_output_array()
             analyser.load_data_frame(df)
             analyser.calculate()
             results = json.dumps(analyser.get_results())

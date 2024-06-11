@@ -80,51 +80,9 @@ class Analyser:
         self.powers = self.data_frame[:,3]
         self.leakage_currents = self.data_frame[:,4]
    
-    def faster_fft(self, samples):
+    def harmonic_frequency_magnitudes(self, base_frequency, samples):
         """Returns a list of tuples of (harmonic frequency, magnitude) starting from h0 (DC),
-        up to h50. Automatically adapts to signals of different fundamental frequency."""
-        reduced_samples = samples.reshape(-1, 2).mean(axis=1)
-        fft_size = reduced_samples.shape[0]
-
-        # Regenerate the window function if it is the wrong size for the current data frame.
-        # All the amplitude cooefficients need to be adjusted for the window
-        # average amplitude and root2. The root2 term is actually a reduction of
-        # 2/root2, the '2' required to account for the energy in the negative
-        # frequency part of the fft, not included in the rfft, and the /root2 to
-        # account for the fact that we want to display rms amplitudes, not peak
-        # amplitudes
-        if self.fft_window.shape != fft_size:
-            self.fft_window = self.create_fft_window(fft_size)
-            self.bins = np.round(np.fft.rfftfreq(fft_size, 1/7812),0)
-            self.magnitude_scale_factor = ROOT2 / np.mean(self.fft_window)
-            
-        # calculate the fft coefficients
-        fft_out = np.fft.rfft(np.multiply(reduced_samples, self.fft_window), norm='forward')
-        mags = np.abs(fft_out) * self.magnitude_scale_factor
-
-        # The dc cooefficient does not need the 2/root2 term, because it has energy from
-        # both positive and negative frequency. So we correct for that...
-        mags[0] = mags[0] / ROOT2 
-
-        # Phases not currently used for anything, but here's how to get them if required!
-        # phases = np.angle(fft_out)
-
-        # Selector for bins that are harmonics of the fundamental frequency of the signal
-        base_frequency = self.results['frequency']
-        # rounds harmonic frequencies to the nearest 0.5Hz
-        harmonic_frequencies = [ round(base_frequency*h) for h in range(0,51) ]
-        print(harmonic_frequencies)
-
-        # Filter mags for just harmonic magnitudes, using numpy integer indexing
-        harmonic_magnitudes = mags[ np.nonzero([1 if f in harmonic_frequencies else 0 for f in self.bins]) ] 
-        print(harmonic_magnitudes)
-        return harmonic_magnitudes
-
-
-
-    def fft(self, samples):
-        """Returns a list of tuples of (harmonic frequency, magnitude) starting from h0 (DC),
-        up to h50. Automatically adapts to signals of different fundamental frequency."""
+        up to h50. Automatically adapts to signals of different h1 (base) frequency."""
         fft_size = samples.shape[0]
         # Regenerate the window function if it is the wrong size for the current data frame.
         # All the amplitude cooefficients need to be adjusted for the window
@@ -133,9 +91,13 @@ class Analyser:
         # frequency part of the fft, not included in the rfft, and the /root2 to
         # account for the fact that we want to display rms amplitudes, not peak
         # amplitudes
-        if self.fft_window.shape != fft_size:
+        if self.fft_window.shape[0] != fft_size:
             self.fft_window = self.create_fft_window(fft_size)
-            self.bins = np.fft.rfftfreq(fft_size, 1/self.sample_rate)
+            # Bin size = sample rate / fft length.
+            # Nyquist frequency = sample rate /2 
+            # eg for fft_size = 7812, self.sample_rate = 7812.5, the bins are
+            # approximately 1Hz apart and the Nyquist frequency is 3906.25 Hz.
+            self.bins = np.round(np.fft.rfftfreq(fft_size, 1/self.sample_rate),0)
             self.magnitude_scale_factor = ROOT2 / np.mean(self.fft_window)
             
         # calculate the fft coefficients
@@ -149,10 +111,8 @@ class Analyser:
         # Phases not currently used for anything, but here's how to get them if required!
         # phases = np.angle(fft_out)
 
-        # Selector for bins that are harmonics of the fundamental frequency of the signal
-        base_frequency = self.results['frequency']
-        # rounds harmonic frequencies to the nearest 0.5Hz
-        harmonic_frequencies = [ round(base_frequency*h*2)/2 for h in range(0,51) ]
+        # rounds harmonic frequencies to the nearest 1.0Hz
+        harmonic_frequencies = [ round(base_frequency*h) for h in range(0,51) ]
 
         # Filter mags for just harmonic magnitudes, using numpy integer indexing
         harmonic_magnitudes = mags[ np.nonzero([1 if f in harmonic_frequencies else 0 for f in self.bins]) ] 
@@ -232,26 +192,31 @@ class Analyser:
 
     def power_quality(self):
         """Power quality calcuation relies on other results: call after averages and frequency."""
-        #fft_voltages = self.fft(self.voltages)
-        #fft_currents = self.fft(self.currents)
-        fft_voltages = self.faster_fft(self.voltages[:-1])
-        fft_currents = self.faster_fft(self.currents[:-1])
+        n_samples = math.floor(self.sample_rate)
+        base_frequency = self.results['frequency']
         try:
+            if self.voltages.shape[0] < n_samples or self.currents.shape[0] < n_samples:
+                raise IndexError
+
+            # returns harmonic magnitudes from h0 to h50, as a list
+            fft_voltages = self.harmonic_frequency_magnitudes(base_frequency, self.voltages[-n_samples:])
+            fft_currents = self.harmonic_frequency_magnitudes(base_frequency, self.currents[-n_samples:])
+
             # convert harmonic voltages to % of RMS value, and calculate THD(v)
             thdv = math.sqrt(np.sum(np.square(fft_voltages[2:]))) / fft_voltages[1]
             self.results['total_harmonic_distortion_voltage_percentage'] = self.round_to(thdv*100, 1)
             sf = 100/self.results['rms_voltage']
             self.results['harmonic_voltage_percentages'] = np.round(fft_voltages*sf, 1).tolist()
-        except (ZeroDivisionError, OverflowError, ValueError, IndexError):
-            self.results['total_harmonic_distortion_voltage_percentage'] = 0.0
-            self.results['harmonic_voltage_percentages'] = [0.0 for m in fft_voltages ]
-        try:
+
             # convert harmonic currents to % of RMS value, and calculate THD(i)
             thdi = math.sqrt(np.sum(np.square(fft_currents[2:]))) / fft_currents[1]
             self.results['total_harmonic_distortion_current_percentage'] = self.round_to(thdi*100, 1) 
             sf = 100/self.results['rms_current']
             self.results['harmonic_current_percentages'] = np.round(fft_currents*sf, 1).tolist()
+
         except (ZeroDivisionError, OverflowError, ValueError, IndexError):
+            self.results['total_harmonic_distortion_voltage_percentage'] = 0.0
+            self.results['harmonic_voltage_percentages'] = [0.0 for m in fft_voltages ]
             self.results['total_harmonic_distortion_current_percentage'] = 0.0
             self.results['harmonic_current_percentages'] = [0.0 for m in fft_currents ]
 

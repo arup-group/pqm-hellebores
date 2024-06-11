@@ -17,7 +17,6 @@ fi
 grep --ignore-case raspberry '/sys/firmware/devicetree/base/model' &> /dev/null
 if [[ $? -eq 0 ]]; then
     real_hardware=true
-    #READER="stdbuf --output=8M ./reader.py"
     READER="./reader.py"
 else
     real_hardware=false

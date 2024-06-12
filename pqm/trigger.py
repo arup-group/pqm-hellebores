@@ -39,10 +39,11 @@ class Buffer:
     trigger_test_fn = None
 
 
-    def __init__(self):
+    def __init__(self, size):
         """buffer memory initialised with empty data"""
         # performance optimisation: could consider memoryview object here
-        self.buf = [ [0.0, 0.0, 0.0, 0.0, 0.0] for i in range(BUFFER_SIZE) ]
+        self.size = size
+        self.buf = [ [0.0, 0.0, 0.0, 0.0, 0.0] for i in range(size) ]
 
     def reset(self, test_fn, test_ch):
         """sets updated trigger test function and trigger channel"""
@@ -55,7 +56,7 @@ class Buffer:
         # the storage location is determined by the input pointer sp, which is not intended
         # to be manipulated other than here.
         try:
-            self.buf[self.sp % BUFFER_SIZE] = [ float(w) for w in line.split() ]
+            self.buf[self.sp % self.size] = [ float(w) for w in line.split() ]
         except ValueError:
             print(
                 f"trigger.py, store_line(): Couldn't interpret '{line}'.",
@@ -68,8 +69,8 @@ class Buffer:
         while self.tp < self.sp:
             self.triggered, self.interpolation_fraction = (
                 self.trigger_test_fn(
-                    self.buf[(self.tp - 1) % BUFFER_SIZE][self.trigger_test_ch], 
-                    self.buf[self.tp % BUFFER_SIZE][self.trigger_test_ch]))
+                    self.buf[(self.tp - 1) % self.size][self.trigger_test_ch], 
+                    self.buf[self.tp % self.size][self.trigger_test_ch]))
             if self.triggered:
                 self.fp = self.tp + st.post_trigger_samples
                 self.rp = self.tp - st.pre_trigger_samples
@@ -90,7 +91,7 @@ class Buffer:
         shift = 1.0 - self.rp - st.pre_trigger_samples - self.interpolation_fraction
         em = ''
         for s in range(self.rp, self.fp):
-            sample = self.buf[s % BUFFER_SIZE]
+            sample = self.buf[s % self.size]
             # modify the time stamps
             timestamp = st.interval * (s + shift)
             # if it's the last sample in the frame, add an 'END' marker
@@ -166,7 +167,7 @@ def main():
     global st, process_fn
     # we make a buffer to temporarily hold a history of samples -- this allows us to output
     # a frame of waveform that includes samples 'before and after the trigger'
-    buf = Buffer()
+    buf = Buffer(BUFFER_SIZE)
 
     # load settings into st object
     # new settings can alter the trigger behaviour, so the receive_new_settings() function

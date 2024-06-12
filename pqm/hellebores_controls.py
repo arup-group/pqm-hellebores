@@ -161,7 +161,7 @@ def create_vertical(st, app_actions):
             f'{currents.get_value()} A/div', adapt_parent=False)
         st.current_display_index = currents.get_index()
         # Here we switch physical sense channel, if necessary
-        if st.current_display_ranges[st.current_display_index] <= 0.1:
+        if st.current_display_ranges[st.current_display_index] <= 0.05:
             st.current_sensor = 'low'
         else:
             st.current_sensor = 'full'

@@ -34,7 +34,6 @@ def find_serial_device():
  
 
 def get_command_args():
-    global program_name
     cmd_parser = argparse.ArgumentParser(description='Communicate with command server on Pico microcontroller.')
     cmd_parser.add_argument('--hard_reset', action='store_true', help='Toggles GPIO pin to reset the Pico via interrupt service')
     cmd_parser.add_argument('--ctrl_c', action='store_true', help='Send a CONTROL-C to Pico.')
@@ -43,7 +42,7 @@ def get_command_args():
     cmd_parser.add_argument('--no_response', action='store_true', help='Transmit only, do not attempt to read response from Pico')
     program_name = cmd_parser.prog
     args = cmd_parser.parse_args()
-    return args
+    return (program_name, args)
 
 
 def hard_reset():
@@ -98,8 +97,7 @@ def receive_response(ser):
 def main():
     '''Reads command line and resets Pico and/or sends a command to the primitive
     server program running on Pico at startup.'''
-    global program_name
-    args = get_command_args()
+    progam_name, args = get_command_args()
     # if hard reset is requested, attempt to reset Pico before checking to
     # see if the serial interface is up/exists 
     if args.hard_reset:

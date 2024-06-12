@@ -21,9 +21,8 @@ class Analyser:
     """Create an instance with the sample rate, then call load_data_frame, calculate,
     get_results in that order.""" 
 
-    def __init__(self, st):
-        self.st = st
-        self.sample_rate = st.sample_rate
+    def __init__(self):
+        self.st = None                    # NB set a reference to settings object asap
         self.data_frame = None
         self.size = 0
         self.fft_window = np.blackman(0)  # empty to begin with
@@ -39,7 +38,7 @@ class Analyser:
         self.mvars = 0
 
     def check_updated_settings(self):
-        if self.st.analysis_start_time == 0:
+        if self.st and self.st.analysis_start_time == 0:
             # reset analysis accumulators
             self.reset_accumulators()
             self.st.analysis_start_time = time.time()
@@ -95,9 +94,9 @@ class Analyser:
             self.fft_window = self.create_fft_window(fft_size)
             # Bin size = sample rate / fft length.
             # Nyquist frequency = sample rate /2 
-            # eg for fft_size = 7812, self.sample_rate = 7812.5, the bins are
+            # eg for fft_size = 7812, self.st.sample_rate = 7812.5, the bins are
             # approximately 1Hz apart and the Nyquist frequency is 3906.25 Hz.
-            self.bins = np.round(np.fft.rfftfreq(fft_size, 1/self.sample_rate),0)
+            self.bins = np.round(np.fft.rfftfreq(fft_size, 1/self.st.sample_rate),0)
             self.magnitude_scale_factor = ROOT2 / np.mean(self.fft_window)
             
         # calculate the fft coefficients
@@ -143,10 +142,10 @@ class Analyser:
             # sample rate is /second
             t0 = self.timestamps[c0] + (1000.0 * self.voltages[c0]
                                         / (self.voltages[c0]-self.voltages[c0+1])
-                                        / self.sample_rate)
+                                        / self.st.sample_rate)
             tn = self.timestamps[cn] + (1000.0 * self.voltages[cn]
                                         / (self.voltages[cn]-self.voltages[cn+1])
-                                        / self.sample_rate)
+                                        / self.st.sample_rate)
             # The overall time period divided by the number of cycles gives us the
             # period and frequency of the signal.
             period = (tn-t0) / 1000.0 / n
@@ -192,7 +191,7 @@ class Analyser:
 
     def power_quality(self):
         """Power quality calcuation relies on other results: call after averages and frequency."""
-        n_samples = math.floor(self.sample_rate)
+        n_samples = math.floor(self.st.sample_rate)
         base_frequency = self.results['frequency']
         try:
             if self.voltages.shape[0] < n_samples or self.currents.shape[0] < n_samples:
@@ -225,7 +224,7 @@ class Analyser:
         # delta_t in milliseconds
         # divide by two because the sample data overlaps each calculation (ie each sample participates
         # twice, so we add half of the contribution each time)
-        delta_t = int(self.size / self.sample_rate / 2 * 1000)
+        delta_t = int(self.size / self.st.sample_rate / 2 * 1000)
         self.accumulated_time += delta_t
         # Keep the accumulators in high resolution integer form, ie 'milliwatt-seconds'.
         self.mws += round(self.results['mean_power'] * delta_t)
@@ -274,10 +273,6 @@ class Sample_cache:
         np.concatenate((self.input_array[self.rear_ptr:], self.input_array[:self.rear_ptr]), out=self.output_array)
         return self.output_array
 
-def check_updated_settings():
-    global analyser
-    analyser.check_updated_settings()
-
 def read_lines(n, cache):
     """Reads n lines from stdin, and stores in the cache."""
     for i in range(n):
@@ -291,39 +286,39 @@ def read_lines(n, cache):
 def read_analyse_output(cache, analyser, output_interval):
     """Loop through analysis and output processes, interspersed with new data reading
     to avoid stalling the sample data pipeline at the input."""
-    # Divide the frame of data for each output_interval into 6 blocks of roughly equal size:
+    # Divide the frame of data for each output_interval into 2 blocks of roughly equal size:
     # the final block will be rounded up.
-    block_size = output_interval // 6
+    #block_size = output_interval // 2
     while True:
         interval_counter = 0
         # Retrieve a block of calculation data, and load it into the analyser
         analyser.load_data_frame(cache.get_output_array()) 
-        interval_counter += read_lines(block_size, cache)
-        # Analyse the data in steps
-        calculation_tasks = [ analyser.averages,
-                              analyser.frequency,
-                              analyser.power_quality,
-                              analyser.accumulators ]
-        for task in calculation_tasks:
-            task()
-            interval_counter += read_lines(block_size, cache)
+        # Do the calculations
+        analyser.averages()
+        analyser.frequency()
+        analyser.accumulators()
+        # Read some lines before doing the most intensive calculation
+        #interval_counter += readlines(block_size, cache)
+        analyser.power_quality()
         # Generate the output
         print(json.dumps(analyser.get_results()))
         sys.stdout.flush()
         # Complete the frame of new data acquisition for the current interval
         # rounding up this block of data to make exactly one 'output_interval'.
-        read_lines(output_interval - interval_counter, cache)
+        #read_lines(output_interval - interval_counter, cache)
+        read_lines(output_interval, cache)
 
 def main():
-    global analyser
-    st = settings.Settings(lambda: check_updated_settings())
+    analyser = Analyser()
+    st = settings.Settings(lambda: analyser.check_updated_settings())
+    # analyser needs a reference to the newly created settings object
+    analyser.st = st
     # We will output new calculations once per second.
     output_interval = int(st.sample_rate)
     # However, our calculation buffer is 2 seconds in length to increase accuracy.
     cache_size = int(st.sample_rate*2)
     # The cache is a circular buffer, we can keep pushing data into it.
     cache = Sample_cache(cache_size)
-    analyser = Analyser(st)
     # Before actually analysing, seed the cache with data
     read_lines(cache.size, cache)
     # Read, analyse, output loop

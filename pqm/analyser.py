@@ -237,12 +237,6 @@ class Analyser:
         self.results['volt_ampere_reactive_hour'] = self.round_to(self.mvars / 1000 / 3600, 3)
         self.results['hours'] = self.round_to(self.accumulated_time / 1000 / 3600, 3)
 
-    def calculate(self):
-        """Perform analysis on a pre-loaded data frame."""
-        self.averages()
-        self.frequency()
-        self.power_quality()
-        self.accumulators()
 
     def load_data_frame(self, data_frame):
         """Load a data frame into memory, and slice into separate sets for voltage, current
@@ -321,8 +315,9 @@ def read_analyse_output(cache, analyser, output_interval):
         read_lines(output_interval - interval_counter, cache)
 
 def main():
-    global analyser
-    st = settings.Settings(lambda: check_updated_settings())
+    global settings_update_fn
+    settings_update_fn = None
+    st = settings.Settings(lambda: settings_update_fn())
     # We will output new calculations once per second.
     output_interval = int(st.sample_rate)
     # However, our calculation buffer is 2 seconds in length to increase accuracy.

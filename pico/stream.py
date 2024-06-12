@@ -326,19 +326,20 @@ def streaming_loop_core_1():
     and reads new data from the ADC into memory. Also watches for change in flags
     variable to enable clean exit or recovery from OVERLOAD condition.'''
     global flags
-
     start_adc()
+
     # The overload flag may be raised by Core 0 at any time, so we have to allow
-    # for it in the loop test here by using a flag filter.
+    # for it in the outer loop test here by using a bitmask filter
     while flags & STREAMING:
-        # cell_p is a local cache of the cell variable, so that we can
-        # detect when it changes value
+        # cell_p is a local cache of the cell variable, so that the inner loop
+        # can synchronise to when cell changes value
         cell_p = cell
+
         # Inner loop -- speed critical -- we do sampling here, nothing else.
         while flags == STREAMING:
             # read out from the ADC *immediately* if the cell variable has changed
-            spi_adc_interface.readinto(cells_mv[(cell_p := cell)]) \
-                if cell != cell_p else None
+            cell == cell_p or spi_adc_interface.readinto(cells_mv[(cell_p := cell)])
+
         # If Core 0 has raised OVERLOAD flag, we deal with it here.
         if flags & OVERLOAD:
             # Tell the ADC to clear overload.

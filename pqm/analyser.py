@@ -280,40 +280,30 @@ def read_lines(n, cache):
         cache.put(line)
     # Test for end of input stream
     if line == '':
-        raise SystemExit
-    return i
+        return False
+    else:
+        return True
 
 def read_analyse_output(cache, analyser, output_interval):
-    """Loop through analysis and output processes, interspersed with new data reading
-    to avoid stalling the sample data pipeline at the input."""
-    # Divide the frame of data for each output_interval into 2 blocks of roughly equal size:
-    # the final block will be rounded up.
-    #block_size = output_interval // 2
-    while True:
-        interval_counter = 0
-        # Retrieve a block of calculation data, and load it into the analyser
+    """Loop through analysis and output processes until read_lines fails."""
+    while read_lines(output_interval, cache):
+        # Retrieve the cache and load it into the analyser
         analyser.load_data_frame(cache.get_output_array()) 
         # Do the calculations
         analyser.averages()
         analyser.frequency()
         analyser.accumulators()
-        # Read some lines before doing the most intensive calculation
-        #interval_counter += readlines(block_size, cache)
         analyser.power_quality()
         # Generate the output
         print(json.dumps(analyser.get_results()))
         sys.stdout.flush()
-        # Complete the frame of new data acquisition for the current interval
-        # rounding up this block of data to make exactly one 'output_interval'.
-        #read_lines(output_interval - interval_counter, cache)
-        read_lines(output_interval, cache)
 
 def main():
     analyser = Analyser()
     st = settings.Settings(lambda: analyser.check_updated_settings())
     # analyser needs a reference to the newly created settings object
     analyser.st = st
-    # We will output new calculations once per second.
+    # We will output new calculations approximately once per second.
     output_interval = int(st.sample_rate)
     # However, our calculation buffer is 2 seconds in length to increase accuracy.
     cache_size = int(st.sample_rate*2)
@@ -323,7 +313,6 @@ def main():
     read_lines(cache.size, cache)
     # Read, analyse, output loop
     read_analyse_output(cache, analyser, output_interval)
-
 
 
 if __name__ == '__main__':

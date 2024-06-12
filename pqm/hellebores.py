@@ -84,18 +84,17 @@ class UI_groups:
 
     def refresh(self, buffer, screen):
         """dispatch to the refresh method of the element group currently selected."""
-        if self.mode == 'waveform' and self.app_actions.capturing:
-            # if capturing, we might display multiple frames in one display
-            self.instruments[self.mode].refresh(buffer, self.app_actions.multi_trace, screen, self.elements['datetime'])
-        elif self.mode == 'waveform':
-            # but just one frame if in stopped mode
-            self.instruments[self.mode].refresh(buffer, 1, screen, self.elements['datetime'])
+        if self.mode == 'waveform':
+            # waveform mode
+            if self.app_actions.capturing:
+                # if capturing, we might display multiple frames in one display
+                self.instruments[self.mode].refresh(buffer, self.app_actions.multi_trace, screen, self.elements['datetime'])
+            else:
+                # but just one frame if in stopped mode
+                self.instruments[self.mode].refresh(buffer, 1, screen, self.elements['datetime'])
         else:
-            # If it's not a waveform display, include a small delay in screen update time to
-            # save CPU. Not too long, otherwise waveform input buffer stalls and there are
-            # errors in the results.
+            # non-waveform mode
             self.instruments[self.mode].refresh(buffer, screen, self.elements['datetime'])
-            time.sleep(0.02)
 
     def draw_texts(self, capturing):
         self.instruments[self.mode].draw_texts(capturing)
@@ -286,6 +285,9 @@ class Sample_Buffer:
             except IOError:
                 print('hellebores.py: Sample_Buffer.load_analysis()'
                       ' file reading error.', file=sys.stderr) 
+            return True
+        else:
+            return False
 
     def load_waveform(self, f, capturing, wfs):
         # the loop will exit if:
@@ -478,22 +480,23 @@ def main():
         # pipeline flowing. If the read rate doesn't keep up with the pipe, then we will see 
         # artifacts on screen. Check if the BUFFER led on PCB is stalling if performance
         # problems are suspected here.
-        # The load_waveform() function also implicitly manages display refresh speed when not
-        # capturing, by waiting for a definite time for new data.
+        # The load_waveform() function also implicitly manages display refresh speed
+        # by waiting for a definite time for new data.
 
         # if multi_trace is active, read multiple frames into the buffer, otherwise just one
         for i in range(app_actions.multi_trace):
             buffer.load_waveform(app_actions.waveform_stream, app_actions.capturing, wfs)
 
         # read new analysis results, if available 
-        buffer.load_analysis(app_actions.analysis_stream, app_actions.capturing)
+        analysis_updated = buffer.load_analysis(app_actions.analysis_stream, app_actions.capturing)
 
-        if buffer.pipes_ok == False:
+        if not buffer.pipes_ok:
             # one or both incoming data pipes were closed, quit the application
             app_actions.exit_application('quit')
 
         # hack to make the cursor invisible while still responding to touch signals
         # would like to do this only once, rather than every trip round the loop
+        # **** OPTIMISE this to test whether we need to do it only once on startup ****
         if hide_mouse_pointer:
             pygame.mouse.set_cursor(
                 (8,8), (0,0), (0,0,0,0,0,0,0,0), (0,0,0,0,0,0,0,0))
@@ -525,26 +528,31 @@ def main():
                 screen.fill(LIGHT_GREY)
             elif e.type == app_actions.draw_controls_event:
                 # we don't actually do anything here, just want the side effect of 'events'
-                # having something in it because it is tested next, and will cause the 
+                # having something in it because it is tested shortly, and will cause the 
                 # controls to be re-drawn
                 pass
+
+        # SCREEN REDRAWING FUNCTIONS FOLLOW
+        # The 'if' conditions optimise the redraw work to reduce CPU usage.
 
         # we don't use the event handler to schedule plotting updates, because it is not
         # efficient enough for high frame rates. Instead we plot explicitly each
         # time round the loop. Depending on the current mode, waveforms, meter readings etc
         # will be drawn as necessary.
-        ui.refresh(buffer, screen)
+        if ui.mode == 'waveform' or events or analysis_updated:
+            ui.refresh(buffer, screen)
 
         # ui.get_updater().update() is an expensive function, so we use the simplest possible
         # thorpy theme to achieve the quickest redraw time. Then, we only update/redraw when
         # buttons are pressed or the text needs updating. When there is an overlay menu displayed
         # there is more drawing work to do, so we use multi_trace to help optimise.
-        if events or ui.overlay_dialog_active:
+        if ui.overlay_dialog_active or events:
             ui.set_multi_trace()
             ui.get_updater().update(events=events)
 
         # push all of our updated work into the active display framebuffer
-        pygame.display.flip()
+        if ui.mode == 'waveform' or events or ui.overlay_dialog_active or analysis_updated:
+            pygame.display.flip()
 
 
 if __name__ == '__main__':

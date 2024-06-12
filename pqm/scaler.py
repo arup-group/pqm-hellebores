@@ -21,7 +21,11 @@ def from_twos_complement(v):
     return -(v & 0x8000) | (v & 0x7fff)
 
 def get_factors(run_calibrated=True):
-    global st, offsets, gains
+    global st, offsets, gains, current_channel
+    if st.current_sensor == 'low':
+        current_channel = 1
+    else:
+        current_channel = 2
     if run_calibrated == True:
         offsets = st.cal_offsets
         gains   = [ s*g for s,g in zip(st.scale_factors, st.cal_gains) ]
@@ -38,7 +42,7 @@ def scale_readings(cs):
 
 
 def main():
-    global st
+    global st, current_channel
 
     # check for uncalibrated mode
     if len(sys.argv) == 2 and sys.argv[1] == '--uncalibrated':
@@ -66,10 +70,7 @@ def main():
             # if st.current_axis_per_division is less than or equal to 0.1 A/div,
             # we use channel 1 for current measurements. If it is more than 0.1 A/div,
             # we use channel 2.
-            if st.current_sensor == 'low':
-                current = scaled[1]
-            else:
-                current = scaled[2]
+            current = scaled[current_channel]
             power = voltage * current
             leakage_current = scaled[0]
             print(f'{t:12.4f} {voltage:10.3f} {current:10.5f} {power:10.3f} {leakage_current:12.7f}')

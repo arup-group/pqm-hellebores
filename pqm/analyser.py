@@ -315,9 +315,8 @@ def read_analyse_output(cache, analyser, output_interval):
         read_lines(output_interval - interval_counter, cache)
 
 def main():
-    global settings_update_fn
-    settings_update_fn = None
-    st = settings.Settings(lambda: settings_update_fn())
+    global analyser
+    st = settings.Settings(lambda: check_updated_settings())
     # We will output new calculations once per second.
     output_interval = int(st.sample_rate)
     # However, our calculation buffer is 2 seconds in length to increase accuracy.

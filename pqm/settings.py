@@ -182,8 +182,8 @@ class Settings():
     def signal_handler(self, signum, frame):
         # on Windows, let the program quit if the environment variable hasn't been set
         if os.name == 'nt' and not ('CATCH_SIGINT' in os.environ):
-            # default CTRL-C behaviour in python is to raise KeyError
-            raise KeyError 
+            # default CTRL-C behaviour in python is to raise KeyboardInterrupt
+            raise KeyboardInterrupt 
         # for all other cases, we check the flag and reload the settings file if True
         if self.reload_on_signal == True:
             self.set_settings(self.load_settings())

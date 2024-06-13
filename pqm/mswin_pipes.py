@@ -9,10 +9,13 @@ import time
 import sys
 import win32pipe
 import win32file
+import msvcrt
 import pywintypes
+import io
 
 # local
 from settings import Settings
+
 
 class Pipe:
     def __init__(self, pipe_name, mode):
@@ -86,20 +89,36 @@ class Pipe:
         win32file.WriteFile(self.pfh, str.encode(line))
 
 
-    def is_data_available(self, t):
-        """boolean predicate to check if there is data waiting in the pipe"""
+    def close(self):
+        win32file.CloseHandle(self.pfh)
+
+
+
+# windows lacks a 'select' function on file streams and so we have to do weird
+# stuff to be able to check if data is available in the stream or pipe
+def is_data_available(f, t):
+    """boolean predicate to check if there is data waiting in the pipe"""
+
+    def check_fh(fh, t):
         t0 = time.time()
-        while True:
-            _, n, _ = win32pipe.PeekNamedPipe(self.pfh, 0)
+        while time.time() - t0 < t:
+            _, n, _ = win32pipe.PeekNamedPipe(fh, 0)
             if n > 0:
                 # true if there are bytes available in the pipe
                 return True
-            if time.time() - t0 > t:
-                # false if we timeout
-                return False
+        return False
 
-    def close(self):
-        win32file.CloseHandle(self.pfh)
+    if isinstance(f, Pipe):
+        # f is a Pipe object
+        data_available = check_fh(f.pfh, t)
+    elif isinstance(f, io.IOBase):
+        # f is a file stream object 
+        data_available = check_fh(msvcrt.get_osfhandle(f.fileno()), t)
+    else:
+        data_available = False
+
+    return data_available
+
 
 
 def main():

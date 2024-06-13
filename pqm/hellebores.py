@@ -25,7 +25,7 @@ from hellebores_controls import *
 from hellebores_waveform import Waveform
 from hellebores_multimeter import Multimeter
 if os.name == 'nt':
-    from mswin_pipes import Pipe
+    import mswin_pipes
 
 
 # More UI is needed for the following:
@@ -178,14 +178,12 @@ def get_screen_hardware_size():
 
 # the version of is_data_available(f, t) that we will use is determined
 # once at runtime
+# wait at most 't' seconds for new data to appear
+# f is file object to test for reading, t is time in seconds
 if os.name == 'posix':
-    # f is file object to test for reading, t is time in seconds
-    # wait at most 't' seconds for new data to appear
-    # element 0 of tuple will be an empty list unless there is data ready to read
     is_data_available = lambda f, t: select.select( [f], [], [], t)[0] != []
 elif os.name == 'nt':
-    # simulated functionality for windows, which lacks the 'select' function 
-    is_data_available = lambda p, t: p.is_data_available(t)
+    is_data_available = lambda f, t: mswin_pipes.is_data_available(f, t)
 else:
     # other scenarios, this is unlikely to work
     is_data_available = lambda f, t: True 
@@ -267,7 +265,7 @@ class Sample_Buffer:
             self.cs['mean_volt_ampere_min'] = self.cs['mean_volt_ampere']
             
     def load_analysis(self, f, capturing):
-        # incoming analysis data is optional
+        # incoming analysis data is optional: set pipe file to 'None'
         if f and is_data_available(f, 0.0):
             try:
                 l = f.readline()
@@ -356,7 +354,9 @@ class App_Actions:
             p = open(file_name, 'r')
         elif os.name == 'nt':
             # Windows
-            p = Pipe(file_name, 'r')
+            # NB this is a 'Pipe' object, not a proper file stream object. We deal with it again
+            # in the is_data_available implementation.
+            p = mswin_pipes.Pipe(file_name, 'r')
         else:
             # Other
             print(f"{sys.argv[0]}: Don't know how to open incoming pipe on {os.name} system.", file=sys.stderr)
@@ -369,10 +369,13 @@ class App_Actions:
             if waveform_stream_name != None:
                 self.waveform_stream = self.open_pipe(waveform_stream_name) 
             else:
+                # read from stdin if waveform pipe not specified
                 self.waveform_stream = sys.stdin
+
             if analysis_stream_name != None:
                 self.analysis_stream = self.open_pipe(analysis_stream_name)
             else:
+                # no data if analysis pipe not specified
                 self.analysis_stream = None
         except (PermissionError, FileNotFoundError, OSError):
             print(f"{sys.argv[0]}: App_Actions.open_streams() couldn't open the input streams "

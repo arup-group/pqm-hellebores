@@ -1,0 +1,16 @@
+# environment.yaml
+name: pqm-env
+channels:
+  - conda-forge
+dependencies:
+  - python>=3.9
+  - pyserial
+  - pygame
+  - pillow
+  - numpy
+  - psutil
+  - pip
+  - pip:
+    - thorpy
+  - pywin32
+

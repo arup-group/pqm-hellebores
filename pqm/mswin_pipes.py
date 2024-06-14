@@ -20,12 +20,7 @@ from settings import Settings
 class Pipe:
     def __init__(self, pipe_name, mode):
         self.pfh = None  # pipe file handle
-        if mode == 'r':
-            self.open_existing_pipe(pipe_name)
-        elif mode == 'w':
-            self.open_new_pipe(pipe_name)
-        else:
-            print(f"Can't open pipe with this mode", file=sys.stderr)
+        self.open(pipe_name, mode)
 
     # these two functions facilitate use of the object with the 'with' syntax
     # so that we close the pipe properly even if there's an exception
@@ -34,6 +29,17 @@ class Pipe:
     
     def __exit__(self, e_type, e_value, e_traceback):
         self.close()
+
+
+    def open(self, pipe_name, mode):
+        if mode == 'r':
+            pipe = self.open_existing_pipe(pipe_name)
+        elif mode == 'w':
+            pipe = self.open_new_pipe(pipe_name)
+        else:
+            print(f"Can't open pipe with this mode", file=sys.stderr)
+        self.pfh = pipe
+
 
     def open_existing_pipe(self, pipe_name, retries=10):
         """open a pipe for reading using Windows file API"""
@@ -54,10 +60,10 @@ class Pipe:
                 time.sleep(1.0)
                 pipe = self.open_existing_pipe(pipe_name, retries-1)
         else:
-            print(f"mswin_pipes.open_existing_pipe(): couldn't open pipe {pipe_name}, quitting.", file=sys.stderr)
+            print(f"mswin_pipes.open_existing_pipe(): couldn't open pipe {pipe_name}, "
+                  f"quitting.", file=sys.stderr)
             raise SystemExit
-        self.pfh = pipe
-        return self.pfh
+        return pipe
 
 
     def open_new_pipe(self, pipe_name):
@@ -74,9 +80,13 @@ class Pipe:
             win32pipe.ConnectNamedPipe(pipe, None)
         # need to check which exception is raised when CreateNamedPipe fails
         except (pywintypes.error, PermissionError, OSError, IOError):
-            print(f"mswin_pipes.open_new_pipe(): couldn't open pipe {pipe_name}, quitting.", file=sys.stderr)
+            print(f"mswin_pipes.open_new_pipe(): couldn't open pipe {pipe_name}, "
+                  f"quitting.", file=sys.stderr)
             raise SystemExit
-        self.pfh = pipe
+        return pipe
+
+
+    def get_handle(self):
         return self.pfh
 
 
@@ -94,31 +104,27 @@ class Pipe:
 
 
 
-# windows lacks a 'select' function on file streams and so we have to do weird
-# stuff to be able to check if data is available in the stream or pipe
-def is_data_available(f, t):
+def get_pipe_from_stream(stream):
+    pfh = msvcrt.get_osfhandle(stream.fileno())
+    return pfh
+
+
+# windows lacks a 'select' function and so we have to do weird
+# stuff to be able to check if data is available in the pipe
+def peek_pipe(pfh, t):
     """boolean predicate to check if there is data waiting in the pipe"""
-
-    def check_fh(fh, t):
-        t0 = time.time()
-        while time.time() - t0 < t:
-            _, n, _ = win32pipe.PeekNamedPipe(fh, 0)
-            if n > 0:
-                # true if there are bytes available in the pipe
-                return True
-        return False
-
-    if isinstance(f, Pipe):
-        # f is a Pipe object
-        data_available = check_fh(f.pfh, t)
-    elif isinstance(f, io.IOBase):
-        # f is a file stream object 
-        data_available = check_fh(msvcrt.get_osfhandle(f.fileno()), t)
-    else:
-        data_available = False
-
-    return data_available
-
+    data_waiting = False
+    t0 = time.time()
+    # need to run through the loop at least once, so don't test the time in
+    # the while condition.
+    while True:
+        _, n, _ = win32pipe.PeekNamedPipe(pfh, 0)
+        if n > 0:
+            data_waiting = True
+            break
+        if time.time() - t0 > t:
+            break
+    return data_waiting
 
 
 def main():
@@ -137,7 +143,7 @@ def main():
     
         elif command == 'write':
             # open a new pipe for writing then copy data from stdin
-           with Pipe(sys.argv[2], 'w') as p:
+            with Pipe(sys.argv[2], 'w') as p:
                 for line in sys.stdin:
                     p.writeline(line)
                     
@@ -156,7 +162,8 @@ def main():
 if __name__ == '__main__':
     # on windows, pipe names need to be in the form \\.\pipe\foo
     if len(sys.argv) < 3:
-        print(f"Usage: {sys.argv[0]} read [pipe], or {sys.argv[0]} write [pipe], or {sys.argv[0]} tee [pipe1] [pipe2]")
+        print(f"Usage: {sys.argv[0]} read [pipe], or {sys.argv[0]} write [pipe], "
+              f"or {sys.argv[0]} tee [pipe1] [pipe2]")
         sys.exit(1)
     else:
         main()

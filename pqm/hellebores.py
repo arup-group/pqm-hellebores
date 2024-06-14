@@ -17,6 +17,7 @@ import sys
 import os
 import select
 import json
+import io
 
 # local imports
 from settings import Settings
@@ -25,7 +26,7 @@ from hellebores_controls import *
 from hellebores_waveform import Waveform
 from hellebores_multimeter import Multimeter
 if os.name == 'nt':
-    import mswin_pipes
+    from mswin_pipes import Pipe, peek_pipe, get_pipe_from_stream
 
 
 # More UI is needed for the following:
@@ -176,24 +177,13 @@ def get_screen_hardware_size():
     return i.current_w, i.current_h
 
 
-# the version of is_data_available(f, t) that we will use is determined
-# once at runtime
-# wait at most 't' seconds for new data to appear
-# f is file object to test for reading, t is time in seconds
-if os.name == 'posix':
-    is_data_available = lambda f, t: select.select( [f], [], [], t)[0] != []
-elif os.name == 'nt':
-    is_data_available = lambda f, t: mswin_pipes.is_data_available(f, t)
-else:
-    # other scenarios, this is unlikely to work
-    is_data_available = lambda f, t: True 
-
 
 class Sample_Buffer:
 
-    def __init__(self, st):
-        # local reference to settings
+    def __init__(self, st, app_actions):
+        # local reference to settings and app_actions
         self.st = st
+        self.app_actions = app_actions
         # working points buffer for four lines, calculation array
         # flag for detecting when pipes are closed (end of file)
         self.ps = [ [],[],[],[] ]           # points
@@ -263,12 +253,14 @@ class Sample_Buffer:
             self.cs['mean_volt_ampere_reactive_min'] = self.cs['mean_volt_ampere_reactive']
             self.cs['mean_volt_ampere_max'] = self.cs['mean_volt_ampere']
             self.cs['mean_volt_ampere_min'] = self.cs['mean_volt_ampere']
-            
-    def load_analysis(self, f, capturing):
+
+
+    def load_analysis(self, capturing):
         # incoming analysis data is optional: set pipe file to 'None'
-        if f and is_data_available(f, 0.0):
+        if self.app_actions.analysis_stream \
+            and self.app_actions.peek_data(self.app_actions.analysis_stream, 0.0):
             try:
-                l = f.readline()
+                l = self.app_actions.analysis_stream.readline()
                 # read() and readline() return empty strings if the source of the pipe is closed
                 # so we immediately test for that
                 if l == '':
@@ -287,7 +279,8 @@ class Sample_Buffer:
         else:
             return False
 
-    def load_waveform(self, f, capturing, wfs):
+
+    def load_waveform(self, capturing, wfs):
         # the loop will exit if:
         # (a) there is no data currently waiting to be read, 
         # (b) negative x coordinate indicates last sample of current frame
@@ -296,9 +289,9 @@ class Sample_Buffer:
         # (e) more than 1000 samples have been read (this keeps the UI responsive)
         # returns 'True' if we have completed a new frame
         sample_counter = 0
-        while is_data_available(f, 0.05) and sample_counter < 1000: 
+        while self.app_actions.peek_data(self.app_actions.waveform_stream, 0.2) and sample_counter < 1000: 
             try:
-                l = f.readline()
+                l = self.app_actions.waveform_stream.readline()
                 if l == '':
                     print('Waveform pipe was closed.', file=sys.stderr)
                     self.pipes_ok = False
@@ -328,6 +321,7 @@ class Sample_Buffer:
                       ' file reading error.', file=sys.stderr) 
                 break
 
+
     def get_waveform(self, index=0):
         # reverse into history by 'index' frames
         return self.sample_waveform_history[SAMPLE_BUFFER_SIZE-1-index]
@@ -336,6 +330,8 @@ class Sample_Buffer:
 class App_Actions:
 
     def __init__(self, waveform_stream_name, analysis_stream_name):
+        self.waveform_stream = None
+        self.analysis_stream = None
         # open the streams (input data pipe files)
         self.open_streams(waveform_stream_name, analysis_stream_name)
         # allow/stop update of the lines on the screen
@@ -348,35 +344,45 @@ class App_Actions:
         self.clear_screen_event = pygame.event.custom_type()
         self.draw_controls_event = pygame.event.custom_type()
 
-    def open_pipe(self, file_name):
+    def select_peek_data_function(self, source='named_pipe'):
+        """The version of self.peek_data(f, t) that we will use is determined
+        once at runtime."""
+        if os.name == 'posix':
+            self.peek_data = lambda f, t: select.select( [f], [], [], t)[0] != []
+        elif os.name == 'nt' and source == 'named_pipe':
+            self.peek_data = lambda p, t: peek_pipe(p.get_handle(), t)
+        elif os.name == 'nt' and source == 'stream':
+            self.peek_data = lambda stream, t: peek_pipe(get_pipe_from_stream(stream), t)
+        else:
+            # other scenarios, this is unlikely to work
+            self.peek_data = lambda f, t: True 
+
+    def open_pipe(self, pipe_name):
         if os.name == 'posix':
             # Pi, Ubuntu, WSL etc
-            p = open(file_name, 'r')
+            p = open(pipe_name, 'r')
         elif os.name == 'nt':
             # Windows
-            # NB this is a 'Pipe' object, not a proper file stream object. We deal with it again
-            # in the is_data_available implementation.
-            p = mswin_pipes.Pipe(file_name, 'r')
+            p = Pipe(pipe_name, 'r')
         else:
             # Other
-            print(f"{sys.argv[0]}: Don't know how to open incoming pipe on {os.name} system.", file=sys.stderr)
+            print(f"{sys.argv[0]}: Don't know how to open incoming pipe on {os.name} "
+                  f"system.", file=sys.stderr)
             raise NotImplementedError 
         return p
  
     def open_streams(self, waveform_stream_name, analysis_stream_name):
         # open the input stream fifos
         try:
-            if waveform_stream_name != None:
+            if waveform_stream_name:
                 self.waveform_stream = self.open_pipe(waveform_stream_name) 
+                self.select_peek_data_function('named_pipe')
             else:
-                # read from stdin if waveform pipe not specified
+                # we use sys.stdin for waveform data if a pipe name isn't specified
                 self.waveform_stream = sys.stdin
-
-            if analysis_stream_name != None:
+                self.select_peek_data_function('stream')
+            if analysis_stream_name:
                 self.analysis_stream = self.open_pipe(analysis_stream_name)
-            else:
-                # no data if analysis pipe not specified
-                self.analysis_stream = None
         except (PermissionError, FileNotFoundError, OSError):
             print(f"{sys.argv[0]}: App_Actions.open_streams() couldn't open the input streams "
                   f"{waveform_stream_name} and {analysis_stream_name}", file=sys.stderr)
@@ -464,11 +470,9 @@ def main():
     st = Settings(other_programs = [ 'scaler.py', 'trigger.py', 'mapper.py',\
             'analyser.py' ], reload_on_signal=False)
 
-    # set up a sample buffer object
-    buffer = Sample_Buffer(st)
-
-    # create objects that hold the state of the application and UI
+    # create objects that hold the state of the application, data buffers and UI
     app_actions  = App_Actions(waveform_stream_name, analysis_stream_name)
+    buffer       = Sample_Buffer(st, app_actions)
     wfs          = WFS_Counter()
     waveform     = Waveform(st, wfs, app_actions)
     multimeter   = Multimeter(st, app_actions)
@@ -488,10 +492,10 @@ def main():
 
         # if multi_trace is active, read multiple frames into the buffer, otherwise just one
         for i in range(app_actions.multi_trace):
-            buffer.load_waveform(app_actions.waveform_stream, app_actions.capturing, wfs)
+            buffer.load_waveform(app_actions.capturing, wfs)
 
         # read new analysis results, if available 
-        analysis_updated = buffer.load_analysis(app_actions.analysis_stream, app_actions.capturing)
+        analysis_updated = buffer.load_analysis(app_actions.capturing)
 
         if not buffer.pipes_ok:
             # one or both incoming data pipes were closed, quit the application

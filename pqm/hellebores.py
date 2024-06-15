@@ -180,15 +180,14 @@ def get_screen_hardware_size():
 
 class Sample_Buffer:
 
-    def __init__(self, st, app_actions):
+    def __init__(self, st, data_comms):
         # local reference to settings and app_actions
         self.st = st
-        self.app_actions = app_actions
+        self.data_comms = data_comms
         # working points buffer for four lines, calculation array
         # flag for detecting when pipes are closed (end of file)
         self.ps = [ [],[],[],[] ]           # points
         self.cs = {}                        # calculations
-        self.pipes_ok = True
         # sample buffer history
         # future extension is to use this buffer for electrical event history
         # (eg triggered by power fluctuation etc)
@@ -256,23 +255,15 @@ class Sample_Buffer:
 
 
     def load_analysis(self, capturing):
-        # incoming analysis data is optional: set pipe file to 'None'
-        if self.app_actions.analysis_stream \
-            and self.app_actions.peek_data(self.app_actions.analysis_stream, 0.0):
+        # incoming analysis data is optional: returns false if no data source
+        if l:=self.data_comms.get_analysis_line(0.0):
             try:
-                l = self.app_actions.analysis_stream.readline()
-                # read() and readline() return empty strings if the source of the pipe is closed
-                # so we immediately test for that
-                if l == '':
-                    print('Analysis pipe was closed.', file=sys.stderr)
-                    self.pipes_ok = False
-                    return
-                # then load the analysis into a local dictionary
+                # load the analysis into a local dictionary
                 new_analysis = json.loads(l)
                 for (key, value) in new_analysis.items():
                     self.cs[key] = value
                 self.update_analysis_bounds()
-            except IOError:
+            except ValueError:
                 print('hellebores.py: Sample_Buffer.load_analysis()'
                       ' file reading error.', file=sys.stderr) 
             return True
@@ -289,13 +280,8 @@ class Sample_Buffer:
         # (e) more than 1000 samples have been read (this keeps the UI responsive)
         # returns 'True' if we have completed a new frame
         sample_counter = 0
-        while self.app_actions.peek_data(self.app_actions.waveform_stream, 0.2) and sample_counter < 1000: 
+        while sample_counter < 1000 and (l := self.data_comms.get_waveform_line(0.2)): 
             try:
-                l = self.app_actions.waveform_stream.readline()
-                if l == '':
-                    print('Waveform pipe was closed.', file=sys.stderr)
-                    self.pipes_ok = False
-                    break
                 ws = l.split()
                 sample = [ int(w) for w in ws[:5] ]
                 if ws[-1] == '*END*':
@@ -316,7 +302,7 @@ class Sample_Buffer:
                     self.add_sample(sample)
                 self.xp = sample[0]
                 sample_counter = sample_counter + 1
-            except IOError:
+            except (IndexError, ValueError):
                 print('hellebores.py: Sample_Buffer.load_analysis()'
                       ' file reading error.', file=sys.stderr) 
                 break
@@ -327,31 +313,29 @@ class Sample_Buffer:
         return self.sample_waveform_history[SAMPLE_BUFFER_SIZE-1-index]
 
 
-class App_Actions:
 
+class Data_comms:
+    """Contains references and methods to deal with the connection to and reading of
+    incoming data for waveforms and analysis results. Deployed on Pi, this will
+    normally use named pipes controlled by a shell script. However the class here
+    also supports anonymous pipe from stdin (waveform data only), for convenience
+    when interacting with the project in the shell."""
     def __init__(self, waveform_stream_name, analysis_stream_name):
         self.waveform_stream = None
         self.analysis_stream = None
+        self.pipes_ok = False
         # open the streams (input data pipe files)
+        # if successful, this will flip the pipes_ok flag to true
         self.open_streams(waveform_stream_name, analysis_stream_name)
-        # allow/stop update of the lines on the screen
-        self.capturing = True
-        # multi_trace mode overlays traces on one background and is used to optimise
-        # for high frame rates or dialog overlay
-        self.multi_trace = 1
-        # create custom pygame events, which we use for clearing the screen
-        # and triggering a redraw of the controls
-        self.clear_screen_event = pygame.event.custom_type()
-        self.draw_controls_event = pygame.event.custom_type()
 
-    def select_peek_data_function(self, source='named_pipe'):
+    def select_peek_data_function(self, source_type):
         """The version of self.peek_data(f, t) that we will use is determined
         once at runtime."""
         if os.name == 'posix':
             self.peek_data = lambda f, t: select.select( [f], [], [], t)[0] != []
-        elif os.name == 'nt' and source == 'named_pipe':
+        elif os.name == 'nt' and source_type == 'named_pipe':
             self.peek_data = lambda p, t: peek_pipe(p.get_handle(), t)
-        elif os.name == 'nt' and source == 'stream':
+        elif os.name == 'nt' and source_type == 'stream':
             self.peek_data = lambda stream, t: peek_pipe(get_pipe_from_stream(stream), t)
         else:
             # other scenarios, this is unlikely to work
@@ -383,6 +367,7 @@ class App_Actions:
                 self.select_peek_data_function('stream')
             if analysis_stream_name:
                 self.analysis_stream = self.open_pipe(analysis_stream_name)
+            self.pipes_ok = True
         except (PermissionError, FileNotFoundError, OSError):
             print(f"{sys.argv[0]}: App_Actions.open_streams() couldn't open the input streams "
                   f"{waveform_stream_name} and {analysis_stream_name}", file=sys.stderr)
@@ -390,10 +375,52 @@ class App_Actions:
 
     def close_streams(self):
         try:
-            self.waveform_stream.close()
-            self.analysis_stream.close() 
+            for stream in [ self.waveform_stream, self.analysis_stream ]:
+                if stream:
+                    stream.close()
         except OSError:
             print(f"{sys.argv[0]}: App_Actions.close_streams() couldn't close the input streams", file=sys.stderr)
+
+    def get_line(self, source, timeout):
+        """Checks state of stream for up to timeout seconds and either reads a line of
+        new data, or returns False. If the pipe is broken (empty string), will clear the pipes_ok flag."""
+        try:
+            # False if data isn't ready, line of data if ready, '' if pipe is broken
+            l = self.peek_data(source, timeout) and source.readline()
+            if l == '':
+                print(f'The {source} pipe was closed.', file=sys.stderr)
+                self.pipes_ok = False
+            return l
+        except IOError:
+            print(f"{sys.argv[0]}: Data_comms.get_line() failed to read from the {source} stream.", file=sys.stderr)
+
+    def get_waveform_line(self, timeout):
+        """Returns a line of data from the waveform stream, which must be valid."""
+        return self.get_line(self.waveform_stream, timeout)
+
+    def get_analysis_line(self, timeout):
+        """Returns a line of data from the analysis stream. However, if one isn't set, returns False
+        and allows the program to continue."""
+        if self.analysis_stream:
+            return self.get_line(self.analysis_stream, timeout)
+        else:
+            return False
+
+
+
+class App_Actions:
+
+    def __init__(self, data_comms):
+        self.data_comms = data_comms
+        # allow/stop update of the lines on the screen
+        self.capturing = True
+        # multi_trace mode overlays traces on one background and is used to optimise
+        # for high frame rates or dialog overlay
+        self.multi_trace = 1
+        # create custom pygame events, which we use for clearing the screen
+        # and triggering a redraw of the controls
+        self.clear_screen_event = pygame.event.custom_type()
+        self.draw_controls_event = pygame.event.custom_type()
 
 
     def post_clear_screen_event(self):
@@ -424,7 +451,7 @@ class App_Actions:
                    " isn't implemented, exiting with error code 1.", file=sys.stderr)
             code = 1
             
-        self.close_streams()
+        self.data_comms.close_streams()
         pygame.quit()
         sys.exit(code)   # quit application with the selected exit code
 
@@ -471,8 +498,9 @@ def main():
             'analyser.py' ], reload_on_signal=False)
 
     # create objects that hold the state of the application, data buffers and UI
-    app_actions  = App_Actions(waveform_stream_name, analysis_stream_name)
-    buffer       = Sample_Buffer(st, app_actions)
+    data_comms   = Data_comms(waveform_stream_name, analysis_stream_name)
+    app_actions  = App_Actions(data_comms)
+    buffer       = Sample_Buffer(st, data_comms)
     wfs          = WFS_Counter()
     waveform     = Waveform(st, wfs, app_actions)
     multimeter   = Multimeter(st, app_actions)
@@ -497,7 +525,7 @@ def main():
         # read new analysis results, if available 
         analysis_updated = buffer.load_analysis(app_actions.capturing)
 
-        if not buffer.pipes_ok:
+        if not data_comms.pipes_ok:
             # one or both incoming data pipes were closed, quit the application
             app_actions.exit_application('quit')
 

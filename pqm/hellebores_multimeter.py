@@ -85,8 +85,9 @@ class Multimeter:
         # push readings into display text fields
         for key in readings:
             if key in valid_keys:
-                tp_value, padding, decimals = self.multimeter_value_objects[key]
-                tp_value.set_text(f'{readings[key]:7.{decimals}f}'.rjust(padding), adapt_parent=False)
+                tp_value, padding, decimals, display_scaling = self.multimeter_value_objects[key]
+                tp_value.set_text(f'{readings[key]*display_scaling:7.{decimals}f}'.rjust(padding),\
+                        adapt_parent=False)
 
     def create_multimeter_display(self):
         """Multimeter display, on main part of screen"""
@@ -103,59 +104,61 @@ class Multimeter:
         #                          Apparent power minimum /VA       
         # Power factor /1          
         #                         
-
+        # Format of the table is:
+        # analysis key, label text, width and height, font size, number of characters,
+        # vertical padding, number of decimal places, display scaling factor for value.
         column_1        = [ ('rms_voltage', 'Voltage rms /V',
-                                300, 58, LARGE_FONT_SIZE, 8, 10, 2),
+                                300, 58, LARGE_FONT_SIZE, 8, 10, 2, 1),
                             ('rms_current', 'Current rms /A',
-                                300, 58, LARGE_FONT_SIZE, 8, 10, 2),
+                                300, 58, LARGE_FONT_SIZE, 8, 10, 2, 1),
                             ('mean_power', 'Power /W',
-                                300, 58, LARGE_FONT_SIZE, 8, 10, 2),
+                                300, 58, LARGE_FONT_SIZE, 8, 10, 2, 1),
                             ('mean_volt_ampere_reactive', 'Reactive power /VAR',
-                                300, 58, LARGE_FONT_SIZE, 8, 10, 2),
+                                300, 58, LARGE_FONT_SIZE, 8, 10, 2, 1),
                             ('mean_volt_ampere', 'Apparent power /VA',
-                                300, 58, LARGE_FONT_SIZE, 8, 10, 2) ]
+                                300, 58, LARGE_FONT_SIZE, 8, 10, 2, 1) ]
 
         column_2        = [ ('rms_voltage_max', 'Vmax rms /V',
-                                224, 20, FONT_SIZE, 28, 0, 2),
+                                224, 20, FONT_SIZE, 28, 0, 2, 1),
                             ('rms_voltage_min', 'Vmin rms /V',
-                                224, 20, FONT_SIZE, 28, 10, 2),
+                                224, 20, FONT_SIZE, 28, 10, 2, 1),
                             ('rms_current_max', 'Imax rms /A',
-                                224, 20, FONT_SIZE, 28, 0, 2),
+                                224, 20, FONT_SIZE, 28, 0, 2, 1),
                             ('rms_current_min', 'Imin rms /A',
-                                224, 20, FONT_SIZE, 28, 10, 2),
+                                224, 20, FONT_SIZE, 28, 10, 2, 1),
                             ('mean_power_max', 'Pmax /W',
-                                224, 20, FONT_SIZE, 28, 0, 2),
+                                224, 20, FONT_SIZE, 28, 0, 2, 1),
                             ('mean_power_min', 'Pmin /W',
-                                224, 20, FONT_SIZE, 28, 10, 2),
+                                224, 20, FONT_SIZE, 28, 10, 2, 1),
                             ('mean_volt_ampere_reactive_max', 'RPmax /VAR',
-                                224, 20, FONT_SIZE, 28, 0, 2),
+                                224, 20, FONT_SIZE, 28, 0, 2, 1),
                             ('mean_volt_ampere_reactive_min', 'RPmin /VAR',
-                                224, 20, FONT_SIZE, 28, 10, 2),
+                                224, 20, FONT_SIZE, 28, 10, 2, 1),
                             ('mean_volt_ampere_max', 'APmax /VA',
-                                224, 20, FONT_SIZE, 28, 0, 2),
+                                224, 20, FONT_SIZE, 28, 0, 2, 1),
                             ('mean_volt_ampere_min', 'APmin /VA',
-                                224, 20, FONT_SIZE, 28, 10, 2) ]
+                                224, 20, FONT_SIZE, 28, 10, 2, 1) ]
 
         column_3        = [ ('watt_hour', 'Energy /Wh',
-                                224, 20, FONT_SIZE, 28, 0, 2),
+                                224, 20, FONT_SIZE, 28, 0, 2, 1),
                             ('volt_ampere_reactive_hour', 'Reactive energy /VARh',
-                                224, 20, FONT_SIZE, 28, 0, 2),
+                                224, 20, FONT_SIZE, 28, 0, 2, 1),
                             ('volt_ampere_hour', 'Apparent energy /VAh',
-                                224, 20, FONT_SIZE, 28, 0, 2),
+                                224, 20, FONT_SIZE, 28, 0, 2, 1),
                             ('hours', 'Accumulation time /hr',
-                                224, 20, FONT_SIZE, 28, 40, 2),
+                                224, 20, FONT_SIZE, 28, 40, 2, 1),
                             ('power_factor', 'Power factor /1',
-                                224, 20, FONT_SIZE, 28, 0, 2),
+                                224, 20, FONT_SIZE, 28, 0, 2, 1),
                             ('crest_factor_current', 'Crest factor /1',
-                                224, 20, FONT_SIZE, 28, 0, 2),
+                                224, 20, FONT_SIZE, 28, 0, 2, 1),
                             ('frequency', 'Frequency /Hz',
-                                224, 20, FONT_SIZE, 28, 0, 2),
+                                224, 20, FONT_SIZE, 28, 0, 2, 1),
                             ('rms_leakage_current', 'Earth leakage /mA',
-                                224, 20, FONT_SIZE, 28, 0, 3),
+                                224, 20, FONT_SIZE, 28, 0, 3, 1000),
                             ('total_harmonic_distortion_voltage_percentage', 'THD(v) /%',
-                                224, 20, FONT_SIZE, 28, 0, 2),
+                                224, 20, FONT_SIZE, 28, 0, 2, 1),
                             ('total_harmonic_distortion_current_percentage', 'THD(i) /%',
-                                224, 20, FONT_SIZE, 28, 0, 2) ]
+                                224, 20, FONT_SIZE, 28, 0, 2, 1) ]
 
         tp_texts = []
         label_h = 18 
@@ -163,7 +166,7 @@ class Multimeter:
         for column, x in zip([column_1, column_2, column_3], [0, 200, 440]):
             y = 0
             for item in column:
-                key, label, w, value_h, value_font_size, pad_size, gap_h, decimals = item
+                key, label, w, value_h, value_font_size, pad_size, gap_h, decimals, display_scaling = item
                 # create the label
                 if x==0:
                     pad = 36
@@ -185,7 +188,7 @@ class Multimeter:
                 tp_texts.append(tp_value)
                 y = y + value_h + gap_h
                 # add lookup of multimeter value object, with required text padding, keyed by analysis key
-                self.multimeter_value_objects[key] = (tp_value, pad_size, decimals)
+                self.multimeter_value_objects[key] = (tp_value, pad_size, decimals, display_scaling)
 
         multimeter_column_1 = thorpy.Group(tp_texts[:10], mode=None)
         multimeter_column_2 = thorpy.Group(tp_texts[10:30], mode=None)

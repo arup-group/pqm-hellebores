@@ -83,7 +83,7 @@ def configure_pins():
         'sdo_adc'     : Pin(0, Pin.IN),             # output from ADC (to Pico)
         'reset_adc'   : Pin(5, Pin.OUT, value=1),   # reset* ADC
         'dr_adc'      : Pin(4, Pin.IN),             # data ready* from ADC
-        'reset_me'    : Pin(14, Pin.IN),            # reset* Pico (from Pi)
+        'reset_me'    : Pin(14, Pin.IN),            # reset Pico (from Pi)
         'flags_select': Pin(26, Pin.IN)             # NOT USED
     }
     
@@ -245,12 +245,12 @@ def configure_interrupts(command='enable'):
     if command == 'enable':
         # Bind pin transitions to interrupt handlers.
         # We use hard interrupt for the DR* pin to maintain tight timing,
-        # and for the RESET* pin so that the reset works even within a blocking
+        # and for the RESET pin so that the reset works even within a blocking
         # function (eg serial write). We defer the actual hardware reset until
         # cleanup has happened, including core 1 exiting
         pins['dr_adc'].irq(trigger = Pin.IRQ_FALLING,
                            handler = adc_read_handler, hard=True)
-        pins['reset_me'].irq(trigger = Pin.IRQ_FALLING,
+        pins['reset_me'].irq(trigger = Pin.IRQ_RISING,
                            handler = lambda _: set_flags(RESET), hard=True)
 
     elif command == 'disable':
@@ -285,13 +285,13 @@ class Debug_cache:
 
     def __init__(self):
         self.cache_pointer = 0
-        self.cache = [ bytearray(32) for i in range(32) ]
+        self.cache = [ bytearray(32) for i in range(16) ]
  
     def reset(self):
         self.cache_pointer = 0
 
     def save_snip(self, bs):
-        if self.cache_pointer <= 31:
+        if self.cache_pointer <= 15:
             self.cache[self.cache_pointer][:] = bs[:32]
             self.cache_pointer += 1
             return True
@@ -357,7 +357,7 @@ def streaming_loop_core_1():
         while flags == STREAMING:
             # read out from the ADC *immediately* if the cell variable has
             # changed
-            cell == cell_p or 
+            cell == cell_p or \
                 spi_adc_interface.readinto(cells_mv[(cell_p := cell)])
 
         # If Core 0 has raised OVERLOAD flag, we deal with it here.
@@ -439,17 +439,18 @@ def streaming_loop_core_0():
 def in_reset_state():
     '''This function supports recovery from some transient disturbances that
     can cause the inner sampling loops to exit. The function confirms that the
-    reset_me pin of the Pico is sustained in a low state for a long enough
+    reset_me pin of the Pico is sustained in a high state for a long enough
     period that we can rely on it being a genuine reset command.'''
     global flags
     reset_state = False
     # We check to see if the reset pin is sustained in low state for at
     # least 0.1 seconds
-    if pins['reset_me'].value() == 0:
+    if pins['reset_me'].value() == 1:
         time.sleep(0.1)
-        if pins['reset_me'].value() == 0:
+        if pins['reset_me'].value() == 1:
             reset_state = True
             flags = RESET
+            print(pins['reset_me'].value())
     return reset_state
 
         
@@ -457,8 +458,7 @@ def prepare_to_stream(adc_settings):
     '''Configures all the pre-requisities: pins, SPI interface, ADC settings
     circular buffer memory, interrupts and garbage collection.'''
 
-    # Pin and SPI library setup
-    configure_pins()
+    # SPI library setup
     configure_adc_spi_interface()
 
     # Buffer memory is set up in various memoryview structures that point to
@@ -526,7 +526,7 @@ def main():
     if DEBUG:
         print(f'stream.py started with parameters {adc_settings}.')
     try:
-        # Inner sampling loops will exit if a falling edge pulse is detected
+        # Inner sampling loops will exit if a rising edge pulse is detected
         # on the 'reset_me' pin. This is to make it possible to restart the
         # Pico via software, toggling this pin. However, this outer loop
         # allows for automatic recovery if a reset edge has been detected due
@@ -534,11 +534,17 @@ def main():
         # sustained for a long enough period, we consider it spurious and we
         # will restart the ADCs and the streaming, instead of proceeding to 
         # reset the machine.
-        while not in_reset_state():
-            flags = STREAMING
-            cell = 0
+        configure_pins()
+        flags = STREAMING
+        cell = 0
+        while flags == STREAMING:
             prepare_to_stream(adc_settings)
             stream()
+            if flags & RESET:
+                if not in_reset_state():
+                    flags = STREAMING
+                    continue
+                
 
     except KeyboardInterrupt:
         # Catch CTRL-C here.

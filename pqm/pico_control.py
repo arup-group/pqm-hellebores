@@ -56,9 +56,9 @@ def hard_reset():
         RESET = 6
         gp.setmode(gp.BCM)
         gp.setup(RESET, gp.OUT)
-        gp.output(RESET, False)
-        time.sleep(0.2)
         gp.output(RESET, True)
+        time.sleep(0.2)
+        gp.output(RESET, False)
         gp.cleanup()
     except ModuleNotFoundError:
         print(f'{program_name}, hard_reset(): will only work on Raspberry Pi hardware.', file=sys.stderr)

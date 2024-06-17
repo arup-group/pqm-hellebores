@@ -10,15 +10,15 @@ import time
 
 pins = {
     'pico_led'    : Pin(25, Pin.OUT),           # the led on the Pico
-    'reset_adc'   : Pin(5, Pin.OUT, value=1),   # hardware reset of ADC commanded from Pico (active low)
-    'reset_me'    : Pin(14, Pin.IN)             # reset and restart Pico (active low)
+    'reset_adc'   : Pin(5, Pin.OUT, value=1),   # hardware reset* of ADC commanded from Pico (active low)
+    'reset_me'    : Pin(14, Pin.IN)             # reset and restart Pico (active high)
 }
 
 
 def configure_reset_interrupt(mode='enable'):
     '''Implements hardware interrupt on pin 14 that cause the Pico to restart'''
     if mode == 'enable':
-        pins['reset_me'].irq(trigger = Pin.IRQ_FALLING, handler = lambda _: machine.reset(), hard=True)
+        pins['reset_me'].irq(trigger = Pin.IRQ_RISING, handler = lambda _: machine.reset(), hard=True)
     elif mode == 'disable':
         pins['reset_me'].irq(handler = None)
 

@@ -56,9 +56,8 @@ def hard_reset():
         RESET = 6
         gp.setmode(gp.BCM)
         gp.setup(RESET, gp.OUT)
-        time.sleep(0.1)
         gp.output(RESET, False)
-        time.sleep(0.1)
+        time.sleep(0.2)
         gp.output(RESET, True)
         gp.cleanup()
     except ModuleNotFoundError:

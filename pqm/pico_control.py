@@ -96,7 +96,8 @@ def receive_response(ser):
 def main():
     '''Reads command line and resets Pico and/or sends a command to the primitive
     server program running on Pico at startup.'''
-    progam_name, args = get_command_args()
+    global program_name
+    program_name, args = get_command_args()
     # if hard reset is requested, attempt to reset Pico before checking to
     # see if the serial interface is up/exists 
     if args.hard_reset:

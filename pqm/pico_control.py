@@ -102,7 +102,7 @@ def main():
     # see if the serial interface is up/exists 
     if args.hard_reset:
         hard_reset()
-        time.sleep(1)
+        time.sleep(2)
     port_name = find_serial_device()
     if port_name:
         try:

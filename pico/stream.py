@@ -526,25 +526,23 @@ def main():
     if DEBUG:
         print(f'stream.py started with parameters {adc_settings}.')
     try:
-        # Inner sampling loops will exit if a rising edge pulse is detected
-        # on the 'reset_me' pin. This is to make it possible to restart the
-        # Pico via software, toggling this pin. However, this outer loop
-        # allows for automatic recovery if a reset edge has been detected due
-        # to an electrical disturbance (eg inrush). If the reset state is not
-        # sustained for a long enough period, we consider it spurious and we
-        # will restart the ADCs and the streaming, instead of proceeding to 
-        # reset the machine.
         configure_pins()
         flags = STREAMING
         cell = 0
         while flags == STREAMING:
             prepare_to_stream(adc_settings)
             stream()
-            if flags & RESET:
-                if not in_reset_state():
-                    flags = STREAMING
-                    continue
-                
+            # Inner sampling loops will exit if a rising edge pulse is detected
+            # on the 'reset_me' pin. This is to make it possible to restart the
+            # Pico via software, toggling this pin. However, this outer loop
+            # allows for automatic recovery if a reset edge has been detected
+            # due to an electrical disturbance (eg inrush). If the reset state
+            # is not sustained for a long enough period, we consider it
+            # spurious and we will restart the ADCs and the streaming, instead
+            # of proceeding to reset the machine.
+            if flags & RESET and not in_reset_state():
+                flags = STREAMING
+                continue
 
     except KeyboardInterrupt:
         # Catch CTRL-C here.

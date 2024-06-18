@@ -61,8 +61,9 @@ done
 # Start the data pipeline, output feeding the two named pipes
 # Clear old log file
 [[ -e $ERROR_LOG_FILE ]] && rm $ERROR_LOG_FILE
-# Duplicate stderr file descriptor 2 to 4
-# then redirect 2 to file
+# stderr file descriptor is number 2. Duplicate this file descriptor 2 to 4
+# (ie make a copy of it) then redirect 2 to file, so that we catch error
+# messages in a log file
 exec 4>&2 2>$ERROR_LOG_FILE
 
 # Display the version infomation and settings that will be used initially
@@ -84,27 +85,22 @@ echo "Measurement source: $READER"
 # pipelines moving.
 ####
 
-# Reset the Pico, flush out serial buffer that may be in an inconsistent state and start streaming.
+# Reset the Pico and start streaming.
 if $real_hardware; then
-    ./pico_control.py --command "CAT main.py" --hard_reset > /dev/null
+    ./pico_control.py --hard_reset
     ./pico_control.py --command "START stream.py 1x 1x 1x 1x 7.812k" --no_response
 fi
-
-# analyser.py needs to run with an increased input pipe buffer, to avoid stalling the sample
-# stream while doing calculations.
-#ANALYSER="stdbuf --input=4M nice --adjustment=10 ./analyser.py"
-ANALYSER="./analyser.py"
 
 # Plumbing, pipe, pipe, pipe...
 $READER \
     | ./scaler.py \
-        | tee >($ANALYSER | tee $MEASUREMENT_LOG_FILE > $ANALYSIS_PIPE) \
+        | tee >(./analyser.py | tee $MEASUREMENT_LOG_FILE > $ANALYSIS_PIPE) \
             | ./trigger.py | ./mapper.py > $WAVEFORM_PIPE &
 
 ./hellebores.py $WAVEFORM_PIPE $ANALYSIS_PIPE
-# Because hellebores.py is running in the foreground, this script blocks (waits) until it finishes.
-# The reader, scaler, analysis and waveform programs also terminate at that point because their
-# pipeline connections are broken/closed.
+# Because hellebores.py is running in the foreground, this script blocks (waits here) until it
+# finishes. The reader, scaler, analysis and waveform programs all terminate at that point
+# because their pipeline connections are broken/closed.
 
 # Capture the exit code from hellebores.py
 # We'll check it's status shortly
@@ -112,7 +108,7 @@ exit_code=$?
 
 echo "Finished processing."
 
-# Restore stderr file descriptor 2 from saved state on 4, and delete fd 4
+# Restore stderr file descriptor 2 from saved state on 4, then delete fd 4
 exec 2>&4 4>&-
 
 # Now check the exit code

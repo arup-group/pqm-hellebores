@@ -13,4 +13,5 @@ dependencies:
   - pip:
     - thorpy
   - pywin32
+  - msvcrt
 

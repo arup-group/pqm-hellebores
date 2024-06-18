@@ -77,11 +77,15 @@ In the installation step for creating virual environment, for cmd.exe type shell
 python -m venv create venv-windows
 venv-windows\scripts\activate
 ```
-
-Within cmd.exe, use `run\go.bat` instead of `run/go.sh`. This activates the venv-windows environment and uses some additional code to sufficiently implement named pipes and signals to meet most of the dependencies of the project. These windows-specific workarounds are respectively in `mswin_pipes.py` and `settings.py`. However, some features of the go.sh script (eg software update) aren't implemented.
+OR
+```
+conda env create --file environment.yaml
+conda activate pqm-env
+```
+Within cmd.exe, use `run\go.bat` instead of `run/go.sh`. The batch file will activate the venv-windows environment if it is present. The project relies on some POSIX features for named pipes and signals that are not well supported on Windows. Therefore, `mswin_pipes.py` sufficiently implements these dependencies with workarounds to allow the project to run. Note that some features of the `go.sh` script (eg software update) aren't implemented in `go.bat`.
 
 # Calibration
-The four channels of the ADC each have an associated DC offset and gain calibration factor. The calibration factors for each device are stored in the `calibrations.json` file. The identity of the specific device at hand is stored in the `identity` file. Hardware scaling and calibration factors are applied to the data stream by the `scaler.py` program.
+The four channels of the ADC each have an associated DC offset and gain calibration factor. The calibration factors for each device are stored in the `calibrations.json` file. The identity of the specific device at hand is stored in the `configuration/identity` file. Hardware scaling and calibration factors are applied to the data stream by the `scaler.py` program.
 
 
 

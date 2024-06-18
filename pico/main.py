@@ -53,11 +53,9 @@ def process_command(command_string):
     LISTDIR, START [filename] [args], CAT [filename]''' 
 
     # make an array of words
-    words = command_string.split(' ')
-    # remove any empty words (eg caused by duplicate spaces)
-    words = [ w for w in words if w != '' ]
-    
+    words = command_string.split()
     command_status = ''
+
     # do nothing for blank lines, don't handle as an error
     if len(words) == 0:
         return

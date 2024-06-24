@@ -13,6 +13,7 @@ import numpy as np
 import settings
 import sys
 import json
+import csv
 import time
 
 ROOT2 = math.sqrt(2)
@@ -284,28 +285,45 @@ def read_lines(n, cache):
     else:
         return True
 
+
+
+
 def read_analyse_output(cache, analyser, output_interval):
     """Loop through analysis and output processes until read_lines fails."""
+    # generator object for csv formatted output. We use \n rather than
+    # os.linesep because the stdout stream object already converts \n
+    # to \r\n on Windows.
+    #csv_writer = csv.writer(sys.stdout, lineterminator='\n')
+    # While doing calculations, We read new data in two gulps to keep the
+    # sample pipeline moving
     gulp1 = output_interval // 2
     gulp2 = output_interval - gulp1
-    # While doing calculations, We read new data in gulps to keep the sample
-    # pipeline moving
+    first_pass = True
     while True:
         # Retrieve the cache and load it into the analyser
         analyser.load_data_frame(cache.get_output_array()) 
+        # first data gulp
         if not read_lines(gulp1, cache):
             break
         # Do some calculations
         analyser.averages()
         analyser.frequency()
         analyser.accumulators()
+        # second data gulp
         if not read_lines(gulp2, cache):
             break
         # Do some more calculations
         analyser.power_quality()
+        # Generate the output as CSV
+        # ********************
         # Generate the output
         print(json.dumps(analyser.get_results()))
+        #if first_pass:
+        #    csv_writer.writerow(analyser.get_results().keys())
+        #    first_pass = False
+        #csv_writer.writerow(analyser.get_results().values())
         sys.stdout.flush()
+
 
 def main():
     analyser = Analyser()

@@ -259,9 +259,7 @@ class Sample_Buffer:
         if l:=self.data_comms.get_analysis_line(0.0):
             try:
                 # load the analysis into a local dictionary
-                new_analysis = json.loads(l)
-                for (key, value) in new_analysis.items():
-                    self.cs[key] = value
+                self.cs = json.loads(l)
                 self.update_analysis_bounds()
             except ValueError:
                 print('hellebores.py: Sample_Buffer.load_analysis()'

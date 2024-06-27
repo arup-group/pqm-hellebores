@@ -16,6 +16,7 @@ import time
 import sys
 import os
 import select
+import ast
 import json
 import io
 
@@ -222,9 +223,9 @@ class Sample_Buffer:
                 pass
 
     def clear_accumulators(self):
-        """Setitng the analysis_start_time setting to zero triggers a function in analyser.py
+        """Setting the analysis_start_time setting to zero triggers a function in analyser.py
         to reset all the accumulators."""
-        self.st.analysis_start_time = 0
+        self.st.analysis_start_time = time.time()
         self.st.send_to_all()
 
     def update_analysis_bounds(self):
@@ -259,7 +260,8 @@ class Sample_Buffer:
         if l:=self.data_comms.get_analysis_line(0.0):
             try:
                 # load the analysis into a local dictionary
-                self.cs = json.loads(l)
+                self.cs = ast.literal_eval(l)
+                #self.cs = json.loads(l)
                 self.update_analysis_bounds()
             except ValueError:
                 print('hellebores.py: Sample_Buffer.load_analysis()'
@@ -507,86 +509,97 @@ def main():
     # start up in the waveform mode
     ui.app_actions.set_updater('waveform')
 
-    # main loop
-    while True:
-        # ALWAYS read new data, even if we are not capturing it, to keep the incoming data
-        # pipeline flowing. If the read rate doesn't keep up with the pipe, then we will see 
-        # artifacts on screen. Check if the BUFFER led on PCB is stalling if performance
-        # problems are suspected here.
-        # The load_waveform() function also implicitly manages display refresh speed
-        # by waiting for a definite time for new data.
+    # clear the analysis accumulators:
+    # this causes the st.analysis_start_time parameter to be initialised in the working
+    # copy of settings.json
+    buffer.clear_accumulators()
 
-        # if multi_trace is active, read multiple frames into the buffer, otherwise just one
-        for i in range(app_actions.multi_trace):
-            buffer.load_waveform(app_actions.capturing, wfs)
-
-        # read new analysis results, if available 
-        analysis_updated = buffer.load_analysis(app_actions.capturing)
-
-        if not data_comms.pipes_ok:
-            # one or both incoming data pipes were closed, quit the application
-            app_actions.exit_application('quit')
-
-        # hack to make the cursor invisible while still responding to touch signals
-        # would like to do this only once, rather than every trip round the loop
-        # **** OPTIMISE this to test whether we need to do it only once on startup ****
-        if hide_mouse_pointer:
-            pygame.mouse.set_cursor(
-                (8,8), (0,0), (0,0,0,0,0,0,0,0), (0,0,0,0,0,0,0,0))
-
-        # we update status texts and datetime every second
-        if wfs.time_to_update():
-            if app_actions.capturing == True:
-                ui.get_element('datetime').set_text(time.ctime())
-            ui.draw_texts(app_actions.capturing)
-            # force controls - including new text - to be re-drawn
-            app_actions.post_draw_controls_event()
-
-        # here we process mouse/touch/keyboard events.
-        events = pygame.event.get()
-        for e in events:
-            if (e.type == pygame.QUIT) or (e.type == pygame.KEYDOWN and e.key == pygame.K_q):
+    try:
+        # main loop
+        while True:
+            # ALWAYS read new data, even if we are not capturing it, to keep the incoming data
+            # pipeline flowing. If the read rate doesn't keep up with the pipe, then we will see 
+            # artifacts on screen. Check if the BUFFER led on PCB is stalling if performance
+            # problems are suspected here.
+            # The load_waveform() function also implicitly manages display refresh speed
+            # by waiting for a definite time for new data.
+    
+            # if multi_trace is active, read multiple frames into the buffer, otherwise just one
+            for i in range(app_actions.multi_trace):
+                buffer.load_waveform(app_actions.capturing, wfs)
+    
+            # read new analysis results, if available 
+            analysis_updated = buffer.load_analysis(app_actions.capturing)
+    
+            if not data_comms.pipes_ok:
+                # one or both incoming data pipes were closed, quit the application
                 app_actions.exit_application('quit')
-            elif e.type == pygame.KEYDOWN and e.key == pygame.K_d:     # dots
-                waveform.plot_mode('dots')
-            elif e.type == pygame.KEYDOWN and e.key == pygame.K_l:     # lines
-                waveform.plot_mode('lines')
-            elif e.type == pygame.KEYDOWN and e.key == pygame.K_r:     # run
-                app_actions.capturing = True
-            elif e.type == pygame.KEYDOWN and e.key == pygame.K_s:     # stop
-                app_actions.capturing = False
-            elif e.type == app_actions.clear_screen_event:
-                # this event is posted when the 'mode' of the software is changed and we
-                # want to clear the screen completely
-                screen.fill(LIGHT_GREY)
-            elif e.type == app_actions.draw_controls_event:
-                # we don't actually do anything here, just want the side effect of 'events'
-                # having something in it because it is tested shortly, and will cause the 
-                # controls to be re-drawn
-                pass
-
-        # SCREEN REDRAWING FUNCTIONS FOLLOW
-        # The 'if' conditions optimise the redraw work to reduce CPU usage.
-
-        # we don't use the event handler to schedule plotting updates, because it is not
-        # efficient enough for high frame rates. Instead we plot explicitly each
-        # time round the loop. Depending on the current mode, waveforms, meter readings etc
-        # will be drawn as necessary.
-        if ui.mode == 'waveform' or events or analysis_updated:
-            ui.refresh(buffer, screen)
-
-        # ui.get_updater().update() is an expensive function, so we use the simplest possible
-        # thorpy theme to achieve the quickest redraw time. Then, we only update/redraw when
-        # buttons are pressed or the text needs updating. When there is an overlay menu displayed
-        # there is more drawing work to do, so we use multi_trace to help optimise.
-        if ui.overlay_dialog_active or events:
-            ui.set_multi_trace()
-            ui.get_updater().update(events=events)
-
-        # push all of our updated work into the active display framebuffer
-        if ui.mode == 'waveform' or events or ui.overlay_dialog_active or analysis_updated:
-            pygame.display.flip()
-
+    
+            # hack to make the cursor invisible while still responding to touch signals
+            # would like to do this only once, rather than every trip round the loop
+            # **** OPTIMISE this to test whether we need to do it only once on startup ****
+            if hide_mouse_pointer:
+                pygame.mouse.set_cursor(
+                    (8,8), (0,0), (0,0,0,0,0,0,0,0), (0,0,0,0,0,0,0,0))
+    
+            # we update status texts and datetime every second
+            if wfs.time_to_update():
+                if app_actions.capturing == True:
+                    ui.get_element('datetime').set_text(time.ctime())
+                ui.draw_texts(app_actions.capturing)
+                # force controls - including new text - to be re-drawn
+                app_actions.post_draw_controls_event()
+    
+            # here we process mouse/touch/keyboard events.
+            events = pygame.event.get()
+            for e in events:
+                if (e.type == pygame.QUIT) or (e.type == pygame.KEYDOWN and e.key == pygame.K_q):
+                    app_actions.exit_application('quit')
+                elif e.type == pygame.KEYDOWN and e.key == pygame.K_d:     # dots
+                    waveform.plot_mode('dots')
+                elif e.type == pygame.KEYDOWN and e.key == pygame.K_l:     # lines
+                    waveform.plot_mode('lines')
+                elif e.type == pygame.KEYDOWN and e.key == pygame.K_r:     # run
+                    app_actions.capturing = True
+                elif e.type == pygame.KEYDOWN and e.key == pygame.K_s:     # stop
+                    app_actions.capturing = False
+                elif e.type == app_actions.clear_screen_event:
+                    # this event is posted when the 'mode' of the software is changed and we
+                    # want to clear the screen completely
+                    screen.fill(LIGHT_GREY)
+                elif e.type == app_actions.draw_controls_event:
+                    # we don't actually do anything here, just want the side effect of 'events'
+                    # having something in it because it is tested shortly, and will cause the 
+                    # controls to be re-drawn
+                    pass
+    
+            # SCREEN REDRAWING FUNCTIONS FOLLOW
+            # The 'if' conditions optimise the redraw work to reduce CPU usage.
+    
+            # we don't use the event handler to schedule plotting updates, because it is not
+            # efficient enough for high frame rates. Instead we plot explicitly each
+            # time round the loop. Depending on the current mode, waveforms, meter readings etc
+            # will be drawn as necessary.
+            if ui.mode == 'waveform' or events or analysis_updated:
+                ui.refresh(buffer, screen)
+    
+            # ui.get_updater().update() is an expensive function, so we use the simplest possible
+            # thorpy theme to achieve the quickest redraw time. Then, we only update/redraw when
+            # buttons are pressed or the text needs updating. When there is an overlay menu displayed
+            # there is more drawing work to do, so we use multi_trace to help optimise.
+            if ui.overlay_dialog_active or events:
+                ui.set_multi_trace()
+                ui.get_updater().update(events=events)
+    
+            # push all of our updated work into the active display framebuffer
+            if ui.mode == 'waveform' or events or ui.overlay_dialog_active or analysis_updated:
+                pygame.display.flip()
+    
+    # General exception catch here will attempt to exit cleanly and signal to the controlling script
+    # a suitable exit code, so that it knows that something went wrong.
+    except Exception as e:
+        print(repr(e), file=sys.stderr)
+        app_actions.exit_application('error')
 
 if __name__ == '__main__':
     main()

@@ -28,6 +28,7 @@ class Analyser:
         self.size = 0
         self.fft_window = np.blackman(0)  # empty to begin with
         self.results = {}
+        self.analysis_start_time = 0
         self.reset_accumulators()
 
     def reset_accumulators(self):
@@ -39,11 +40,9 @@ class Analyser:
         self.mvars = 0
 
     def check_updated_settings(self):
-        if self.st and self.st.analysis_start_time == 0:
-            # reset analysis accumulators
+        if self.st and self.analysis_start_time != self.st.analysis_start_time:
+            self.analysis_start_time = self.st.analysis_start_time
             self.reset_accumulators()
-            self.st.analysis_start_time = time.time()
-            self.st.send_to_all()
 
     def create_fft_window(self, n_points, window_type='flattop'):
         # window_type = 'blackman', 'flattop' or 'rectangular'
@@ -290,15 +289,10 @@ def read_lines(n, cache):
 
 def read_analyse_output(cache, analyser, output_interval):
     """Loop through analysis and output processes until read_lines fails."""
-    # generator object for csv formatted output. We use \n rather than
-    # os.linesep because the stdout stream object already converts \n
-    # to \r\n on Windows.
-    #csv_writer = csv.writer(sys.stdout, lineterminator='\n')
     # While doing calculations, We read new data in two gulps to keep the
     # sample pipeline moving
     gulp1 = output_interval // 2
     gulp2 = output_interval - gulp1
-    first_pass = True
     while True:
         # Retrieve the cache and load it into the analyser
         analyser.load_data_frame(cache.get_output_array()) 
@@ -314,14 +308,8 @@ def read_analyse_output(cache, analyser, output_interval):
             break
         # Do some more calculations
         analyser.power_quality()
-        # Generate the output as CSV
-        # ********************
         # Generate the output
-        print(json.dumps(analyser.get_results()))
-        #if first_pass:
-        #    csv_writer.writerow(analyser.get_results().keys())
-        #    first_pass = False
-        #csv_writer.writerow(analyser.get_results().values())
+        print(analyser.get_results())
         sys.stdout.flush()
 
 

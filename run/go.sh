@@ -94,10 +94,14 @@ fi
 # Plumbing, pipe, pipe, pipe...
 $READER \
     | ./scaler.py \
-        | tee >(./analyser.py | tee $MEASUREMENT_LOG_FILE > $ANALYSIS_PIPE) \
-            | ./trigger.py | ./mapper.py > $WAVEFORM_PIPE &
+        | tee >(./trigger.py | ./mapper.py > $WAVEFORM_PIPE) \
+            | ./analyser.py \
+                | tee >(./analysis_to_csv.py > $MEASUREMENT_LOG_FILE) \
+                    > $ANALYSIS_PIPE &
 
+# hellebores.py GUI reads from both the waveform and analysis pipes...
 ./hellebores.py $WAVEFORM_PIPE $ANALYSIS_PIPE
+
 # Because hellebores.py is running in the foreground, this script blocks (waits here) until it
 # finishes. The reader, scaler, analysis and waveform programs all terminate at that point
 # because their pipeline connections are broken/closed.

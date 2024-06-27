@@ -2,6 +2,9 @@
 ### Utility functions to assist cmd.exe shell on windows systems
 ### Supports pipe in, pipe out and tee functionality, using APIs supported
 ### on MS Windows, but not available natively in the cmd.exe shell.
+### Note also that Powershell only supports pipe redirection of byte
+### streams in v.7.4+, earlier Powershell versions will not work.
+### See this PR: https://github.com/PowerShell/PowerShell/pull/17857
 ######
 
 # install the pywin32 package via pip

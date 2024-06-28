@@ -213,46 +213,17 @@ class Sample_Buffer:
         self.ps[3].append((sample[0], sample[4]))
 
     def clear_analysis_bounds(self):
-        for key in ['rms_voltage_max', 'rms_voltage_min', 'rms_current_max', 'rms_current_min',
-                'mean_power_max', 'mean_power_min', 'mean_volt_ampere_reactive_max', 'mean_volt_ampere_reactive_min',
-                'mean_volt_ampere_max', 'mean_volt_ampere_min' ]:
-            try:
-                del self.cs[key]
-            except KeyError:
-                # if the key doesn't actually exist in the dictionary, catch error and continue
-                pass
+        """Incrementing the analysis_max_min_reset setting triggers a function in analyser.py
+        to clear the analysis max/min boundaries."""
+        self.st.analysis_max_min_reset += 1
+        self.st.send_to_all() 
+
 
     def clear_accumulators(self):
-        """Setting the analysis_start_time setting to zero triggers a function in analyser.py
+        """Incrementing the analysis_accumulators_reset setting triggers a function in analyser.py
         to reset all the accumulators."""
-        self.st.analysis_start_time = time.time()
+        self.st.analysis_accumulators_reset += 1
         self.st.send_to_all()
-
-    def update_analysis_bounds(self):
-        """Keep track of max and min boundaries since sampling started."""
-        try:
-            self.cs['rms_voltage_max'] = max(self.cs['rms_voltage_max'], self.cs['rms_voltage'])
-            self.cs['rms_voltage_min'] = min(self.cs['rms_voltage_min'], self.cs['rms_voltage'])
-            self.cs['rms_current_max'] = max(self.cs['rms_current_max'], self.cs['rms_current'])
-            self.cs['rms_current_min'] = min(self.cs['rms_current_min'], self.cs['rms_current'])
-            self.cs['mean_power_max'] = max(self.cs['mean_power_max'], self.cs['mean_power'])
-            self.cs['mean_power_min'] = min(self.cs['mean_power_min'], self.cs['mean_power'])
-            self.cs['mean_volt_ampere_reactive_max'] = max(self.cs['mean_volt_ampere_reactive_max'], self.cs['mean_volt_ampere_reactive'])
-            self.cs['mean_volt_ampere_reactive_min'] = min(self.cs['mean_volt_ampere_reactive_min'], self.cs['mean_volt_ampere_reactive'])
-            self.cs['mean_volt_ampere_max'] = max(self.cs['mean_volt_ampere_max'], self.cs['mean_volt_ampere'])
-            self.cs['mean_volt_ampere_min'] = min(self.cs['mean_volt_ampere_min'], self.cs['mean_volt_ampere'])
-        except KeyError:
-            # If the max/min fields are not set yet then initialise them to the current analysis values
-            self.cs['rms_voltage_max'] = self.cs['rms_voltage']
-            self.cs['rms_voltage_min'] = self.cs['rms_voltage']
-            self.cs['rms_current_max'] = self.cs['rms_current']
-            self.cs['rms_current_min'] = self.cs['rms_current']
-            self.cs['mean_power_max'] = self.cs['mean_power']
-            self.cs['mean_power_min'] = self.cs['mean_power']
-            self.cs['mean_volt_ampere_reactive_max'] = self.cs['mean_volt_ampere_reactive']
-            self.cs['mean_volt_ampere_reactive_min'] = self.cs['mean_volt_ampere_reactive']
-            self.cs['mean_volt_ampere_max'] = self.cs['mean_volt_ampere']
-            self.cs['mean_volt_ampere_min'] = self.cs['mean_volt_ampere']
 
 
     def load_analysis(self, capturing):
@@ -261,7 +232,6 @@ class Sample_Buffer:
             try:
                 # load the analysis into a local dictionary
                 self.cs = ast.literal_eval(l)
-                self.update_analysis_bounds()
             except (ValueError, AttributeError, SyntaxError):
                 print('hellebores.py: Sample_Buffer.load_analysis()'
                       ' file reading error.', file=sys.stderr) 

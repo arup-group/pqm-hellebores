@@ -11,16 +11,16 @@ PICO_FILES="main.py stream.py"
 
 
 get_local_sha256 () {
-    echo $(sha256sum $PICO_DIR/$1 | cut -d ' ' -f 1)
+    echo $(shasum -a 256 $PICO_DIR/$1 | awk '{print $1}')
 }
 
 get_pico_sha256 () {
-    echo $($PROGRAM_DIR/pico_control.py --command "SHA256 $1" | cut -d ' ' -f 3 | tr -d '\n')
+    echo $($PROGRAM_DIR/pico_control.py --command "SHA256 $1" | awk '{print $3}')
 }
 
 transfer_file_to_pico () {
     # $1 name of file to send
-    file_length=$(ls -l $1 | cut -d ' ' -f 5)
+    file_length=$(ls -l $1 | awk '{print $5}')
     $PROGRAM_DIR/pico_control.py --command "SAVE transfer_file $file_length" --send_file "$1"
     echo "Checking to see if the transfer was successful."
     sha256_local=$(get_local_sha256 "$pico_file")

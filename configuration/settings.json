@@ -1,5 +1,6 @@
 {
-    "analysis_start_time": 0,
+    "analysis_max_min_reset": 0,
+    "analysis_accumulators_reset": 0,
     "sample_rate": 7812.5,
     "time_axis_divisions": 10,
     "time_axis_pre_trigger_divisions": 5,

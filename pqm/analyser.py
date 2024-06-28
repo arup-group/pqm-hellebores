@@ -28,21 +28,23 @@ class Analyser:
         self.size = 0
         self.fft_window = np.blackman(0)  # empty to begin with
         self.results = {}
-        self.analysis_start_time = 0
-        self.reset_accumulators()
-
-    def reset_accumulators(self):
-        """set integer accumulators to zero: time in milliseconds, and energy transfer in
-        milli-watt-seconds etc."""
-        self.accumulated_time = 0
-        self.mws = 0
-        self.mvas = 0
-        self.mvars = 0
+        self.analysis_max_min_reset = 0
+        self.analysis_accumulators_reset = 0
+        self.clear_accumulators()         # called to initialise with zeros
 
     def check_updated_settings(self):
-        if self.st and self.analysis_start_time != self.st.analysis_start_time:
-            self.analysis_start_time = self.st.analysis_start_time
-            self.reset_accumulators()
+        """Called when a signal is received, this function checks the latest settings
+        to see if analysis max/min or accumulators need to be reset."""
+        # return early if the settings haven't been loaded yet
+        if not self.st:
+            return
+        if self.analysis_max_min_reset != self.st.analysis_max_min_reset:
+            self.analysis_max_min_reset = self.st.analysis_max_min_reset
+            self.clear_analysis_bounds()
+        if self.analysis_accumulators_reset != self.st.analysis_accumulators_reset:
+            self.analysis_accumulators_reset = self.st.analysis_accumulators_reset
+            self.clear_accumulators()
+
 
     def create_fft_window(self, n_points, window_type='flattop'):
         # window_type = 'blackman', 'flattop' or 'rectangular'
@@ -219,23 +221,66 @@ class Analyser:
             self.results['total_harmonic_distortion_current_percentage'] = 0.0
             self.results['harmonic_current_percentages'] = [0.0 for m in fft_currents ]
 
-    def accumulators(self):
+    def clear_accumulators(self):
+        """set integer accumulators to zero: time in milliseconds, and energy transfer in
+        milli-watt-seconds etc."""
+        self.accs = { 'time': 0.0, 'mws': 0.0, 'mvas': 0.0, 'mvars': 0.0 }
+
+    def update_accumulators(self):
         """Wh, VARh and VAh accumulators."""
         # delta_t in milliseconds
         # divide by two because the sample data overlaps each calculation (ie each sample participates
         # twice, so we add half of the contribution each time)
         delta_t = int(self.size / self.st.sample_rate / 2 * 1000)
-        self.accumulated_time += delta_t
         # Keep the accumulators in high resolution integer form, ie 'milliwatt-seconds'.
-        self.mws += round(self.results['mean_power'] * delta_t)
-        self.mvas += round(self.results['mean_volt_ampere'] * delta_t)
-        self.mvars += round(self.results['mean_volt_ampere_reactive'] * delta_t)
+        self.accs['time'] += delta_t
+        self.accs['mws'] += round(self.results['mean_power'] * delta_t)
+        self.accs['mvas'] += round(self.results['mean_volt_ampere'] * delta_t)
+        self.accs['mvars'] += round(self.results['mean_volt_ampere_reactive'] * delta_t)
         # For display purposes, convert to 'Watt-hours'
-        self.results['watt_hour'] = self.round_to(self.mws / 1000 / 3600, 3)
-        self.results['volt_ampere_hour'] = self.round_to(self.mvas / 1000 / 3600, 3)
-        self.results['volt_ampere_reactive_hour'] = self.round_to(self.mvars / 1000 / 3600, 3)
-        self.results['hours'] = self.round_to(self.accumulated_time / 1000 / 3600, 3)
+        self.results['hours'] = self.round_to(self.accs['time'] / 1000 / 3600, 3)
+        self.results['watt_hour'] = self.round_to(self.accs['mws'] / 1000 / 3600, 3)
+        self.results['volt_ampere_hour'] = self.round_to(self.accs['mvas'] / 1000 / 3600, 3)
+        self.results['volt_ampere_reactive_hour'] = self.round_to(self.accs['mvars'] / 1000 / 3600, 3)
 
+
+    def clear_analysis_bounds(self):
+        """Clears record of max and min boundaries."""
+        bounds_keys = ['rms_voltage_max', 'rms_voltage_min', 'rms_current_max', 'rms_current_min',
+           'mean_power_max', 'mean_power_min', 'mean_volt_ampere_reactive_max', 'mean_volt_ampere_reactive_min',
+           'mean_volt_ampere_max', 'mean_volt_ampere_min' ]
+        for k in bounds_keys:
+           try:
+               del self.results[k]
+           except KeyError:
+               # if the key doesn't actually exist in the dictionary, catch error and continue
+               pass
+
+    def update_analysis_bounds(self):
+        """Keep track of max and min boundaries since sampling started."""
+        try:
+            self.results['rms_voltage_max'] = max(self.results['rms_voltage_max'], self.results['rms_voltage'])
+            self.results['rms_voltage_min'] = min(self.results['rms_voltage_min'], self.results['rms_voltage'])
+            self.results['rms_current_max'] = max(self.results['rms_current_max'], self.results['rms_current'])
+            self.results['rms_current_min'] = min(self.results['rms_current_min'], self.results['rms_current'])
+            self.results['mean_power_max'] = max(self.results['mean_power_max'], self.results['mean_power'])
+            self.results['mean_power_min'] = min(self.results['mean_power_min'], self.results['mean_power'])
+            self.results['mean_volt_ampere_reactive_max'] = max(self.results['mean_volt_ampere_reactive_max'], self.results['mean_volt_ampere_reactive'])
+            self.results['mean_volt_ampere_reactive_min'] = min(self.results['mean_volt_ampere_reactive_min'], self.results['mean_volt_ampere_reactive'])
+            self.results['mean_volt_ampere_max'] = max(self.results['mean_volt_ampere_max'], self.results['mean_volt_ampere'])
+            self.results['mean_volt_ampere_min'] = min(self.results['mean_volt_ampere_min'], self.results['mean_volt_ampere'])
+        except KeyError:
+            # If the max/min fields are not set yet then initialise them to the current analysis values
+            self.results['rms_voltage_max'] = self.results['rms_voltage']
+            self.results['rms_voltage_min'] = self.results['rms_voltage']
+            self.results['rms_current_max'] = self.results['rms_current']
+            self.results['rms_current_min'] = self.results['rms_current']
+            self.results['mean_power_max'] = self.results['mean_power']
+            self.results['mean_power_min'] = self.results['mean_power']
+            self.results['mean_volt_ampere_reactive_max'] = self.results['mean_volt_ampere_reactive']
+            self.results['mean_volt_ampere_reactive_min'] = self.results['mean_volt_ampere_reactive']
+            self.results['mean_volt_ampere_max'] = self.results['mean_volt_ampere']
+            self.results['mean_volt_ampere_min'] = self.results['mean_volt_ampere']
 
     def load_data_frame(self, data_frame):
         """Load a data frame into memory, and slice into separate sets for voltage, current
@@ -302,12 +347,13 @@ def read_analyse_output(cache, analyser, output_interval):
         # Do some calculations
         analyser.averages()
         analyser.frequency()
-        analyser.accumulators()
+        analyser.update_accumulators()
         # second data gulp
         if not read_lines(gulp2, cache):
             break
         # Do some more calculations
         analyser.power_quality()
+        analyser.update_analysis_bounds()
         # Generate the output
         print(analyser.get_results())
         sys.stdout.flush()

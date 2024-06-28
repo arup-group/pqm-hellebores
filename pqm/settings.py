@@ -68,7 +68,8 @@ class Settings():
  
 
     def set_settings(self, js):
-        self.analysis_start_time                       = js['analysis_start_time']
+        self.analysis_max_min_reset                    = js['analysis_max_min_reset']
+        self.analysis_accumulators_reset               = js['analysis_accumulators_reset']
         self.sample_rate                               = js['sample_rate']
         self.time_axis_divisions                       = js['time_axis_divisions']
         self.time_axis_pre_trigger_divisions           = js['time_axis_pre_trigger_divisions']
@@ -102,7 +103,8 @@ class Settings():
 
     def make_json(self):
         js = {}
-        js['analysis_start_time']                      = self.analysis_start_time
+        js['analysis_max_min_reset']                   = self.analysis_max_min_reset
+        js['analysis_accumulators_reset']              = self.analysis_accumulators_reset
         js['sample_rate']                              = self.sample_rate
         js['time_axis_divisions']                      = self.time_axis_divisions
         js['time_axis_pre_trigger_divisions']          = self.time_axis_pre_trigger_divisions
@@ -280,7 +282,8 @@ if __name__ == '__main__':
 
 default_settings = '''
 {
-    "analysis_start_time": 0,
+    "analysis_max_min_reset": 0,
+    "analysis_accumulators_reset": 0,
     "sample_rate": 7812.5,
     "time_axis_divisions": 10,
     "time_axis_pre_trigger_divisions": 5,

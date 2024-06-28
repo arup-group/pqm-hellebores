@@ -151,11 +151,11 @@ def main():
                     p.writeline(line)
                     
         elif command == 'tee':
-            # open two pipes for writing then copy from stdin to both
-            with Pipe(sys.argv[2], 'w') as p1, Pipe(sys.argv[3], 'w') as p2:
+            # open a pipe for writing then copy from stdin to the pipe and stdout
+            with Pipe(sys.argv[2], 'w') as p:
                 for line in sys.stdin:
-                    p1.writeline(line)
-                    p2.writeline(line)
+                    p.writeline(line)
+                    sys.stdout.write(line)
 
     except:
         print(f"{sys.argv[0]}: error processing the command {command}.", file=sys.stderr)

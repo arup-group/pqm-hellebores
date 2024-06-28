@@ -15,9 +15,9 @@ import pygame
 import time
 import sys
 import os
+import argparse
 import select
 import ast
-import json
 import io
 
 # local imports
@@ -261,9 +261,8 @@ class Sample_Buffer:
             try:
                 # load the analysis into a local dictionary
                 self.cs = ast.literal_eval(l)
-                #self.cs = json.loads(l)
                 self.update_analysis_bounds()
-            except ValueError:
+            except (ValueError, AttributeError, SyntaxError):
                 print('hellebores.py: Sample_Buffer.load_analysis()'
                       ' file reading error.', file=sys.stderr) 
             return True
@@ -358,13 +357,12 @@ class Data_comms:
     def open_streams(self, waveform_stream_name, analysis_stream_name):
         # open the input stream fifos
         try:
-            if waveform_stream_name:
-                self.waveform_stream = self.open_pipe(waveform_stream_name) 
-                self.select_peek_data_function('named_pipe')
-            else:
-                # we use sys.stdin for waveform data if a pipe name isn't specified
+            if waveform_stream_name == 'stdin':
                 self.waveform_stream = sys.stdin
                 self.select_peek_data_function('stream')
+            else:
+                self.waveform_stream = self.open_pipe(waveform_stream_name) 
+                self.select_peek_data_function('named_pipe')
             if analysis_stream_name:
                 self.analysis_stream = self.open_pipe(analysis_stream_name)
             self.pipes_ok = True
@@ -457,19 +455,19 @@ class App_Actions:
 
 
 
+def get_command_args():
+    # NB argparse library adds extra backslash escape characters to strings, which we don't want
+    cmd_parser = argparse.ArgumentParser(description='Read waveform and analysis (optional) data streams and provide a GUI to display them and configure the post-processing.')
+    cmd_parser.add_argument('--waveform_file', default='stdin', help='Path of waveform file stream or pipe.')
+    cmd_parser.add_argument('--analysis_file', default=None, help='Path of analysis file stream or pipe.')
+    program_name = cmd_parser.prog
+    args = cmd_parser.parse_args()
+    return (program_name, args)
+
+
 def main():
-    # get names of stream files from the command line, or use stdin
-    if len(sys.argv) == 3:
-        # read incoming data from named pipes
-        waveform_stream_name = sys.argv[1]
-        analysis_stream_name = sys.argv[2]
-    elif len(sys.argv) == 1:
-        # read incoming data from stdin (waveform only)
-        waveform_stream_name = None
-        analysis_stream_name = None
-    else:
-        print(f"Usage: {sys.argv[0]} [waveform_stream_name] [analysis_stream_name].", file=sys.stderr)
-        sys.exit(1)
+    program_name, args = get_command_args()
+    print(program_name, args)
 
     # initialise pygame
     pygame.init()
@@ -498,7 +496,7 @@ def main():
             'analyser.py' ], reload_on_signal=False)
 
     # create objects that hold the state of the application, data buffers and UI
-    data_comms   = Data_comms(waveform_stream_name, analysis_stream_name)
+    data_comms   = Data_comms(args.waveform_file, args.analysis_file)
     app_actions  = App_Actions(data_comms)
     buffer       = Sample_Buffer(st, data_comms)
     wfs          = WFS_Counter()

@@ -13,6 +13,9 @@ if [[ -e $SCRIPT_DIR/../venv ]]; then
     source $SCRIPT_DIR/../venv/bin/activate
 fi
 
+# Suppress the pygame import support message
+export PYGAME_HIDE_SUPPORT_PROMPT=hide
+
 # Figure out if we are running on real hardware or not
 grep --ignore-case raspberry '/sys/firmware/devicetree/base/model' &> /dev/null
 if [[ $? -eq 0 ]]; then
@@ -100,7 +103,7 @@ $READER \
                     > $ANALYSIS_PIPE &
 
 # hellebores.py GUI reads from both the waveform and analysis pipes...
-./hellebores.py $WAVEFORM_PIPE $ANALYSIS_PIPE
+./hellebores.py --waveform_file="$WAVEFORM_PIPE" --analysis_file="$ANALYSIS_PIPE"
 
 # Because hellebores.py is running in the foreground, this script blocks (waits here) until it
 # finishes. The reader, scaler, analysis and waveform programs all terminate at that point

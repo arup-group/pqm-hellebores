@@ -12,6 +12,7 @@
 import sys
 import ast
 import csv
+from settings import Settings
 
 
 def string_to_dict(line):
@@ -30,6 +31,11 @@ def string_to_dict(line):
     return analysis
 
 def main():
+    # The only purpose we create st object is to to trap CTRL-C (SIGINT) signal.
+    # This signal is used to control reload of settings in other programs 
+    # in the project but unavoidably also received by this program.
+    st=Settings(reload_on_signal=False)
+
     program_name = sys.argv[0]
     # open up a csv object to write to stdout
     # We use \n rather than os.linesep because the stdout stream object already

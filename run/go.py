@@ -20,10 +20,14 @@ def run_on_windows():
     os.chdir(resolve_path('../pqm', ''))
     pyth = sys.executable
     temp_dir = os.getenv('TEMP', '..')
+    analysis_log_file = resolve_path(temp_dir, f'pqm.{os.getpid()}.csv')
 
     # Display version and initial settings
     os.system(f'{pyth} version.py')
     os.system(f'{pyth} settings.py')
+    print('Starting processing...')
+    print(f'Measurement source: {pyth} rain_chooser.py')
+    print('Analysis log file: {analysis_log_file}')
 
     # An earlier attempt at forming the pipelines within a .BAT file worked using the START
     # command in a batch file. However, each instance of the 'START' command creates a new 
@@ -50,7 +54,7 @@ def run_on_windows():
     cmd_1 = (f'{pyth} rain_chooser.py | {pyth} scaler.py | {tee} {branch1}'
              f' | {pyth} trigger.py | {pyth} mapper.py | {write} {waveform_pipe}')
     cmd_2 = (f'{read} {branch1} | {pyth} analyser.py | {tee} {analysis_pipe}'
-             f' | {pyth} analysis_to_csv.py > {temp_dir}\\pqm.{os.getpid()}.csv')
+             f' | {pyth} analysis_to_csv.py > {analysis_log_file}')
     cmd_3 = f'{pyth} hellebores.py --waveform_file="{waveform_pipe}" --analysis_file="{analysis_pipe}"'
 
     # On Windows, SIGINT (CTRL_C events) are raised by hellebores.py when the user settings are

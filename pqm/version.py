@@ -13,9 +13,21 @@ RUN_DIR = './run'
 VERSION_FILE = 'VERSION'
 
 class Version:
+    def __init__(self):
+        pass
+
+    def about(self):
+        list_of_files = self.list_files([PROGRAM_DIR, PICO_DIR, RUN_DIR])
+        ver =   f'Version              : {self.get_version()}'
+        md5 =   f'MD5 checksum         : {self.md5(list_of_files)}'
+        git_h = f'Git HEAD             : {self.git_head()}'
+        tf =    f'Temporary files      : {self.get_temp_dir()}'
+        about = '\n'.join( [ver, md5, git_h, tf] )
+        return about
 
     def resolve_path(self, path, file):
-        # we resolve paths relative to the known location of this program file
+        # we resolve paths relative to the base directory of the project, using the known location
+        # of this program file as a starting point
         file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', path, file)
         resolved_path = os.path.abspath(file_path)
         return resolved_path
@@ -93,22 +105,12 @@ class Version:
         return git_head
 
     def get_temp_dir(self):
-        temp_from_env = os.getenv('TEMP')
-        if temp_from_env == None:
-            temp_dir = ''
-        else:
-            temp_dir = temp_from_env
+        temp_dir = self.resolve_path(os.getenv('TEMP', '.'), '.')
         return temp_dir 
 
 
 def main():
-    v = Version()
-    list_of_files = v.list_files([PROGRAM_DIR, PICO_DIR, RUN_DIR])
-    print(f"Temporary files      : {v.get_temp_dir()}")
-    print(f"Version              : {v.get_version()}")
-    print(f"MD5 checksum         : {v.md5(list_of_files)}")
-    print(f"Git HEAD             : {v.git_head()}")
-
+    print(Version().about())
 
 
 if __name__ == '__main__':

@@ -2,7 +2,7 @@ import thorpy
 import pygame
 import time
 from hellebores_constants import *
-
+from version import Version
 
 class Range_controller:
     ranges = []
@@ -42,7 +42,7 @@ def create_datetime():
 
 def configure_button_decorations(button, callback_function):
     button.set_bck_color(VERY_LIGHT_GREY, 'normal')
-    button.set_bck_color(VERY_LIGHT_GREY, 'hover')
+    #button.set_bck_color(VERY_LIGHT_GREY, 'hover')
     button.set_font_color(WHITE)
     button.at_unclick = callback_function
 
@@ -442,16 +442,20 @@ def create_options(waveform, app_actions):
     def about_box():
         alert = thorpy.Alert(
             title="hellebores.py",
-            text="Power quality meter, v0.1",
+            text=Version().about(),
             ok_text="Ok, I've read")
         alert.set_draggable()
         alert.cannot_drag_outside = True
         for e in alert.get_all_descendants():
-           if isinstance(e, thorpy.elements.Button):
-               e.set_bck_color(VERY_LIGHT_GREY, 'normal')
-               e.set_bck_color(VERY_LIGHT_GREY, 'hover')
-               e.set_font_color(WHITE)
-           e.hand_cursor = False
+            if isinstance(e, thorpy.elements.Button):
+                e.set_bck_color(VERY_LIGHT_GREY, 'normal')
+                #e.set_bck_color(VERY_LIGHT_GREY, 'hover')
+                e.set_font_color(WHITE)
+            if isinstance(e, thorpy.elements.Text):
+                e.set_bck_color(LIGHTEST_GREY, 'normal')
+                #e.set_bck_color(LIGHTEST_GREY, 'hover')
+                e.set_font_color(BLACK)
+            e.hand_cursor = False
         alert.launch_nonblocking()
 
     button_done = configure_button(
@@ -461,7 +465,7 @@ def create_options(waveform, app_actions):
     button_lines = configure_button(
         BUTTON_SIZE, 'Lines', lambda: waveform.plot_mode('lines'))
     button_about = configure_button(
-        BUTTON_SIZE, 'About...',about_box)
+        BUTTON_SIZE, 'About...', about_box)
     button_software_update = configure_button(
         BUTTON_SIZE, 'Software\nupdate', lambda: app_actions.exit_application('software_update'))
     button_shutdown = configure_button(

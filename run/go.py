@@ -27,7 +27,7 @@ def run_on_windows():
     os.system(f'{pyth} settings.py')
     print('Starting processing...')
     print(f'Measurement source: {pyth} rain_chooser.py')
-    print('Analysis log file: {analysis_log_file}')
+    print(f'Analysis log file: {analysis_log_file}')
 
     # An earlier attempt at forming the pipelines within a .BAT file worked using the START
     # command in a batch file. However, each instance of the 'START' command creates a new 

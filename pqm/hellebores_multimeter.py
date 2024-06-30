@@ -6,13 +6,8 @@ from hellebores_controls import *
 
 
 # text message cell enumerations
-T_RUNSTOP     = 0
-T_WFS         = 1
-T_TIMEDIV     = 2
-T_VOLTSDIV    = 3
-T_AMPSDIV     = 4
-T_WATTSDIV    = 5
-T_LEAKDIV     = 6
+T_RUNSTOP       = 0
+T_RANGE_WARNING = 1
 
 
 class Multimeter:
@@ -37,6 +32,12 @@ class Multimeter:
         self.texts[item].set_text(value)
 
     def draw_texts(self, capturing):
+        if self.st.current_sensor=='low':
+            self.texts[T_RANGE_WARNING].set_bck_color(ORANGE)
+            self.texts[T_RANGE_WARNING].set_text('LOW RANGE', adapt_parent=False)
+        else:
+            self.texts[T_RANGE_WARNING].set_bck_color(LIGHT_GREY)
+            self.texts[T_RANGE_WARNING].set_text('', adapt_parent=False)
         if capturing:
             self.texts[T_RUNSTOP].set_bck_color(GREEN)
             self.texts[T_RUNSTOP].set_text('Running', adapt_parent=False)
@@ -44,23 +45,21 @@ class Multimeter:
             self.texts[T_RUNSTOP].set_bck_color(RED)
             self.texts[T_RUNSTOP].set_text('Stopped', adapt_parent=False)
 
-    def refresh(self, buffer, screen, datetime):
-        # display all the readings
+    def refresh(self, capturing, buffer, screen, datetime):
+        """display all the readings"""
         screen.blit(self.multimeter_background, (0,0))
-        self.update_multimeter_display(buffer.cs)
+        if capturing: 
+            self.update_multimeter_display(buffer.cs)
         self.multimeter_display.draw()
         datetime.draw()
            
     def create_multimeter_controls(self):
         """Multimeter controls, on right of screen"""
         control_texts = []
-        for s in range(4):
+        for s in range(2):
             t = thorpy.Text('')
             t.set_size(TEXT_SIZE)
-            if s==0:
-                t.set_font_color(BLACK)
-            else:
-                t.set_font_color(WHITE)
+            t.set_font_color(BLACK)
             control_texts.append(t)
         button_setup = [
             ('Run/Stop', self.app_actions.start_stop),
@@ -71,7 +70,7 @@ class Multimeter:
             ]
         buttons = [ configure_button(BUTTON_SIZE, bt, bf) for bt, bf in button_setup ]
         # Now add the multimeter controls
-        multimeter_controls = thorpy.Box([ *control_texts[0:2], *buttons, *control_texts[2:] ])
+        multimeter_controls = thorpy.Box([ *control_texts[:2], *buttons, *control_texts[2:] ])
         multimeter_controls.set_topright(*CONTROLS_BOX_POSITION)
         multimeter_controls.set_bck_color(LIGHT_GREY)
         for e in multimeter_controls.get_all_descendants():

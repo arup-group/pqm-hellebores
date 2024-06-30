@@ -90,13 +90,15 @@ class UI_groups:
             # waveform mode
             if self.app_actions.capturing:
                 # if capturing, we might display multiple frames in one display
-                self.instruments[self.mode].refresh(buffer, self.app_actions.multi_trace, screen, self.elements['datetime'])
+                traces = self.app_actions.multi_trace
             else:
                 # but just one frame if in stopped mode
-                self.instruments[self.mode].refresh(buffer, 1, screen, self.elements['datetime'])
+                traces = 1
+            self.instruments[self.mode].refresh(buffer, traces, screen, self.elements['datetime'])
         else:
             # non-waveform mode
-            self.instruments[self.mode].refresh(buffer, screen, self.elements['datetime'])
+            self.instruments[self.mode].refresh(self.app_actions.capturing, buffer, \
+                screen, self.elements['datetime'])
 
     def draw_texts(self, capturing):
         self.instruments[self.mode].draw_texts(capturing)

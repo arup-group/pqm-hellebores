@@ -45,7 +45,7 @@ fi
 # NB the special variable $$ contains the PID of the current process
 WAVEFORM_PIPE=$TEMP/waveform_pipe
 ANALYSIS_PIPE=$TEMP/analysis_pipe
-MEASUREMENT_LOG_FILE=$TEMP/pqm.$$.csv
+ANALYSIS_LOG_FILE=$TEMP/pqm.$$.csv
 ERROR_LOG_FILE=$TEMP/error.log
 
 
@@ -77,6 +77,7 @@ exec 4>&2 2>$ERROR_LOG_FILE
 # then pass both pipes as parameters to the GUI
 echo "Starting processing..."
 echo "Measurement source: $READER"
+echo "Analysis log file: $ANALYSIS_LOG_FILE"
 
 ####
 # This is where we actually start the programs
@@ -99,7 +100,7 @@ $READER \
     | ./scaler.py \
         | tee >(./trigger.py | ./mapper.py > $WAVEFORM_PIPE) \
             | ./analyser.py \
-                | tee >(./analysis_to_csv.py > $MEASUREMENT_LOG_FILE) \
+                | tee >(./analysis_to_csv.py > $ANALYSIS_LOG_FILE) \
                     > $ANALYSIS_PIPE &
 
 # hellebores.py GUI reads from both the waveform and analysis pipes...

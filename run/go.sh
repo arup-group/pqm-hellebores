@@ -97,18 +97,15 @@ fi
 
 # Plumbing, pipe, pipe, pipe...
 $READER \
-    | ./scaler.py \
-        | tee >(./trigger.py | ./mapper.py > $WAVEFORM_PIPE) \
-            | ./analyser.py \
-                | tee >(./analysis_to_csv.py > $ANALYSIS_LOG_FILE) \
-                    > $ANALYSIS_PIPE &
+    | ./scaler.py | tee >(./trigger.py | ./mapper.py > $WAVEFORM_PIPE) \
+        | ./analyser.py | tee >(./analysis_to_csv.py > $ANALYSIS_LOG_FILE) > $ANALYSIS_PIPE &
 
 # hellebores.py GUI reads from both the waveform and analysis pipes...
 ./hellebores.py --waveform_file="$WAVEFORM_PIPE" --analysis_file="$ANALYSIS_PIPE"
 
 # Because hellebores.py is running in the foreground, this script blocks (waits here) until it
-# finishes. The reader, scaler, analysis and waveform programs all terminate at that point
-# because their pipeline connections are broken/closed.
+# exits. The reader, scaler, analysis and waveform programs all terminate at the point
+# that their pipeline connections are broken/closed.
 
 # Capture the exit code from hellebores.py
 # We'll check it's status shortly

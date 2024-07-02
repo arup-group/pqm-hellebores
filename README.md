@@ -22,37 +22,39 @@ Enable the option for remote SSH access.
 Set the wifi country, SSID and password to be used for initial access.
 
 **Pi setup**  
-Start a terminal session via SSH or use a bluetooth keyboard.  
+1. Start a terminal session via SSH. (As alternative, you could use a bluetooth keyboard and work locally.)
+`ssh -X pi@www.xxx.yyy.zzz`
 
-Clone the repository:  
-```
-git clone https://github.com/arup-group/pqm-hellebores.git
-```
+2. Clone the repository:  
+`git clone https://github.com/arup-group/pqm-hellebores.git`
 
-Change to the working directory:  
+3. Change to the working directory. Create a virtual environment, and activate it:
 ```
 cd pqm-hellebores
-```
-
-Create a virtual environment, and activate it:
-```
-python -m venv create venv
+python -m venv venv
 source venv/bin/activate
 ```
 
-Install the dependencies:
-```
-python -m pip install -r requirements.txt
-```
+4. Install the dependencies:
+`python -m pip install -r requirements.txt`
 
-See notes file for additional system dependencies.
+5. Change the hostname:
+`sudo hostnamectl set-hostname PQM-nn`
+(NB nn is the device unique identifier)
 
-Set up the desktop shortcuts: 
+6. Install a bluetooth file transfer client
+`sudo apt install blueman`
+
+7. Add shortcuts to the 'Other' desktop menu:
 ```
 cp ./pi-setup/find-me.desktop /home/pi/.local/share/applications
 cp ./pi-setup/hellebores.desktop /home/pi/.local/share/applications
-cp ./pi-setup/autorun.sh /home/pi
 ```
+
+8. Add the Power Quality Manager launcher to the desktop autostart directory.
+`cp ./pi-setup/pqm.desktop /home/pi/.config/autostart`
+
+See notes file for additional system dependencies.
   
 **Pico setup**  
 Using Thonny:

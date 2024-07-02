@@ -35,7 +35,6 @@ create_venv_with_dependencies () {
 set_identity () {
     # NB pass in a parameter with the required identity
     echo "$1" > $INSTALLATION_DIR/configuration/identity &&
-    hostnamectl set-hostname $1
     if [[ "$?" != "0" ]]; then
         echo "Failed in set_identity"
     fi

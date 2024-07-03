@@ -22,13 +22,6 @@ def run_on_windows():
     temp_dir = os.getenv('TEMP', '..')
     analysis_log_file = resolve_path(temp_dir, f'pqm.{os.getpid()}.csv')
 
-    # Display version and initial settings
-    os.system(f'{pyth} version.py')
-    os.system(f'{pyth} settings.py')
-    print('Starting processing...')
-    print(f'Measurement source: {pyth} rain_chooser.py')
-    print(f'Analysis log file: {analysis_log_file}')
-
     # An earlier attempt at forming the pipelines within a .BAT file worked using the START
     # command in a batch file. However, each instance of the 'START' command creates a new 
     # process group, even with the /b switch active. This won't work in our case, because the
@@ -46,6 +39,17 @@ def run_on_windows():
     write = f'{pyth} mswin_pipes.py write'
     tee = f'{pyth} mswin_pipes.py tee'
  
+    # Display version and initial settings
+    os.system(f'{pyth} version.py')
+    print('')
+    os.system(f'{pyth} settings.py')
+    print('')
+    print('Starting processing...')
+    print(f'Measurement source   : {pyth} rain_chooser.py')
+    print(f'Analysis log file    : {analysis_log_file}')
+    print(f'Waveform pipe file   : {waveform_pipe}')
+    print(f'Analysis pipe file   : {analysis_pipe}')
+
     # We start three command lines. Standard shell anonymous pipes are used for anonymous
     # connections between programs, and named pipes are used when the data needs to be
     # accessed in another command. In addition to the 7 python processes required to actually

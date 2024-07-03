@@ -69,15 +69,17 @@ done
 # messages in a log file
 exec 4>&2 2>$ERROR_LOG_FILE
 
-# Display the version infomation and settings that will be used initially
-./version.py
-./settings.py
+# Display the version information and settings that will be used initially
+./version.py && echo ""
+./settings.py && echo ""
 
 # Run the capture and analysis, feeding two pipe files,
 # then pass both pipes as parameters to the GUI
 echo "Starting processing..."
-echo "Measurement source: $READER"
-echo "Analysis log file: $ANALYSIS_LOG_FILE"
+echo "Measurement source   : $READER"
+echo "Analysis log file    : $ANALYSIS_LOG_FILE"
+echo "Waveform pipe file   : $WAVEFORM_PIPE"
+echo "Analysis pipe file   : $ANALYSIS_PIPE"
 
 ####
 # This is where we actually start the programs

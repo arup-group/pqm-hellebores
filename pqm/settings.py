@@ -8,13 +8,17 @@ import psutil
 import time
 import glob
 
-# NB configuration path is relative to location of this file
-CONFIGURATION_PATH = '../configuration'
-SETTINGS_FILE = 'settings.json'        # NB settings file is later cached in /tmp
+# Configuration files are stored in the configuration folder
+# NB a working copy of the settings file is later cached in ramdisk
+CONFIGURATION_DIRECTORY = '../configuration'
+SETTINGS_FILE = 'settings.json'
 IDENTITY_FILE = 'identity'
 CALIBRATIONS_FILE = 'calibrations.json'
 
 class Settings():
+
+    def __init__(self):
+        pass
 
     def resolve_path(self, path, file):
         file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), path, file)
@@ -23,7 +27,7 @@ class Settings():
 
     def get_identity(self):
         try:
-            identity_file = self.resolve_path(CONFIGURATION_PATH, IDENTITY_FILE)
+            identity_file = self.resolve_path(CONFIGURATION_DIRECTORY, IDENTITY_FILE)
             with open(identity_file, 'r') as f:
                 identity = f.read().strip()
         except (FileNotFoundError, IOError):
@@ -33,7 +37,7 @@ class Settings():
 
     def get_calibration(self, identity):
         try:
-            calibrations_file = self.resolve_path(CONFIGURATION_PATH, CALIBRATIONS_FILE)
+            calibrations_file = self.resolve_path(CONFIGURATION_DIRECTORY, CALIBRATIONS_FILE)
             with open(calibrations_file, 'r') as f:
                 js = json.loads(f.read())
                 cal = js[identity]
@@ -236,7 +240,7 @@ class Settings():
         (self.cal_offsets, self.cal_gains) = self.get_calibration(self.identity)
 
         # load initial settings
-        self.sfile = self.resolve_path(CONFIGURATION_PATH, SETTINGS_FILE)
+        self.sfile = self.resolve_path(CONFIGURATION_DIRECTORY, SETTINGS_FILE)
         self.set_settings(self.load_settings())
 
         # set a callback function. This will be called every time a signal is received,
@@ -259,18 +263,10 @@ class Settings():
 
 
     def show_settings(self):
-        print('Identity:')
-        print(f'  {self.identity}')
-        print('Calibration:')
-        print(f"  {'offsets':40s} {self.cal_offsets}")
-        print(f"  {'gains':40s} {self.cal_gains}")
-        print('Working copy of settings.json:')
-        print(f'  {self.sfile}')
         print('Settings:')
         items = self.make_json()
         for i in items:
-            print(f'  {i:40s} {items[i]}')
-
+            print(f'  {i:40s}: {items[i]}')
 
  
 

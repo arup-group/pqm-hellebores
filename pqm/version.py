@@ -3,8 +3,10 @@
 import hashlib
 import sys
 import os
+import argparse
 import subprocess
 import re
+from settings import Settings
 
 # location of files relative to the root directory of the project tree
 PROGRAM_DIR = './pqm'
@@ -13,16 +15,20 @@ RUN_DIR = './run'
 VERSION_FILE = 'VERSION'
 
 class Version:
+
     def __init__(self):
-        pass
+        self.st = Settings()
 
     def about(self):
         list_of_files = self.list_files([PROGRAM_DIR, PICO_DIR, RUN_DIR])
-        ver =   f'Version              : {self.get_version()}'
-        md5 =   f'MD5 checksum         : {self.md5(list_of_files)}'
-        git_h = f'Git HEAD             : {self.git_head()}'
-        tf =    f'Temporary files      : {self.get_temp_dir()}'
-        about = '\n'.join( [ver, md5, git_h, tf] )
+        ver =      f'Version              : {self.get_version()}'
+        md5 =      f'SHA256 checksum      : {self.sha256(list_of_files)}'
+        git_h =    f'Git commit id        : {self.git_head()}'
+        tf =       f'Temporary files      : {self.get_temp_dir()}'
+        identity = f'Identity             : {self.st.identity}'
+        offsets =  f'Calibration offsets  : {self.st.cal_offsets}'
+        gains =    f'Calibration gains    : {self.st.cal_gains}'
+        about = '\n'.join( [ver, md5, git_h, tf, identity, offsets, gains] )
         return about
 
     def resolve_path(self, path, file):
@@ -43,10 +49,10 @@ class Version:
                             file=sys.stderr)
         return text
 
-    def md5(self, list_of_files):
+    def sha256(self, list_of_files):
         contents = self.readfiles(list_of_files)
-        md5 = hashlib.md5(contents.encode()).hexdigest()
-        return md5
+        sha256 = hashlib.sha256(contents.encode()).hexdigest()
+        return sha256
 
     def list_files(self, paths):
         file_names = [] 
@@ -109,8 +115,20 @@ class Version:
         return temp_dir 
 
 
+def get_command_args():
+    cmd_parser = argparse.ArgumentParser(description='Maintain device instance and software version information.')
+    cmd_parser.add_argument('--increment_sub_version', action='store_true', \
+        help='Increment the sub-version number of the current VERSION string.')
+    program_name = cmd_parser.prog
+    args = cmd_parser.parse_args()
+    return (program_name, args)
+
 def main():
-    print(Version().about())
+    program_name, args = get_command_args()
+    v = Version()
+    if args.increment_sub_version:
+        v.increment_sub_version()
+    print(v.about())
 
 
 if __name__ == '__main__':

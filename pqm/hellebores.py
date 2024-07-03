@@ -251,7 +251,7 @@ class Sample_Buffer:
         # (e) more than 1000 samples have been read (this keeps the UI responsive)
         # returns 'True' if we have completed a new frame
         sample_counter = 0
-        while sample_counter < 1000 and (l := self.data_comms.get_waveform_line(0.2)): 
+        while sample_counter < 1000 and (l := self.data_comms.get_waveform_line(0.02)):
             try:
                 ws = l.split()
                 sample = [ int(w) for w in ws[:5] ]
@@ -439,11 +439,10 @@ def get_command_args():
 
 def main():
     program_name, args = get_command_args()
-    print(program_name, args)
 
     # initialise pygame
     pygame.init()
-    pygame.display.set_caption('pqm-hellebores')
+    pygame.display.set_caption('PQM Hellebores')
 
     # fullscreen on Pi, but not on laptop
     # also make the mouse pointer invisible on Pi, as we will use the touchscreen

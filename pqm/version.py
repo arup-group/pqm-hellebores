@@ -128,7 +128,9 @@ def main():
     v = Version()
     if args.increment_sub_version:
         v.increment_sub_version()
-    print(v.about())
+        print(v.get_version())
+    else:
+        print(v.about())
 
 
 if __name__ == '__main__':

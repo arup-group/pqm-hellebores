@@ -18,17 +18,21 @@ from settings import Settings
 def string_to_dict(line):
     """Converts a dictionary expressed as a string into a python dictionary
     object and then removes unwanted key/value pairs."""
+    wanted_keys = ['rms_voltage','rms_current','mean_power','mean_volt_ampere_reactive',\
+                   'mean_volt_ampere','watt_hour','volt_ampere_reactive_hour',\
+                   'volt_ampere_hour','hours','power_factor','crest_factor_current','frequency',\
+                   'rms_leakage_current','total_harmonic_distortion_voltage_percentage',\
+                   'total_harmonic_distortion_current_percentage']
     try:
         analysis = ast.literal_eval(line)
-        analysis.pop('harmonic_voltage_percentages') 
-        analysis.pop('harmonic_current_percentages') 
+        filtered_analysis = { k:analysis[k] for k in wanted_keys }
     except KeyError:
-        # If it doesn't have expected keys, pass silently
-        pass
+        # If a key error, help to point to that problem
+        print(f"{sys.argv[0]}, string_to_dict(): Key error in {wanted_keys}.", file=sys.stderr)
     except (AttributeError, SyntaxError):
-        # If it's something more serious, raise a ValueError
+        # If another type of problem, raise a ValueError
         raise ValueError
-    return analysis
+    return filtered_analysis
 
 def main():
     # The only purpose we create st object is to to trap CTRL-C (SIGINT) signal.

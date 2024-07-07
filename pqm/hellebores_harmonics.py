@@ -83,16 +83,16 @@ class Harmonics:
         # push readings into display text fields
         for key in readings:
             if key in valid_keys:
-                tp_value, padding, decimals, display_scaling = self.harmonic_value_objects[key]
+                tp_value, getter, padding, decimals, display_scaling = self.harmonic_value_objects[key]
                 tp_value.set_text(f'{readings[key]*display_scaling:7.{decimals}f}'.rjust(padding),\
                         adapt_parent=False)
 
     def create_harmonic_display(self):
         """Harmonic display, on main part of screen"""
-        #  Voltage /Vrms        Power factor /1
+        #  Voltage rms /V       Power factor /1
         #  Frequency /Hz        Crest factor /1
         #  THDv /%h1
-        #  Harmonic /%Vrms
+        #  Harmonic voltage /%
         #  h0
         #  h1        h11        h21        h31        h41
         #  h2        h12        h22        h32        h42
@@ -109,15 +109,16 @@ class Harmonics:
         # analysis key, label text, width and height, font size, number of characters,
         # vertical padding, number of decimal places, display scaling factor for value.
         column_1        = [ ('rms_voltage', 'Voltage rms /V',
-                                300, 58, LARGE_FONT_SIZE, 8, 10, 1, 1),
-                            ('rms_current', 'Current rms /A',
-                                300, 58, LARGE_FONT_SIZE, 8, 10, 3, 1),
-                            ('mean_power', 'Power /W',
-                                300, 58, LARGE_FONT_SIZE, 8, 10, 2, 1),
-                            ('mean_volt_ampere_reactive', 'Reactive power /VAR',
-                                300, 58, LARGE_FONT_SIZE, 8, 10, 2, 1),
-                            ('mean_volt_ampere', 'Apparent power /VA',
-                                300, 58, LARGE_FONT_SIZE, 8, 10, 2, 1) ]
+                                224, 20, FONT_SIZE, 28, 0, 1, 1),
+                            ('frequency', 'Frequency /Hz',
+                                224, 20, FONT_SIZE, 28, 0, 1, 1),
+                            ('total_harmonic_distortion_voltage_percentage', 'THD(v) /%',
+                                224, 20, FONT_SIZE, 28, 0, 1, 1),
+                            ('', 'Harmonic voltage /%',
+                                224, 20, FONT_SIZE, 28, 0, 1, 1) ]
+        for i in range(0,11):
+            column_1.append((lambda results: results.harmonic_voltage_percentages[i], f'h{i}',
+                                 224, 20, FONT_SIZE, 28, 0, 1, 1))
 
         column_2        = [ ('rms_voltage_max', 'Vmax rms /V',
                                 224, 20, FONT_SIZE, 28, 0, 1, 1),
@@ -188,8 +189,9 @@ class Harmonics:
                 tp_value.set_topleft(x,y)
                 tp_texts.append(tp_value)
                 y = y + value_h + gap_h
-                # add lookup of multimeter value object, with required text padding, keyed by analysis key
-                self.multimeter_value_objects[key] = (tp_value, pad_size, decimals, display_scaling)
+                # add lookup of multimeter value object, with getter lambda function, required text padding,
+                # keyed by analysis key
+                self.value_updater.append((tp_value, getter_lambda, pad_size, decimals, display_scaling))
 
         multimeter_column_1 = thorpy.Group(tp_texts[:10], mode=None)
         multimeter_column_2 = thorpy.Group(tp_texts[10:30], mode=None)

@@ -11,19 +11,23 @@ The software is designed to run on Raspberry Pi and Raspberry Pi Pico microcontr
 Partly to enable rapid development cycles, but also validation of calculations, the software will also run on desktop computers using a simulator to take the place of the Pico/ADC to generate sample data.
 
 **Raspberry Pi**  
+
 Minimum hardware requirement is Raspberry Pi 3B+. Non-plus models do not have sufficent thermal dissipation for high CPU loads. Touch screen display with DSI interface, 800x480 pixels. Raspberry Pi OS (32 bit) with desktop. Prepare the image with connectivity to local/required wifi, SSH access, and change the default password. If you have one, pair a Bluetooth keyboard for local access.
 
 **Raspberry Pi Pico**  
+
 Use Thonny on your desktop or laptop computer to install MicroPython on the Pico and verify that you have local REPL access to the microcontroller via a USB cable.
 
 ## Installation
 **Raspberry PI SD card**
+
 Prepare the SD card using Raspberry Pi Imager. As a convenience, a USB stick with Raspberry Pi OS can be prepared first, plugged in the Pi and then that image booted to write to an in-situ SD card -- avoids the need to remove ribbon cable. If using this method, note that an non-initialised Pico must be unplugged from the Pi USB port for this to work.
 Set a project specific password.
 Enable the option for remote SSH access.
 Set the wifi country, SSID and password to be used for initial access.
 
 **Pi setup**  
+
 1. Start a terminal session via SSH. (As alternative, you could use a bluetooth keyboard and work locally.)
 ```
 ssh -X pi@www.xxx.yyy.zzz
@@ -74,6 +78,7 @@ cp ./pi-setup/pqm.desktop /home/pi/.config/autostart
 See notes file for additional system dependencies.
   
 **Pico setup**  
+
 Using Thonny:
 Open `./pico/main.py` and save it to the root folder of the microcontroller.
 Open `./pico/stream.py` and save it to the root folder of the microcontroller.
@@ -83,9 +88,10 @@ To use the interactive user interface, run "hellebores" from the Raspberry Pi de
 
 It's possible to access the running environment on a Pi using SSH. For working on the Pico microcontroller, use ssh -X to connect to the Pi and then start `thonny` within your SSH session. This will redirect thonny's program window to your local X-server (needs a Linux or WSL2 system, or install an X-server separately).
 
-### Desktop computers
+## Desktop computers
 
 **Ubuntu (incl. WSL) and macOS**
+
 On a system with python3 and git installed, proceed as follows:
 ```
 git clone https://github.com/arup-group/pqm-hellebores.git
@@ -98,6 +104,7 @@ run/go.sh
 ```
 
 **Windows**
+
 In a command window with python and git available:
 ```
 git clone https://github.com/arup-group/pqm-hellebores.git

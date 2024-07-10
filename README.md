@@ -70,7 +70,7 @@ cp ./pi-setup/find-me.desktop /home/pi/.local/share/applications
 cp ./pi-setup/hellebores.desktop /home/pi/.local/share/applications
 ```
 
-8. Add the Power Quality Manager launcher to the desktop autostart directory.
+8. Add the Power Quality Monitor launcher to the desktop autostart directory.
 ```
 cp ./pi-setup/pqm.desktop /home/pi/.config/autostart
 ```
@@ -80,6 +80,7 @@ See notes file for additional system dependencies.
 **Pico setup**  
 
 Using Thonny:
+
 Open `./pico/main.py` and save it to the root folder of the microcontroller.
 Open `./pico/stream.py` and save it to the root folder of the microcontroller.
 
@@ -89,7 +90,6 @@ To use the interactive user interface, run "hellebores" from the Raspberry Pi de
 It's possible to access the running environment on a Pi using SSH. For working on the Pico microcontroller, use ssh -X to connect to the Pi and then start `thonny` within your SSH session. This will redirect thonny's program window to your local X-server (needs a Linux or WSL2 system, or install an X-server separately).
 
 ## Desktop computers
-
 **Ubuntu (incl. WSL) and macOS**
 
 On a system with python3 and git installed, proceed as follows:

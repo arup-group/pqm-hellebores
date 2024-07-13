@@ -116,7 +116,7 @@ echo PQM-0 > configuration\identity
 run\go
 ```
 
-NB Some code paths are different on Windows to allow the project to run, and the files `go.bat` and `go.py` are exclusive to Windows. Note that some features of the `go.sh` script (eg software update) are not implemented.
+NB Some code paths are different on Windows to allow the project to run, and the files `mswin_pipes.py`, `go.bat` and `go.py` are exclusive to Windows. Note that some features of the `go.sh` script (eg software update) are not implemented.
 
 
 ## Development

@@ -20,7 +20,7 @@ import select
 import ast
 import io
 
-# local imports
+# project imports
 from settings import Settings
 from hellebores_constants import *
 from hellebores_controls import *
@@ -245,11 +245,10 @@ class Sample_Buffer:
     def load_waveform(self, capturing, wfs):
         # the loop will exit if:
         # (a) there is no data currently waiting to be read, 
-        # (b) negative x coordinate indicates last sample of current frame
-        # (c) the x coordinate 'goes backwards' indicating a new frame has started
-        # (d) the line is empty, can't be split() or any other kind of read error
+        # (b) *END* marker at the end of the current line,
+        # (c) the x coordinate 'goes backwards' indicating a new frame has started,
+        # (d) the line is empty, can't be split() or any other kind of read error,
         # (e) more than 1000 samples have been read (this keeps the UI responsive)
-        # returns 'True' if we have completed a new frame
         sample_counter = 0
         while sample_counter < 1000 and (l := self.data_comms.get_waveform_line(0.02)):
             try:

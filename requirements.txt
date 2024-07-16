@@ -5,7 +5,6 @@ pillow
 numpy
 psutil
 pywin32; sys_platform == 'win32'
-msvcrt; sys_platform == 'win32'
 RPi.GPIO; 'Raspbian' in platform_version
 
 

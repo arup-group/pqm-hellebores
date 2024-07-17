@@ -17,7 +17,8 @@ import signal
 from settings import Settings
 
 
-def from_twos_complement(v):
+def from_twos_complement_hex(w):
+    v = int(w, base=16)
     return -(v & 0x8000) | (v & 0x7fff)
 
 def get_factors(run_calibrated=True):
@@ -38,7 +39,8 @@ def get_factors(run_calibrated=True):
 def scale_readings(cs):
     """cs contains channel readings in integers"""
     global offsets, gains
-    return [ (from_twos_complement(cs[i]) + offsets[i]) * gains[i] for i in [0,1,2,3] ]
+    #return [ (cs + o) * g for cs, o, g in zip(cs, offsets, gains) ]
+    return [ (cs[i] + offsets[i]) * gains[i] for i in [0,1,2,3] ]
 
 
 def main():
@@ -62,7 +64,7 @@ def main():
             # calculate time axis position
             t = st.interval*i
             # split channel values into an integer array, removing the index field
-            cs = [ int(w.strip(), base=16) for w in line.split() ][1:]
+            cs = [ from_twos_complement_hex(w) for w in line.split()[1:] ]
             # scale the readings
             scaled = scale_readings(cs)
             # calculate floating point values, with appropriate calibration factors

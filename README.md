@@ -41,8 +41,8 @@ git clone https://github.com/arup-group/pqm-hellebores.git
 3. Change to the working directory. Create a virtual environment, and activate it:
 ```
 cd pqm-hellebores
-python -m venv venv
-source venv/bin/activate
+python -m venv .venv
+source .venv/bin/activate
 ```
 
 4. Install the dependencies:
@@ -96,8 +96,8 @@ On a system with python3 and git installed, proceed as follows:
 ```
 git clone https://github.com/arup-group/pqm-hellebores.git
 cd pqm-hellebores
-python3 -m venv venv
-source venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 python3 -m pip install -r requirements.txt
 echo PQM-0 > configuration/identity
 run/go.sh
@@ -109,8 +109,8 @@ In a command window with python and git available:
 ```
 git clone https://github.com/arup-group/pqm-hellebores.git
 cd pqm-hellebores
-python -m venv venv-windows
-venv-windows\scripts\activate
+python -m venv .venv-windows
+.venv-windows\scripts\activate
 python -m pip install -r requirements.txt
 echo PQM-0 > configuration\identity
 run\go

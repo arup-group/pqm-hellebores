@@ -7,8 +7,8 @@ Copy pico/main.py and pico/stream.py to the Pico storage, using Thonny.
 
 On Pi
 sudo apt install python-venv
-python -m venv create venv
-source venv/bin/activate
+python -m venv create .venv
+source .venv/bin/activate
 python -m pip install -r requirements.txt
 or, to upgrade existing packages:
 python -m pip install -r requirements.txt --upgrade

@@ -12,6 +12,7 @@
 import sys
 import ast
 import csv
+from datetime import datetime, timezone
 from settings import Settings
 
 
@@ -25,7 +26,9 @@ def string_to_dict(line):
                    'total_harmonic_distortion_current_percentage']
     try:
         analysis = ast.literal_eval(line)
-        filtered_analysis = { k:analysis[k] for k in wanted_keys }
+        # insert timestamp, rounded down to nearest second
+        filtered_analysis = { 'timestamp':  datetime.now().replace(microsecond=0).astimezone().isoformat('T') }
+        filtered_analysis.update({ k:analysis[k] for k in wanted_keys })
     except KeyError:
         # If a key error, help to point to that problem
         print(f"{sys.argv[0]}, string_to_dict(): Key error in {wanted_keys}.", file=sys.stderr)
@@ -46,7 +49,10 @@ def main():
     # converts \n to \r\n on Windows.
     csv_writer = csv.writer(sys.stdout, lineterminator='\n') 
     try:
-        # for the first line, we push out both headers and data
+        # skip the first two lines, to allow averages to be established
+        line = sys.stdin.readline()
+        line = sys.stdin.readline()
+        # for the third line, we push out both headers and data
         line = sys.stdin.readline()
         analysis = string_to_dict(line)
         csv_writer.writerow(analysis.keys())

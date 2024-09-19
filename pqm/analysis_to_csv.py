@@ -27,7 +27,9 @@ def string_to_dict(line):
     try:
         analysis = ast.literal_eval(line)
         # insert timestamp, rounded down to nearest second
-        filtered_analysis = { 'timestamp':  datetime.now().replace(microsecond=0).astimezone().isoformat('T') }
+        # Excel-compatible datetime without timezone information
+        # for RFC3339 format with timezone, add .astimezone().isoformat('T)
+        filtered_analysis = { 'timestamp':  datetime.now().replace(microsecond=0) }
         filtered_analysis.update({ k:analysis[k] for k in wanted_keys })
     except KeyError:
         # If a key error, help to point to that problem

@@ -21,6 +21,20 @@ button_frame.grid(row=2, column=0)
 text = tk.Entry(root, width=50, textvariable=string_entered)
 text.grid(row=1, column=0)
 
+# make a grid of buttons
+button_characters = [ "0123456789$£#@&",
+                      "¬`'\"%^~!?:;.,_=",
+                      "*/+-\\/|()[]{}<>",
+                      "abcdefghijklm",
+                      "nopqrstuvwxyz",
+                      "ABCDEFGHIJKLM",
+                      "NOPQRSTUVWXYZ" ]
+
+for line in button_characters:
+    for character in line:
+        b = tk.Button(button_frame, width=3, font=('System',6), text=character, \
+                 command=lambda: text.insert(tk.END, character))
+
 # we use a Button object to display the currently selected character
 type_button = tk.Button(button_frame, width=5, font=('System', 18), textvariable=character_selected, \
         command=lambda c=character_selected: text.insert(tk.END, c.get()))

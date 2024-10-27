@@ -26,6 +26,7 @@ from hellebores_constants import *
 from hellebores_controls import *
 from hellebores_waveform import Waveform
 from hellebores_multimeter import Multimeter
+from hellebores_harmonic import Harmonic
 if os.name == 'nt':
     from mswin_pipes import Pipe, peek_pipe, get_pipe_from_stream
 
@@ -46,7 +47,7 @@ class UI_groups:
     # the flag helps to reduce workload of screen refresh when there are overlay menus.
     overlay_dialog_active = False
 
-    def __init__(self, st, buffer, waveform, multimeter, app_actions):
+    def __init__(self, st, buffer, waveform, multimeter, v_harmonics, app_actions):
         # make a local reference to app_actions and st
         self.app_actions = app_actions
         self.st = st
@@ -69,6 +70,8 @@ class UI_groups:
         self.elements['multimeter'] = [ multimeter.multimeter_controls ]
 
         # voltage harmonic group
+        self.instruments['voltage_harmonic'] = v_harmonics
+        self.elements['voltage_harmonic'] = [ v_harmonics.harmonic_controls ]
 
         # current harmonic group
 
@@ -472,7 +475,8 @@ def main():
     wfs          = WFS_Counter()
     waveform     = Waveform(st, wfs, app_actions)
     multimeter   = Multimeter(st, app_actions)
-    ui           = UI_groups(st, buffer, waveform, multimeter, app_actions)
+    v_harmonics  = Harmonic(st, app_actions)
+    ui           = UI_groups(st, buffer, waveform, multimeter, v_harmonics, app_actions)
 
     # start up in the waveform mode
     ui.app_actions.set_updater('waveform')

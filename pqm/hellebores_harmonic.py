@@ -86,7 +86,7 @@ class Harmonic:
         # set the value into the display object
         def set_value(key, value):
             tp_value, value_characters, decimals, display_scaling = self.harmonic_value_objects[key]
-            tp_value.set_text(f'value*display_scaling:7.{decimals}f}'.rjust(value_characters),\
+            tp_value.set_text(f'{value*display_scaling:7.{decimals}f}'.rjust(value_characters),\
                 adapt_parent=False)
 
         # push readings into display text fields
@@ -157,28 +157,28 @@ class Harmonic:
                             ('', 'Harmonic voltage /%',
                                 224, 18, FONT_SIZE, 20, FONT_SIZE, 28, 28, 0, 1, 1) ]
         for i in range(0,11):
-            column_1.append(f'harmonic_voltage_percentages_{i}', f'h{i}',
-                                224, 18, FONT_SIZE, 20, FONT_SIZE, 28, 28, 0, 1, 1)
+            column_1.append((f'harmonic_voltage_percentages_{i}', f'h{i}',
+                                 224, 18, FONT_SIZE, 20, FONT_SIZE, 28, 28, 0, 1, 1))
 
         column_2        = [ ('', '', 224, 18, FONT_SIZE, 100, FONT_SIZE, 28, 28, 0, 1, 1) ]
         for i in range(11,21):
-            column_2.append('harmonic_voltage_percentages_{i}', f'h{i}',
-                                224, 18, FONT_SIZE, 20, FONT_SIZE, 28, 28, 0, 1, 1)
+            column_2.append(('harmonic_voltage_percentages_{i}', f'h{i}',
+                                 224, 18, FONT_SIZE, 20, FONT_SIZE, 28, 28, 0, 1, 1))
 
         column_3        = [ ('', '', 224, 18, FONT_SIZE, 100, FONT_SIZE, 28, 28, 0, 1, 1) ]
         for i in range(21,31):
-            column_3.append('harmonic_voltage_percentages_{i}', f'h{i}',
-                                224, 18, FONT_SIZE, 20, FONT_SIZE, 28, 28, 0, 1, 1)
+            column_3.append(('harmonic_voltage_percentages_{i}', f'h{i}',
+                                 224, 18, FONT_SIZE, 20, FONT_SIZE, 28, 28, 0, 1, 1))
 
         column_4        = [ ('', '', 224, 18, FONT_SIZE, 100, FONT_SIZE, 28, 28, 0, 1, 1) ]
         for i in range(31,41):
-            column_4.append('harmonic_voltage_percentages_{i}', f'h{i}',
-                                224, 18, FONT_SIZE, 20, FONT_SIZE, 28, 28, 0, 1, 1)
+            column_4.append(('harmonic_voltage_percentages_{i}', f'h{i}',
+                                 224, 18, FONT_SIZE, 20, FONT_SIZE, 28, 28, 0, 1, 1))
 
         column_5        = [ ('', '', 224, 18, FONT_SIZE, 100, FONT_SIZE, 28, 28, 0, 1, 1) ]
         for i in range(41,51):
-            column_5.append('harmonic_voltage_percentages_{i}', f'h{i}',
-                                 224, 18, FONT_SIZE, 20, FONT_SIZE, 28, 28, 0, 1, 1)
+            column_5.append(('harmonic_voltage_percentages_{i}', f'h{i}',
+                                 224, 18, FONT_SIZE, 20, FONT_SIZE, 28, 28, 0, 1, 1))
         
         # create harmonic measurement display object
         harmonic_display = thorpy.Group([ thorpy.Group(self.create_ui_display_texts(column_1, 0), mode=None),

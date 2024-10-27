@@ -9,8 +9,8 @@ PROGRAM_DIR=$(realpath $SCRIPT_DIR/../pqm)
 cd $PROGRAM_DIR
 
 # Activate the virtual environment, if we have one
-if [[ -e $SCRIPT_DIR/../venv ]]; then
-    source $SCRIPT_DIR/../venv/bin/activate
+if [[ -e $SCRIPT_DIR/../.venv ]]; then
+    source $SCRIPT_DIR/../.venv/bin/activate
 fi
 
 # Suppress the pygame import support message

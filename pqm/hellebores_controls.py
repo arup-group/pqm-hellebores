@@ -64,10 +64,12 @@ def configure_button(size, text, callback_function):
     
 def create_mode(app_actions):
     """Mode controls dialog"""
-    button_waveform = configure_button(BUTTON_WIDE_SIZE, 'Waveform', lambda: app_actions.set_updater('waveform'))
-    button_multimeter = configure_button(BUTTON_WIDE_SIZE, 'Multimeter', lambda: app_actions.set_updater('multimeter'))
-    button_voltage_harmonics = configure_button(
-        BUTTON_WIDE_SIZE, 'Voltage harmonics', voltage_harmonics_reaction)
+    button_waveform = configure_button(BUTTON_WIDE_SIZE, 'Waveform',\
+        lambda: app_actions.set_updater('waveform'))
+    button_multimeter = configure_button(BUTTON_WIDE_SIZE, 'Multimeter',\
+        lambda: app_actions.set_updater('multimeter'))
+    button_voltage_harmonics = configure_button(BUTTON_WIDE_SIZE, 'Voltage harmonics',\
+        lambda: app_actions.set_updater('voltage_harmonic'))
     button_current_harmonics = configure_button(
         BUTTON_WIDE_SIZE, 'Current harmonics', current_harmonics_reaction)
 

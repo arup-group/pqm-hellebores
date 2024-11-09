@@ -85,9 +85,9 @@ class Harmonic:
         
         # set the value into the display object
         def set_value(key, value):
-            tp_value, value_characters, decimals, display_scaling = self.harmonic_value_objects[key]
-            tp_value.set_text(f'{value*display_scaling:7.{decimals}f}'.rjust(value_characters),\
-                adapt_parent=False)
+            tp_text, text_length, dp_fix, scale_factor = self.harmonic_value_objects[key]
+            tp_text.set_text(f'{value*scale_factor:7.{dp_fix}f}'.rjust(text_length), adapt_parent=False)
+
 
         # push readings into display text fields
         for key in readings:
@@ -101,31 +101,40 @@ class Harmonic:
                 set_value(key, readings[key])
 
 
-    def create_ui_display_texts(self, definitions, x):
+    # { text: 'Voltage rms /V', text_length: 20, pixels: (224,18), v_pad: 0,\
+    # font_size: FONT_SIZE, font_colour: YELLOW, scale_factor: 1, dp_fix: 1, value_key: 'rms_voltage' } 
+    def create_ui_display_texts(self, definitions):
         ui_display_texts = []
-        y = 0
-        for item in definitions:
-            key, label, w, label_h, label_font_size, value_h, value_font_size, label_characters,\
-                value_characters, gap_h, decimals, display_scaling = item
-            # create the label object
-            tp_label = thorpy.Text(label.rjust(label_characters))
-            tp_label.set_size((w,label_h))
-            tp_label.set_font_size(label_font_size)
-            tp_label.set_font_color(WHITE)
-            tp_label.set_topleft(x,y)
-            ui_display_texts.append(tp_label)
-            y = y + label_h
-            # create the value object 
-            tp_value = thorpy.Text('999.999'.rjust(value_characters))
-            tp_value.set_size((w,value_h))
-            tp_value.set_font_size(value_font_size)
-            tp_value.set_font_color(YELLOW)
-            tp_value.set_topleft(x,y)
-            ui_display_texts.append(tp_value)
-            y = y + value_h + gap_h
-            # add lookup of multimeter value object, with parameters for text format
-            # keyed by analysis key
-            self.harmonic_value_objects[key] = (tp_value, value_characters, decimals, display_scaling)
+        x = 0                  # x pixel offset
+        # definitions contains a list of text object definitions, by column then by item
+        # we iterate through the list of lists
+        for column in definitions:
+            y = 0              # y pixel offset
+            x_inc = 0          # x increment to next column
+            for t in column:
+                # allows explicit relative re-positioning
+                if 'reposition' in t:
+                    (x_inc, y_inc) = t['reposition']
+                    x += x_inc
+                    y += y_inc
+                    continue
+                x_inc = max(x_inc, t['pixels'][0])
+                y_inc = t['pixels'][1] + t['v_pad']
+                # create the text object
+                tp_text = thorpy.Text(t['text'].rjust(t['text_length']))
+                tp_text.set_size(t['pixels'])
+                tp_text.set_font_size(t['font_size'])
+                tp_text.set_font_color(t['font_colour'])
+                tp_text.set_topleft(x,y)
+                ui_display_texts.append(tp_text)
+                # if it's a variable, add a lookup for the multimeter value object
+                if 'value_key' in t.keys():
+                    self.harmonic_value_objects[ t['value_key'] ] = (tp_text, t['text_length'], t['dp_fix'], \
+                        t['scale_factor'])
+                # reposition ready for next item in column
+                y = y + y_inc
+            # reposition for next column
+            x = x + x_inc
         return ui_display_texts
 
 
@@ -146,53 +155,93 @@ class Harmonic:
         #  h8        h18        h28        h38        h48
         #  h9        h19        h29        h39        h49
         #  h10       h20        h30        h40        h50
-        #
-        # Format of the table is:
-        # analysis key, label text, width, label height, label font size, value height, value font size,
-        # number of label characters, number of value characters, vertical padding,
-        # number of decimal places, display scaling factor for value.
-        column_1        = [ ('rms_voltage', 'Voltage rms /V',
-                                224, 18, FONT_SIZE, 20, FONT_SIZE, 28, 28, 0, 1, 1),
-                            ('frequency', 'Frequency /Hz',
-                                224, 18, FONT_SIZE, 20, FONT_SIZE, 28, 28, 0, 1, 1),
-                            ('total_harmonic_distortion_voltage_percentage', 'THD(v) /%',
-                                224, 18, FONT_SIZE, 20, FONT_SIZE, 28, 28, 0, 1, 1),
-                            ('', 'Harmonic voltage /%',
-                                224, 18, FONT_SIZE, 20, FONT_SIZE, 28, 28, 0, 1, 1) ]
-        for i in range(0,11):
-            column_1.append((f'harmonic_voltage_percentages_{i}', f'h{i}',
-                                 224, 18, FONT_SIZE, 20, FONT_SIZE, 28, 28, 0, 1, 1))
-
-        column_2        = [ ('', '', 224, 18, FONT_SIZE, 100, FONT_SIZE, 28, 28, 0, 1, 1) ]
-        for i in range(11,21):
-            column_2.append((f'harmonic_voltage_percentages_{i}', f'h{i}',
-                                 224, 18, FONT_SIZE, 20, FONT_SIZE, 28, 28, 0, 1, 1))
-
-        column_3        = [ ('', '', 224, 18, FONT_SIZE, 100, FONT_SIZE, 28, 28, 0, 1, 1) ]
-        for i in range(21,31):
-            column_3.append((f'harmonic_voltage_percentages_{i}', f'h{i}',
-                                 224, 18, FONT_SIZE, 20, FONT_SIZE, 28, 28, 0, 1, 1))
-
-        column_4        = [ ('', '', 224, 18, FONT_SIZE, 100, FONT_SIZE, 28, 28, 0, 1, 1) ]
-        for i in range(31,41):
-            column_4.append((f'harmonic_voltage_percentages_{i}', f'h{i}',
-                                 224, 18, FONT_SIZE, 20, FONT_SIZE, 28, 28, 0, 1, 1))
-
-        column_5        = [ ('', '', 224, 18, FONT_SIZE, 100, FONT_SIZE, 28, 28, 0, 1, 1) ]
-        for i in range(41,51):
-            column_5.append((f'harmonic_voltage_percentages_{i}', f'h{i}',
-                                 224, 18, FONT_SIZE, 20, FONT_SIZE, 28, 28, 0, 1, 1))
         
-        # create harmonic measurement display object
-        harmonic_display = thorpy.Group([ thorpy.Group(self.create_ui_display_texts(column_1, 0), mode=None),
-                                          thorpy.Group(self.create_ui_display_texts(column_2, 60), mode=None), 
-                                          thorpy.Group(self.create_ui_display_texts(column_3, 120), mode=None),  
-                                          thorpy.Group(self.create_ui_display_texts(column_4, 180), mode=None),   
-                                          thorpy.Group(self.create_ui_display_texts(column_5, 240), mode=None) ],
-                                        mode='h', gap=0, margins=(0,0))
+
+        #
+        # Format: in dictionary form for ease of reading.
+        # For a label field, can omit the scale_factor, dp_fix and value_key elements
+        # { text: 'Voltage rms /V', text_length: 20, pixels: (224,18), v_pad: 0,\
+        # font_size: FONT_SIZE, font_colour: YELLOW, scale_factor: 1, dp_fix: 1, value_key: 'rms_voltage' } 
+        #
+        # initialise array of columns to hold definition of display texts
+        definitions = [ [] for i in range(10) ]
+
+        definitions[0].append( {'text': 'Voltage rms /V', 'text_length': 16, 'pixels': (140,18), 'v_pad': 0, \
+            'font_size': FONT_SIZE, 'font_colour': WHITE } )
+        definitions[1].append( {'text': '999.9', 'text_length': 10, 'pixels': (60,18), 'v_pad': 0, \
+            'font_size': FONT_SIZE, 'font_colour': YELLOW, 'scale_factor': 1, 'dp_fix': 1, \
+            'value_key': 'rms_voltage' } )
+
+        definitions[0].append( {'text': 'Frequency /Hz', 'text_length': 16, 'pixels': (140,18), 'v_pad': 0, \
+            'font_size': FONT_SIZE, 'font_colour': WHITE } )
+        definitions[1].append( {'text': '999.9', 'text_length': 10, 'pixels': (60,18), 'v_pad': 0, \
+            'font_size': FONT_SIZE, 'font_colour': YELLOW, 'scale_factor': 1, 'dp_fix': 1, \
+            'value_key': 'frequency' } )
+
+        definitions[0].append( {'text': 'THD(v) /%', 'text_length': 16, 'pixels': (140,18), 'v_pad': 0, \
+            'font_size': FONT_SIZE, 'font_colour': WHITE } )
+        definitions[1].append( {'text': '999.9', 'text_length': 10, 'pixels': (60,18), 'v_pad': 0, \
+            'font_size': FONT_SIZE, 'font_colour': YELLOW, 'scale_factor': 1, 'dp_fix': 1, \
+            'value_key': 'total_harmonic_distortion_voltage_percentage' } )
+
+        definitions[0].append( {'text': 'THD(i) /%', 'text_length': 16, 'pixels': (140,18), 'v_pad': 10, \
+            'font_size': FONT_SIZE, 'font_colour': WHITE } )
+        definitions[1].append( {'text': '999.9', 'text_length': 10, 'pixels': (60,18), 'v_pad': 10, \
+            'font_size': FONT_SIZE, 'font_colour': YELLOW, 'scale_factor': 1, 'dp_fix': 1, \
+            'value_key': 'total_harmonic_distortion_current_percentage' } )
+
+        definitions[0].append( {'text': 'Harmonic voltage magnitudes (as % of Voltage RMS)', 'text_length': 52, \
+            'pixels': (412,18), 'v_pad': 10, 'font_size': FONT_SIZE, 'font_colour': WHITE } )
+
+        definitions[0].append( {'reposition': (0,0) } )
+        definitions[1].append( {'reposition': (0,28) } )
+        for i in range(0,11):
+            definitions[0].append( {'text': f'h{i}', 'text_length': 8, 'pixels': (70,18), 'v_pad': 10, \
+                'font_size': FONT_SIZE, 'font_colour': WHITE } )
+            definitions[1].append( {'text': '999.99', 'text_length': 6, 'pixels': (60,18), 'v_pad': 10, \
+                'font_size': FONT_SIZE, 'font_colour': YELLOW, 'scale_factor': 1, 'dp_fix': 1, \
+                'value_key': f'harmonic_voltage_percentages_{i}' } )
+
+        #definitions[2].append( {'text': '', 'text_length': 1, 'pixels': (60,18), 'v_pad': 100, \
+        #    'font_size': FONT_SIZE, 'font_colour': WHITE } )
+        definitions[2].append( {'reposition': (0,138) } )
+        definitions[3].append( {'reposition': (0,138) } )
+        for i in range(11,21):
+            definitions[2].append( {'text': f'h{i}', 'text_length': 8, 'pixels': (70,18), 'v_pad': 10, \
+                'font_size': FONT_SIZE, 'font_colour': WHITE } )
+            definitions[3].append( {'text': '999.99', 'text_length': 6, 'pixels': (60,18), 'v_pad': 10, \
+                'font_size': FONT_SIZE, 'font_colour': YELLOW, 'scale_factor': 1, 'dp_fix': 1, \
+                'value_key': f'harmonic_voltage_percentages_{i}' } )
+
+        definitions[4].append( {'reposition': (0,138) } )
+        definitions[5].append( {'reposition': (0,138) } )
+        for i in range(21,31):
+            definitions[4].append( {'text': f'h{i}', 'text_length': 8, 'pixels': (70,18), 'v_pad': 10, \
+                'font_size': FONT_SIZE, 'font_colour': WHITE } )
+            definitions[5].append( {'text': '999.99', 'text_length': 6, 'pixels': (60,18), 'v_pad': 10, \
+                'font_size': FONT_SIZE, 'font_colour': YELLOW, 'scale_factor': 1, 'dp_fix': 1, \
+                'value_key': f'harmonic_voltage_percentages_{i}' } )
+
+        definitions[6].append( {'reposition': (0,138) } )
+        definitions[7].append( {'reposition': (0,138) } )
+        for i in range(31,41):
+            definitions[6].append( {'text': f'h{i}', 'text_length': 8, 'pixels': (70,18), 'v_pad': 10, \
+                'font_size': FONT_SIZE, 'font_colour': WHITE } )
+            definitions[7].append( {'text': '999.99', 'text_length': 6, 'pixels': (60,18), 'v_pad': 10, \
+                'font_size': FONT_SIZE, 'font_colour': YELLOW, 'scale_factor': 1, 'dp_fix': 1, \
+                'value_key': f'harmonic_voltage_percentages_{i}' } )
+
+        definitions[8].append( {'reposition': (0,138) } )
+        definitions[9].append( {'reposition': (0,138) } )
+        for i in range(41,51):
+            definitions[8].append( {'text': f'h{i}', 'text_length': 8, 'pixels': (70,18), 'v_pad': 10, \
+                'font_size': FONT_SIZE, 'font_colour': WHITE } )
+            definitions[9].append( {'text': '999.99', 'text_length': 6, 'pixels': (60,18), 'v_pad': 10, \
+                'font_size': FONT_SIZE, 'font_colour': YELLOW, 'scale_factor': 1, 'dp_fix': 1, \
+                'value_key': f'harmonic_voltage_percentages_{i}' } )
+
+        harmonic_display = thorpy.Group( self.create_ui_display_texts(definitions), mode=None, gap=0, margins=(0,0) )
         harmonic_display.set_topleft(*METER_POSITION)
         return harmonic_display
-
-
 
 

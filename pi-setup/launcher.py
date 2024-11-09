@@ -1,11 +1,31 @@
 #!/usr/bin/env python3
 
 import sys
+import os
 import subprocess
 import tkinter as tk
 
 
+if not os.geteuid() == 0:
+    sys.exit("\nOnly root can run this script.\n")
+
 ### wifi connection functions
+
+# onboard -l Small -t Droid
+# matchbox-keyboard lq1
+
+# connect to wifi using wpa_cli
+# wpa_cli add_network
+# 0
+# wpa_cli set_network 0 ssid "peppa"
+# OK
+# wpa_cli set_network 0 psk "asdfasdfasdf"
+# OK
+# wpa_cli enable_network 0
+# OK
+# wpa_cli reconnect
+# OK
+
 
 def what_wifi():
     process = subprocess.run(['nmcli', '-t', '-f', 'ACTIVE,SSID', 'dev', 'wifi'], stdout=subprocess.PIPE)

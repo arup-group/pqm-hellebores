@@ -70,8 +70,8 @@ def create_mode(app_actions):
         lambda: app_actions.set_updater('multimeter'))
     button_voltage_harmonics = configure_button(BUTTON_WIDE_SIZE, 'Voltage harmonics',\
         lambda: app_actions.set_updater('voltage_harmonic'))
-    button_current_harmonics = configure_button(
-        BUTTON_WIDE_SIZE, 'Current harmonics', current_harmonics_reaction)
+    button_current_harmonics = configure_button(BUTTON_WIDE_SIZE, 'Current harmonics', \
+        lambda: app_actions.set_updater('current_harmonic'))
 
     mode = thorpy.TitleBox(
         text='Mode', children=[

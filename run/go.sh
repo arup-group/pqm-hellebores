@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Increase the number of file descriptors that we can have in the current shell
+ulimit -n 2048
+
 # Find current working directory and absolute paths of script and program file directories
 CWD=$(pwd)
 SCRIPT_DIR=$(realpath $(dirname $0))

@@ -12,11 +12,8 @@ T_RANGE_WARNING = 1
 
 class Harmonic:
 
-    # TODO
-    # rename self.texts to self.status_texts to be more descriptive
-
     def __init__(self, st, app_actions, harmonic_of_what):
-        self.texts = []                # list of status text elements
+        self.status_texts = []         # list of status text elements
         self.harmonic_controls = []    # control buttons
         self.harmonic_display = []     # harmonic display (labels and values)
         self.harmonic_elements = []    # self.harmonic_controls + self.harmonic_display
@@ -35,22 +32,19 @@ class Harmonic:
         # combine all the elements
         self.harmonic_elements = [ self.harmonic_controls, self.harmonic_display ]
 
-    def set_text(self, item, value):
-        self.texts[item].set_text(value)
-
     def draw_texts(self, capturing):
         if self.st.current_sensor=='low':
-            self.texts[T_RANGE_WARNING].set_bck_color(ORANGE)
-            self.texts[T_RANGE_WARNING].set_text('LOW RANGE', adapt_parent=False)
+            self.status_texts[T_RANGE_WARNING].set_bck_color(ORANGE)
+            self.status_texts[T_RANGE_WARNING].set_text('LOW RANGE', adapt_parent=False)
         else:
-            self.texts[T_RANGE_WARNING].set_bck_color(LIGHT_GREY)
-            self.texts[T_RANGE_WARNING].set_text('', adapt_parent=False)
+            self.status_texts[T_RANGE_WARNING].set_bck_color(LIGHT_GREY)
+            self.status_texts[T_RANGE_WARNING].set_text('', adapt_parent=False)
         if capturing:
-            self.texts[T_RUNSTOP].set_bck_color(GREEN)
-            self.texts[T_RUNSTOP].set_text('Running', adapt_parent=False)
+            self.status_texts[T_RUNSTOP].set_bck_color(GREEN)
+            self.status_texts[T_RUNSTOP].set_text('Running', adapt_parent=False)
         else:
-            self.texts[T_RUNSTOP].set_bck_color(RED)
-            self.texts[T_RUNSTOP].set_text('Stopped', adapt_parent=False)
+            self.status_texts[T_RUNSTOP].set_bck_color(RED)
+            self.status_texts[T_RUNSTOP].set_text('Stopped', adapt_parent=False)
 
     def refresh(self, capturing, buffer, screen, datetime):
         """display all the readings"""
@@ -61,13 +55,12 @@ class Harmonic:
         datetime.draw()
 
     def create_harmonic_controls(self):
-        """Multimeter controls, on right of screen"""
-        control_texts = []
+        """Harmonic controls, on right of screen"""
         for s in range(2):
             t = thorpy.Text('')
             t.set_size(TEXT_SIZE)
             t.set_font_color(BLACK)
-            control_texts.append(t)
+            self.status_texts.append(t)
         button_setup = [
             ('Run/Stop', self.app_actions.start_stop),
             ('Mode', lambda: self.app_actions.set_updater('mode')),
@@ -77,12 +70,11 @@ class Harmonic:
             ]
         buttons = [ configure_button(BUTTON_SIZE, bt, bf) for bt, bf in button_setup ]
         # Now add the harmonic controls
-        harmonic_controls = thorpy.Box([ *control_texts[:2], *buttons, *control_texts[2:] ])
+        harmonic_controls = thorpy.Box([ *self.status_texts, *buttons ])
         harmonic_controls.set_topright(*CONTROLS_BOX_POSITION)
         harmonic_controls.set_bck_color(LIGHT_GREY)
         for e in harmonic_controls.get_all_descendants():
             e.hand_cursor = False
-        self.texts = control_texts
         return harmonic_controls
 
     def update_harmonic_display(self, readings):
@@ -107,24 +99,27 @@ class Harmonic:
             elif key in valid_keys:
                 set_value(key, readings[key])
 
-
+    def update_position(self, p_move=(0,0)):
+        self._item_position = (self._item_position[0] + p_move[0], self._item_position[1] + p_move[1])
+    
     def add_ui_text(self, text='999.9', text_length=10, font_size=FONT_SIZE, font_colour=WHITE, \
         scale_factor=1, dp_fix=1, value_key=None, p_offset=(0,0), p_move=(0,0)):
-        # create the text object
-        if text != '':
-            tp_text = thorpy.Text(text.rjust(text_length))
-            tp_text.set_font_size(font_size)
-            tp_text.set_font_color(font_colour)
-            tp_text.set_topleft(self._item_position[0] + p_offset[0], self._item_position[1] + p_offset[1])
-            # if it's a value field, add a lookup for the multimeter value object
-            if value_key:
-                self.harmonic_value_objects[ value_key ] = (tp_text, text_length, dp_fix, scale_factor)
-            # save a reference to the text object in a list of text objects
-            self._hd_items.append(tp_text)
+        """Creates a text object for describing or displaying values of results. Default
+        text parameters in the function prototype can be changed when calling. p_offset is a position
+        offset that applies temporarily, whereas p_move fixes a change to the insertion point that will
+        affect subsequent calls."""
+        tp_text = thorpy.Text(text.rjust(text_length))
+        tp_text.set_font_size(font_size)
+        tp_text.set_font_color(font_colour)
+        tp_text.set_topleft(self._item_position[0] + p_offset[0], self._item_position[1] + p_offset[1])
+        # if it's a value field, add a lookup for the multimeter value object
+        if value_key:
+            self.harmonic_value_objects[ value_key ] = (tp_text, text_length, dp_fix, scale_factor)
+        # save a reference to the text object in a list of text objects
+        self._hd_items.append(tp_text)
         # update insertion point for next item, if required
-        self._item_position = (self._item_position[0] + p_move[0], self._item_position[1] + p_move[1])
+        self.update_position(p_move)
            
-
     def create_harmonic_display(self, harmonic_of_what):
         """Harmonic display, on main part of screen.
         Pushes a group of thorpy text objects into self.harmonic_display"""
@@ -192,25 +187,25 @@ class Harmonic:
             self.add_ui_text(text=f'h{i}', text_length=8)
             self.add_ui_text(text_length=6, font_colour=value_colour, \
                 value_key=f'{harmonic_value_root}_{i}', p_offset=(70,0), p_move=(0,28))
-        self.add_ui_text(text='', p_move=(130,-280))
+        self.update_position((130,-280))
 
         for i in range(11,21):
             self.add_ui_text(text=f'h{i}', text_length=8)
             self.add_ui_text(text_length=6, font_colour=value_colour, \
                 value_key=f'{harmonic_value_root}_{i}', p_offset=(70,0), p_move=(0,28))
-        self.add_ui_text(text='', p_move=(130,-280))
+        self.update_position((130,-280))
 
         for i in range(21,31):
             self.add_ui_text(text=f'h{i}', text_length=8)
             self.add_ui_text(text_length=6, font_colour=value_colour, \
                 value_key=f'{harmonic_value_root}_{i}', p_offset=(70,0), p_move=(0,28))
-        self.add_ui_text(text='', p_move=(130,-280))
+        self.update_position((130,-280))
 
         for i in range(31,41):
             self.add_ui_text(text=f'h{i}', text_length=8)
             self.add_ui_text(text_length=6, font_colour=value_colour, \
                 value_key=f'{harmonic_value_root}_{i}', p_offset=(70,0), p_move=(0,28))
-        self.add_ui_text(text='', p_move=(130,-280))
+        self.update_position((130,-280))
 
         for i in range(41,51):
             self.add_ui_text(text=f'h{i}', text_length=8)

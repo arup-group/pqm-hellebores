@@ -47,7 +47,7 @@ class UI_groups:
     # the flag helps to reduce workload of screen refresh when there are overlay menus.
     overlay_dialog_active = False
 
-    def __init__(self, st, buffer, waveform, multimeter, v_harmonics, app_actions):
+    def __init__(self, st, buffer, waveform, multimeter, v_harmonics, i_harmonics, app_actions):
         # make a local reference to app_actions and st
         self.app_actions = app_actions
         self.st = st
@@ -74,6 +74,8 @@ class UI_groups:
         self.elements['voltage_harmonic'] = [ v_harmonics.harmonic_controls ]
 
         # current harmonic group
+        self.instruments['current_harmonic'] = i_harmonics
+        self.elements['current_harmonic'] = [ i_harmonics.harmonic_controls ]
 
         # control groups that overlay the main group when adjusting settings
         self.elements['mode'] = create_mode(app_actions)
@@ -181,7 +183,6 @@ class WFS_Counter:
 def get_screen_hardware_size():
     i = pygame.display.Info()
     return i.current_w, i.current_h
-
 
 
 class Sample_Buffer:
@@ -475,8 +476,9 @@ def main():
     wfs          = WFS_Counter()
     waveform     = Waveform(st, wfs, app_actions)
     multimeter   = Multimeter(st, app_actions)
-    v_harmonics  = Harmonic(st, app_actions)
-    ui           = UI_groups(st, buffer, waveform, multimeter, v_harmonics, app_actions)
+    v_harmonics  = Harmonic(st, app_actions, harmonic_of_what='voltage')
+    i_harmonics  = Harmonic(st, app_actions, harmonic_of_what='current')
+    ui           = UI_groups(st, buffer, waveform, multimeter, v_harmonics, i_harmonics, app_actions)
 
     # start up in the waveform mode
     ui.app_actions.set_updater('waveform')

@@ -133,7 +133,8 @@ class Multimeter:
         self._hd_items = []
         # set first insertion position to origin
         self._item_position = (0,0)
- 
+
+        # Column 1 
         self.add_ui_text(text='Voltage rms /V', text_length=32)
         self.add_ui_text(text_length=7, font_size=LARGE_FONT_SIZE, font_colour=GREEN, \
             value_key='rms_voltage', p_offset=(0,6), p_move=(0,86))
@@ -154,96 +155,95 @@ class Multimeter:
         self.add_ui_text(text_length=7, font_size=LARGE_FONT_SIZE, font_colour=ORANGE, \
             dp_fix=2, value_key='mean_volt_ampere', p_offset=(0,6), p_move=(0,86))
 
+        # Column 2
+        self.update_position((220,-430))
 
-#        column_1        = [ ('rms_voltage', 'Voltage rms /V',
-#                                300, 58, LARGE_FONT_SIZE, 8, 10, 1, 1),
-#                            ('rms_current', 'Current rms /A',
-#                                300, 58, LARGE_FONT_SIZE, 8, 10, 3, 1),
-#                            ('mean_power', 'Power /W',
-#                                300, 58, LARGE_FONT_SIZE, 8, 10, 2, 1),
-#                            ('mean_volt_ampere_reactive', 'Reactive power /VAR',
-#                                300, 58, LARGE_FONT_SIZE, 8, 10, 2, 1),
-#                            ('mean_volt_ampere', 'Apparent power /VA',
-#                                300, 58, LARGE_FONT_SIZE, 8, 10, 2, 1) ]
-#
-#        column_2        = [ ('rms_voltage_max', 'Vmax rms /V',
-#                                224, 20, FONT_SIZE, 28, 0, 1, 1),
-#                            ('rms_voltage_min', 'Vmin rms /V',
-#                                224, 20, FONT_SIZE, 28, 10, 1, 1),
-#                            ('rms_current_max', 'Imax rms /A',
-#                                224, 20, FONT_SIZE, 28, 0, 3, 1),
-#                            ('rms_current_min', 'Imin rms /A',
-#                                224, 20, FONT_SIZE, 28, 10, 3, 1),
-#                            ('mean_power_max', 'Pmax /W',
-#                                224, 20, FONT_SIZE, 28, 0, 2, 1),
-#                            ('mean_power_min', 'Pmin /W',
-#                                224, 20, FONT_SIZE, 28, 10, 2, 1),
-#                            ('mean_volt_ampere_reactive_max', 'RPmax /VAR',
-#                                224, 20, FONT_SIZE, 28, 0, 2, 1),
-#                            ('mean_volt_ampere_reactive_min', 'RPmin /VAR',
-#                                224, 20, FONT_SIZE, 28, 10, 2, 1),
-#                            ('mean_volt_ampere_max', 'APmax /VA',
-#                                224, 20, FONT_SIZE, 28, 0, 2, 1),
-#                            ('mean_volt_ampere_min', 'APmin /VA',
-#                                224, 20, FONT_SIZE, 28, 10, 2, 1) ]
-#
-#        column_3        = [ ('watt_hour', 'Energy /Wh',
-#                                224, 20, FONT_SIZE, 28, 0, 3, 1),
-#                            ('volt_ampere_reactive_hour', 'Reactive energy /VARh',
-#                                224, 20, FONT_SIZE, 28, 0, 3, 1),
-#                            ('volt_ampere_hour', 'Apparent energy /VAh',
-#                                224, 20, FONT_SIZE, 28, 0, 3, 1),
-#                            ('hours', 'Accumulation time /hr',
-#                                224, 20, FONT_SIZE, 28, 40, 3, 1),
-#                            ('power_factor', 'Power factor /1',
-#                                224, 20, FONT_SIZE, 28, 0, 2, 1),
-#                            ('crest_factor_current', 'Crest factor /1',
-#                                224, 20, FONT_SIZE, 28, 0, 2, 1),
-#                            ('frequency', 'Frequency /Hz',
-#                                224, 20, FONT_SIZE, 28, 0, 2, 1),
-#                            ('rms_leakage_current', 'Earth leakage /mA',
-#                                224, 20, FONT_SIZE, 28, 0, 3, 1000),
-#                            ('total_harmonic_distortion_voltage_percentage', 'THD(v) /%',
-#                                224, 20, FONT_SIZE, 28, 0, 2, 1),
-#                            ('total_harmonic_distortion_current_percentage', 'THD(i) /%',
-#                                224, 20, FONT_SIZE, 28, 0, 2, 1) ]
-#
-#        tp_texts = []
-#        label_h = 18 
-#        label_font_size = FONT_SIZE
-#        for column, x in zip([column_1, column_2, column_3], [0, 200, 440]):
-#            y = 0
-#            for item in column:
-#                key, label, w, value_h, value_font_size, pad_size, gap_h, decimals, display_scaling = item
-#                # create the label
-#                if x==0:
-#                    pad = 36
-#                else:
-#                    pad = 28
-#                tp_label = thorpy.Text(label.rjust(pad))
-#                tp_label.set_size((w,label_h))
-#                tp_label.set_font_size(label_font_size)
-#                tp_label.set_font_color(WHITE)
-#                tp_label.set_topleft(x,y)
-#                tp_texts.append(tp_label)
-#                y = y + label_h
-#                # and then initial text for the value
-#                tp_value = thorpy.Text('999.999'.rjust(pad_size))
-#                tp_value.set_size((w,value_h))
-#                tp_value.set_font_size(value_font_size)
-#                tp_value.set_font_color(YELLOW)
-#                tp_value.set_topleft(x,y)
-#                tp_texts.append(tp_value)
-#                y = y + value_h + gap_h
-#                # add lookup of multimeter value object, with required text padding, keyed by analysis key
-#                self.multimeter_value_objects[key] = (tp_value, pad_size, decimals, display_scaling)
-#
-#        multimeter_column_1 = thorpy.Group(tp_texts[:10], mode=None)
-#        multimeter_column_2 = thorpy.Group(tp_texts[10:30], mode=None)
-#        multimeter_column_3 = thorpy.Group(tp_texts[30:], mode=None)
-#        multimeter_display = thorpy.Group([multimeter_column_1, multimeter_column_2, multimeter_column_3],
-#                                   mode='h', gap=0, margins=(0,0))
-#
+        self.add_ui_text(text='Vmax rms /V', text_length=24)
+        self.add_ui_text(text_length=24, font_colour=GREEN, \
+            value_key='rms_voltage_max', p_offset=(0,18), p_move=(0,38))
+
+        self.add_ui_text(text='Vmin rms /V', text_length=24)
+        self.add_ui_text(text_length=24, font_colour=GREEN, \
+            value_key='rms_voltage_min', p_offset=(0,18), p_move=(0,48))
+
+        self.add_ui_text(text='Imax rms /V', text_length=24)
+        self.add_ui_text(text_length=24, font_colour=YELLOW, \
+            dp_fix=3, value_key='rms_current_max', p_offset=(0,18), p_move=(0,38))
+
+        self.add_ui_text(text='Imin rms /V', text_length=24)
+        self.add_ui_text(text_length=24, font_colour=YELLOW, \
+            dp_fix=3, value_key='rms_current_min', p_offset=(0,18), p_move=(0,48))
+
+        self.add_ui_text(text='Pmax /W', text_length=24)
+        self.add_ui_text(text_length=24, font_colour=MAGENTA, \
+            dp_fix=2, value_key='mean_power_max', p_offset=(0,18), p_move=(0,38))
+
+        self.add_ui_text(text='Pmin /W', text_length=24)
+        self.add_ui_text(text_length=24, font_colour=MAGENTA, \
+            dp_fix=2, value_key='mean_power_min', p_offset=(0,18), p_move=(0,48))
+
+        self.add_ui_text(text='RPmax /VAR', text_length=24)
+        self.add_ui_text(text_length=24, font_colour=ORANGE, \
+            dp_fix=2, value_key='mean_volt_ampere_reactive_max', p_offset=(0,18), p_move=(0,38))
+
+        self.add_ui_text(text='RPmin /VAR', text_length=24)
+        self.add_ui_text(text_length=24, font_colour=ORANGE, \
+            dp_fix=2, value_key='mean_volt_ampere_reactive_min', p_offset=(0,18), p_move=(0,48))
+
+        self.add_ui_text(text='APmax /VA', text_length=24)
+        self.add_ui_text(text_length=24, font_colour=ORANGE, \
+            dp_fix=2, value_key='mean_volt_ampere_max', p_offset=(0,18), p_move=(0,38))
+
+        self.add_ui_text(text='APmin /VA', text_length=24)
+        self.add_ui_text(text_length=24, font_colour=ORANGE, \
+            dp_fix=2, value_key='mean_volt_ampere_min', p_offset=(0,18), p_move=(0,48))
+
+        # Column 3
+
+        self.update_position((240,-430))
+
+        self.add_ui_text(text='Energy /Wh', text_length=24)
+        self.add_ui_text(text_length=24, font_colour=ORANGE, \
+            dp_fix=3, value_key='watt_hour', p_offset=(0,18), p_move=(0,38))
+
+        self.add_ui_text(text='Reactive energy /VARh', text_length=24)
+        self.add_ui_text(text_length=24, font_colour=ORANGE, \
+            dp_fix=3, value_key='volt_ampere_reactive_hour', p_offset=(0,18), p_move=(0,38))
+
+        self.add_ui_text(text='Apparent energy /VAh', text_length=24)
+        self.add_ui_text(text_length=24, font_colour=ORANGE, \
+            dp_fix=3, value_key='volt_ampere_hour', p_offset=(0,18), p_move=(0,38))
+
+        self.add_ui_text(text='Accumulation time /hr', text_length=24)
+        self.add_ui_text(text_length=24, font_colour=ORANGE, \
+            dp_fix=3, value_key='hours', p_offset=(0,18), p_move=(0,78))
+
+        self.add_ui_text(text='Power factor /1', text_length=24)
+        self.add_ui_text(text_length=24, font_colour=ORANGE, \
+            dp_fix=2, value_key='power_factor', p_offset=(0,18), p_move=(0,38))
+
+        self.add_ui_text(text='Crest factor /1', text_length=24)
+        self.add_ui_text(text_length=24, font_colour=YELLOW, \
+            dp_fix=2, value_key='crest_factor_current', p_offset=(0,18), p_move=(0,38))
+
+        self.add_ui_text(text='Frequency /Hz', text_length=24)
+        self.add_ui_text(text_length=24, font_colour=ORANGE, \
+            dp_fix=2, value_key='frequency', p_offset=(0,18), p_move=(0,38))
+
+        self.add_ui_text(text='THD(v) /%', text_length=24)
+        self.add_ui_text(text_length=24, font_colour=GREEN, \
+            dp_fix=2, value_key='total_harmonic_distortion_voltage_percentage', p_offset=(0,18), p_move=(0,38))
+
+        self.add_ui_text(text='THD(i) /%', text_length=24)
+        self.add_ui_text(text_length=24, font_colour=YELLOW, \
+            dp_fix=2, value_key='total_harmonic_distortion_current_percentage', p_offset=(0,18), p_move=(0,38))
+
+        self.add_ui_text(text='Earth leakage /mA', text_length=24)
+        self.add_ui_text(text_length=24, font_colour=CYAN, \
+            dp_fix=3, value_key='rms_leakage_current', p_offset=(0,18), p_move=(0,38))
+
+        # insert all text elements into a group, then position group in display
+
         self.multimeter_display = thorpy.Group( self._hd_items, mode=None, gap=0, margins=(0,0) )
         self.multimeter_display.set_topleft(*METER_POSITION)
 

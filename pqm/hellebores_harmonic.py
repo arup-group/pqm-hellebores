@@ -171,7 +171,7 @@ class Harmonic:
 
         self.add_ui_text(text='Frequency /Hz', text_length=16)
         self.add_ui_text(text_length=10, font_colour=ORANGE, value_key='frequency', \
-            dp_fix=3, p_offset=(140,0), p_move=(0,18))
+            dp_fix=2, p_offset=(140,0), p_move=(0,18))
 
         self.add_ui_text(text='THD(v) /%', text_length=16)
         self.add_ui_text(text_length=10, font_colour=GREEN, \

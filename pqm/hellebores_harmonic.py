@@ -150,12 +150,14 @@ class Harmonic:
         if harmonic_of_what == 'voltage':
             rms_label = 'Voltage rms /V'
             rms_value = 'rms_voltage'
+            rms_resolution = 1
             harmonic_table_label = 'Harmonic voltage magnitudes (% of Voltage rms)' 
             harmonic_value_root = 'harmonic_voltage_percentages'
             value_colour = GREEN
         elif harmonic_of_what == 'current':
             rms_label = 'Current rms /A'
             rms_value = 'rms_current'
+            rms_resolution = 3
             harmonic_table_label = 'Harmonic current magnitudes (% of Current rms)' 
             harmonic_value_root = 'harmonic_current_percentages'
             value_colour = YELLOW
@@ -165,11 +167,11 @@ class Harmonic:
 
         self.add_ui_text(text=rms_label, text_length=16)
         self.add_ui_text(text_length=10, font_colour=value_colour, value_key=rms_value, \
-            p_offset=(140,0), p_move=(0,18))
+            dp_fix=rms_resolution, p_offset=(140,0), p_move=(0,18))
 
         self.add_ui_text(text='Frequency /Hz', text_length=16)
         self.add_ui_text(text_length=10, font_colour=ORANGE, value_key='frequency', \
-            p_offset=(140,0), p_move=(0,18))
+            dp_fix=3, p_offset=(140,0), p_move=(0,18))
 
         self.add_ui_text(text='THD(v) /%', text_length=16)
         self.add_ui_text(text_length=10, font_colour=GREEN, \

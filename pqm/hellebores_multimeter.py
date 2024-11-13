@@ -132,11 +132,28 @@ class Multimeter:
         # variable to store list of thorpy text objects while we are building them
         self._hd_items = []
         # set first insertion position to origin
-        self._item_position = (0, 0)
+        self._item_position = (0,0)
  
-        self.add_ui_text(text='Voltage rms /V', text_length=24)
-        self.add_ui_text(text_length=6, font_size=LARGE_FONT_SIZE, font_colour=GREEN, \
-            value_key='rms_voltage', p_offset=(0,10), p_move=(0,68))
+        self.add_ui_text(text='Voltage rms /V', text_length=32)
+        self.add_ui_text(text_length=7, font_size=LARGE_FONT_SIZE, font_colour=GREEN, \
+            value_key='rms_voltage', p_offset=(0,6), p_move=(0,86))
+
+        self.add_ui_text(text='Current rms /V', text_length=32)
+        self.add_ui_text(text_length=7, font_size=LARGE_FONT_SIZE, font_colour=YELLOW, \
+            dp_fix=3, value_key='rms_current', p_offset=(0,6), p_move=(0,86))
+
+        self.add_ui_text(text='Power /W', text_length=32)
+        self.add_ui_text(text_length=7, font_size=LARGE_FONT_SIZE, font_colour=MAGENTA, \
+            dp_fix=2, value_key='mean_power', p_offset=(0,6), p_move=(0,86))
+
+        self.add_ui_text(text='Reactive power /VAR', text_length=32)
+        self.add_ui_text(text_length=7, font_size=LARGE_FONT_SIZE, font_colour=ORANGE, \
+            dp_fix=2, value_key='mean_volt_ampere_reactive', p_offset=(0,6), p_move=(0,86))
+
+        self.add_ui_text(text='Apparent power /VA', text_length=32)
+        self.add_ui_text(text_length=7, font_size=LARGE_FONT_SIZE, font_colour=ORANGE, \
+            dp_fix=2, value_key='mean_volt_ampere', p_offset=(0,6), p_move=(0,86))
+
 
 #        column_1        = [ ('rms_voltage', 'Voltage rms /V',
 #                                300, 58, LARGE_FONT_SIZE, 8, 10, 1, 1),

@@ -19,7 +19,6 @@ class Waveform:
     # array of thorpy text objects
     waveform_colours = [ GREEN, YELLOW, MAGENTA, CYAN ]
     text_colours = [BLACK, WHITE, WHITE] + waveform_colours
-    blit_toggle = True
     def __init__(self, st, wfs, app_actions):
         self.texts = []
         self.st = st

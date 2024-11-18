@@ -101,6 +101,7 @@ class Settings():
         self.trigger_level                             = js['trigger_level']
         self.trigger_position                          = js['trigger_position']
         self.trigger_mode                              = js['trigger_mode']
+        self.run_mode                                  = js['run_mode']
         # now settings that are derived from the above
         self.set_derived_settings()
 
@@ -136,6 +137,7 @@ class Settings():
         js['trigger_level']                            = self.trigger_level
         js['trigger_position']                         = self.trigger_position
         js['trigger_mode']                             = self.trigger_mode
+        js['run_mode']                                 = self.run_mode
         # return the resulting json dictionary 
         return js 
  
@@ -357,7 +359,8 @@ default_settings = '''
     "trigger_slope": "rising",
     "trigger_level": 0.0,
     "trigger_position": 5,
-    "trigger_mode": "sync"
+    "trigger_mode": "sync",
+    "run_mode": "running"
 }
 '''
 

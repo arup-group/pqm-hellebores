@@ -203,12 +203,11 @@ class Sample_Buffer:
         self.xp = -1
 
     def end_frame(self, capturing, wfs):
-        if capturing:
-            # shift the history buffer along and append the new capture
-            self.sample_waveform_history = self.sample_waveform_history[1:]
-            self.sample_waveform_history.append(self.ps)
-            #self.sample_waveform_history[SAMPLE_BUFFER_SIZE] = self.ps
-            wfs.increment()
+        # shift the history buffer along and append the new capture
+        self.sample_waveform_history = self.sample_waveform_history[1:]
+        self.sample_waveform_history.append(self.ps)
+        #self.sample_waveform_history[SAMPLE_BUFFER_SIZE] = self.ps
+        wfs.increment()
         # reset the working buffer
         self.ps = [ [],[],[],[] ]
 

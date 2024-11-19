@@ -17,15 +17,23 @@ import settings
 
 
 BUFFER_SIZE = 65535          # size of circular sample buffer
-
+MAX_READ = BUFFER_SIZE // 2  # maximum reads, post trigger, in stopped mode
 
 class Buffer:
     buf = None           # array of 5*floats, ie BUFFER_SIZE * 5
-    fp = 0               # front pointer of frame
-    tp = 0               # trigger pointer (somewhere between front and rear)
-    rp = 0               # rear pointer of frame
+    # bookmarks for frame output
+    # a frame is output sometime after after the triggered flag is raised or when
+    # settings have changed if stopped.
+    frame_startp = 0
+    frame_endp = 0
+    # we don't modulo rotate sp and tp except when accessing the buffer
+    # this is to make it easier to do numeric comparison between the two pointers.
     sp = 0               # storage pointer (new samples)
-    triggered = False    # trigger flag
+    tp = 0               # trigger pointer
+    post_trigger_sample_count = 0
+    # triggered flag is raised while we are waiting for post-trigger samples, before
+    # we output a frame
+    triggered = False
     # When there is a successful trigger, the trigger_test_fn will return an estimate
     # of the fractional time offset between samples when the trigger took place.
     # The interpolation fraction is used to create the time offset.
@@ -39,9 +47,9 @@ class Buffer:
     trigger_test_fn = None
 
 
-    def __init__(self, size):
+    def __init__(self, size=BUFFER_SIZE):
         """buffer memory initialised with empty data"""
-        # performance optimisation: could consider memoryview object here
+        # *** performance optimisation: could consider memoryview object here ***
         self.size = size
         self.buf = [ [0.0, 0.0, 0.0, 0.0, 0.0] for i in range(size) ]
 
@@ -58,35 +66,39 @@ class Buffer:
         try:
             self.buf[self.sp % self.size] = [ float(w) for w in line.split() ]
         except ValueError:
+            self.buf[self.sp % self.size] = [ 0.0, 0.0, 0.0, 0.0, 0.0 ]
             print(
                 f"trigger.py, store_line(): Couldn't interpret '{line}'.",
                 file=sys.stderr)
-        self.sp = self.sp + 1 
+        self.sp += 1
+        self.post_trigger_sample_count += 1
 
+    def set_output_frame(self):
+        self.frame_startp = self.tp + st.post_trigger_samples
+        self.frame_endp = self.tp - st.pre_trigger_samples
 
     def trigger_test(self):
         """call this to check if recent samples from tp pointer onwards cause a trigger"""
         while self.tp < self.sp:
             self.triggered, self.interpolation_fraction = (
                 self.trigger_test_fn(
+                    # the trigger test function takes the channel reading for
+                    # two successive samples and compares them against the trigger
+                    # criteria
                     self.buf[(self.tp - 1) % self.size][self.trigger_test_ch], 
                     self.buf[self.tp % self.size][self.trigger_test_ch]))
             if self.triggered:
-                self.fp = self.tp + st.post_trigger_samples
-                self.rp = self.tp - st.pre_trigger_samples
+                self.set_output_frame()
+                # re-prime for next time
                 self.tp = self.tp + st.holdoff_samples
-                return True
-            self.tp = self.tp + 1
-        return False
+                break
+            self.tp += 1
 
     def output_ready(self):
         """see if we have stored enough post-trigger samples to commence output"""
-        if self.triggered and self.sp >= self.fp:
-            return True
-        else:
-            return False
+        return True if self.triggered and self.sp >= self.frame_endp else False
 
-    def generate_output(self):
+    def output_frame(self):
         """output the correct array slice with a time shift"""
         shift = 1.0 - self.rp - st.pre_trigger_samples - self.interpolation_fraction
         em = ''
@@ -103,15 +115,17 @@ class Buffer:
  
 
 def via_trigger(line, buf):
-    # store the incoming data
-    buf.store_line(line)
+    # store the incoming data if we are in run mode or to fill buffer in stopped
+    # mode
+    if st.run_mode == 'running' or buf.post_trigger < MAX_SAMPLES:
+        buf.store_line(line)
     # if we haven't triggered yet, test if we can now
     if buf.triggered == False:
         buf.trigger_test()
     # otherwise test to see if we have a full buffer yet
     # if we have, then print out the data and re-arm the trigger
     elif buf.output_ready():
-        buf.generate_output()
+        buf.output_frame()
         buf.triggered = False
 
 
@@ -161,6 +175,10 @@ def receive_new_settings(buf):
             file=sys.stderr)
         process_fn = via_trigger
         buf.reset(trigger_fn_generator(st.trigger_slope, 0.0), 1) 
+    # output the buffer if in stopped mode, since the framing boundary or scaling may
+    # have changed with these new settings, and the buffer needs to be re-processed
+    if st.run_mode == 'stopped':
+        buf.output_frame()
 
 
 def main():

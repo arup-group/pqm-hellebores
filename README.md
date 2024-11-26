@@ -125,9 +125,15 @@ For performance and simplicity benefits, the software is designed with independe
 
 The Pi code will run in WSL, Ubuntu, Mac or similar environments that have a modern python and can support the python dependencies, pipelines and signals. `hellebores.py` and the `rain_chooser.py` simulator require SDL for displaying the GUI and to accept touchscreen or mouse input. The GUI can run under X-Windows or in native Mac and MS-Windows if the SDL libraries are installed and are reachable from the python runtime environment. The run script will test whether a serial interface to Pico is available and if not will use the `rain_chooser.py` simulator as a data source.
 
-When working with `git`, automate minor version increments when making a commit, by adding the following lines to `.git/hooks/pre-commit.sample` and then rename the hook file to `.git/hooks/pre-commit`.
+When working with `git`, automate minor version increments when making a commit, by editing lines at the end of `.git/hooks/pre-commit.sample` and then rename the hook file to `.git/hooks/pre-commit`.
 
 ```
+# If there are whitespace errors, print the offending file names and fail.
+#exec git diff-index --check --cached $against --
+if ! git diff-index --check --cached $against --; then
+    exit 1
+fi
+
 # Increment version number and then add the VERSION file to the commit
 ./pqm/version.py --increment_sub_version
 git add ./VERSION

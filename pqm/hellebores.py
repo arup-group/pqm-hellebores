@@ -466,7 +466,7 @@ def main():
     # settings in this program. We call st.send_to_all() and then
     # these programs are each told to re-read the settings file.
     st = Settings(other_programs = [ 'scaler.py', 'trigger.py', 'mapper.py',\
-            'analyser.py' ], reload_on_signal=False)
+            'analyser.py' ], reload_on_signal=True)
 
     # create objects that hold the state of the application, data buffers and UI
     data_comms   = Data_comms(args.waveform_file, args.analysis_file)

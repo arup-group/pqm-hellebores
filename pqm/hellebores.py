@@ -382,7 +382,8 @@ class Data_comms:
 
 class App_Actions:
 
-    def __init__(self, data_comms):
+    def __init__(self, st, data_comms):
+        self.st = st
         self.data_comms = data_comms
         # allow/stop update of the lines on the screen
         self.capturing = True
@@ -403,6 +404,11 @@ class App_Actions:
 
     def start_stop(self):
         self.capturing = not self.capturing
+        if self.capturing:
+            self.st.run_mode = 'running'
+        else:
+            self.st.run_mode = 'stopped'
+        self.st.send_to_all()
 
     def set_updater(self, mode):
         # this placeholder function is replaced dynamically by the implementation
@@ -470,7 +476,7 @@ def main():
 
     # create objects that hold the state of the application, data buffers and UI
     data_comms   = Data_comms(args.waveform_file, args.analysis_file)
-    app_actions  = App_Actions(data_comms)
+    app_actions  = App_Actions(st, data_comms)
     buffer       = Sample_Buffer(st, data_comms)
     wfs          = WFS_Counter()
     waveform     = Waveform(st, wfs, app_actions)

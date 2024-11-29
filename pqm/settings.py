@@ -162,6 +162,8 @@ class Settings():
         try:
             with open(self.sfile, 'w') as f:
                 f.write(json.dumps(self.make_json(), indent=4))
+                #f.flush()
+                #os.fsync(f.fileno())
         except (PermissionError, IOError):
             print(
                 "settings.py, save_settings(): couldn't write settings.json.",

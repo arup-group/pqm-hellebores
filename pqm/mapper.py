@@ -19,6 +19,7 @@ import settings
 
 def main():
    # load settings into st object from settings.json
+   # settings.json is subsequently reloaded automatically if a SIGUSR1 signal is received
    st = settings.Settings()
    ymax = st.y_pixels
    for line in sys.stdin: # receive data from standard input

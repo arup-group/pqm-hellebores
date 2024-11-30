@@ -117,6 +117,7 @@ class Buffer:
             if self.triggered == True:
                 self.update_frame_markers()
                 break
+            # increment trigger position ready to try again
             else:
                 self.tp += 1
         return self.triggered
@@ -186,7 +187,6 @@ class Buffer:
 
 
     def update_trigger_settings(self):
-        global st
 
         # interpolation fraction
         def i_frac(s1, s2, threshold):
@@ -235,11 +235,6 @@ class Buffer:
             self.process_fn = lambda line: self.via_trigger(line)
             self.trigger_test_fn = trigger_fn_generator('sync', self.st.trigger_slope, 0.0)
             self.trigger_test_ch = 1
-        # output the buffer if in stopped mode, since the framing boundary or scaling may
-        # have changed with these new settings
-        if self.st.run_mode == 'stopped':
-            self.update_frame_markers()
-            self.output_frame()
 
 
 def get_command_args():
@@ -258,12 +253,12 @@ def main():
     # flag to reload settings into st object
     settings_were_updated = True
 
-    def flip_new_settings_flag():
+    def set_settings_were_updated_flag():
         nonlocal settings_were_updated
-        settings_were_updated = not settings_were_updated
+        settings_were_updated = True
 
     # when we receive a SISUSR1 signal, the st object will flip the flag
-    st = Settings(flip_new_settings_flag,
+    st = Settings(set_settings_were_updated_flag,
         other_programs = [ 'scaler.py', 'hellebores.py', 'analyser.py' ])
     
     # we make a buffer to temporarily hold a history of samples -- this allows us to output
@@ -278,16 +273,22 @@ def main():
             # depending on trigger settings. This is setup in 'update_trigger_settings(buf)'
             if settings_were_updated:
                 buf.update_trigger_settings()
-                flip_new_settings_flag()
-            buf.process_fn(line.rstrip())
+                settings_were_updated = False
+                # output the buffer if in stopped mode, since the framing boundary or scaling may
+                # have changed with these new settings
+                if st.run_mode == 'stopped':
+                    buf.update_frame_markers()
+                    buf.output_frame()
             if st.run_mode == 'running' and buf.ready_for_output():
                 buf.output_frame()
                 buf.reprime_trigger()
                 buf.update_frame_markers()
-                # update settings if we are in inrush mode
+                # stop running if we are in inrush mode
                 if st.trigger_mode == 'inrush':
                     st.run_mode = 'stopped'
                     st.send_to_all()
+            # process the incoming line with the current trigger settings
+            buf.process_fn(line.rstrip())
 
     except ValueError:
         print(

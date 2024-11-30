@@ -84,9 +84,9 @@ class Buffer:
                 # make sure the start marker does not precede the end marker of the previous output
                 self.frame_startp = max(self.outp, self.tp - self.st.pre_trigger_samples)
                 self.frame_endp = self.tp + self.st.post_trigger_samples - 1
-            elif st.trigger_mode == 'freerun':
+            elif self.st.trigger_mode == 'freerun':
                 # in freerun mode, we just run frames back to back with one another
-                self.frame_startp = self.frame_outp
+                self.frame_startp = self.outp
                 self.frame_endp = self.frame_startp + self.st.frame_samples
         # in stopped mode, we move the existing frame boundaries around the current trigger
         else:
@@ -97,7 +97,7 @@ class Buffer:
         """Set the earliest trigger position to be at least the hold-off time after the
         previous trigger (dependent on the time axis, so we don't trigger too early in the
         frame)"""
-        self.tp = self.tp + self.st.holdoff_samples
+        self.tp = max(self.outp, self.tp + self.st.holdoff_samples)
         self.triggered = False
 
 
@@ -126,12 +126,12 @@ class Buffer:
 
     def output_frame(self):
         """output the correct array slice with a time shift"""
-        # exact trigger position occurred between the sample self.tp - 1 and self.tp
-        # this needs to be t = 0
-        # at the moment, the additional offset of 1 sample is unexplained.
-        print(f'Output settings: outp {self.outp}, startp {self.frame_startp}, endp {self.frame_endp}, tp {self.tp}, sp {self.sp}', file=sys.stderr)
-        # time=0 at exactly the trigger position corrected by an interpolation fraction
-        trigger_offset = self.tp - 1 + self.interpolation_fraction
+        if self.st.trigger_mode == 'sync' or self.st.trigger_mode == 'inrush':
+            # exact trigger position occurred between the sample self.tp - 1 and self.tp
+            # time=0 at exactly the trigger position corrected by an interpolation fraction
+            trigger_offset = self.tp - 1 + self.interpolation_fraction
+        else:
+            trigger_offset = 0
         for s in range(self.frame_startp, self.frame_endp):
             sample = self.buf[s % self.size]
             # modify the timestamp

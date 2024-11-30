@@ -52,11 +52,11 @@ def run_on_windows():
 
     # We start three command lines. Standard shell anonymous pipes are used for anonymous
     # connections between programs, and named pipes are used when the data needs to be
-    # accessed in another command. In addition to the 7 python processes required to actually
+    # accessed in another command. In addition to the 6 python processes required to actually
     # process the data, we will be running a further 4 python processes to drive the named
     # pipes on Windows.
     cmd_1 = (f'{pyth} rain_chooser.py | {pyth} scaler.py | {tee} {branch1}'
-             f' | {pyth} trigger.py | {pyth} mapper.py | {write} {waveform_pipe}')
+             f' | {pyth} framer.py | {write} {waveform_pipe}')
     cmd_2 = (f'{read} {branch1} | {pyth} analyser.py | {tee} {analysis_pipe}'
              f' | {pyth} analysis_to_csv.py > {analysis_log_file}')
     cmd_3 = f'{pyth} hellebores.py --waveform_file="{waveform_pipe}" --analysis_file="{analysis_pipe}"'

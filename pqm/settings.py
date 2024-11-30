@@ -268,7 +268,8 @@ class Settings():
 
     def show_settings(self):
         print('Settings:')
-        items = self.make_json()
+        #items = self.make_json()
+        items = vars(self) 
         for i in items:
             print(f'  {i:40s}: {items[i]}')
 

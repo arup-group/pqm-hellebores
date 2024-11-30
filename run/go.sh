@@ -102,7 +102,7 @@ fi
 
 # Plumbing, pipe, pipe, pipe...
 $READER \
-    | ./scaler.py | tee >(./trigger.py | ./mapper.py > $WAVEFORM_PIPE) \
+    | ./scaler.py | tee >(./framer.py > $WAVEFORM_PIPE) \
         | ./analyser.py | tee >(./analysis_to_csv.py > $ANALYSIS_LOG_FILE) > $ANALYSIS_PIPE &
 
 # hellebores.py GUI reads from both the waveform and analysis pipes...

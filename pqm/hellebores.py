@@ -196,15 +196,14 @@ class Sample_Buffer:
         self.ps = [ [],[],[],[] ]           # points
         self.cs = {}                        # calculations
         # sample buffer history
-        # future extension is to use this buffer for electrical event history
-        # (eg triggered by power fluctuation etc)
-        self.sample_waveform_history = [ [] for i in range(SAMPLE_BUFFER_SIZE) ]
+        # allows 'multitrace' to work
+        self.waveforms = [ [] for i in range(SAMPLE_BUFFER_SIZE) ]
         # tracks previous 'x coordinate'
         self.xp = -1
 
     def end_frame(self, capturing, wfs):
         # shift the history buffer along and add the new capture
-        self.sample_waveform_history = [ self.ps, self.sample_waveform_history[1:] ]
+        self.waveforms = [ self.ps, self.waveforms[1:] ]
         #self.sample_waveform_history = self.sample_waveform_history[1:]
         #self.sample_waveform_history.append(self.ps)
         #self.sample_waveform_history[SAMPLE_BUFFER_SIZE] = self.ps
@@ -284,7 +283,7 @@ class Sample_Buffer:
 
     def get_waveform(self, index=0):
         # advance into history by 'index' frames
-        return self.sample_waveform_history[min(index,SAMPLE_BUFFER_SIZE)]
+        return self.waveforms[min(index,SAMPLE_BUFFER_SIZE)]
 
 
 
@@ -438,9 +437,12 @@ class App_Actions:
 
 def get_command_args():
     # NB argparse library adds extra backslash escape characters to strings, which we don't want
-    cmd_parser = argparse.ArgumentParser(description='Read waveform and analysis (optional) data streams and provide a GUI to display them and configure the post-processing.')
-    cmd_parser.add_argument('--waveform_file', default='stdin', help='Path of waveform file stream or pipe.')
-    cmd_parser.add_argument('--analysis_file', default=None, help='Path of analysis file stream or pipe.')
+    cmd_parser = argparse.ArgumentParser(description='Read waveform and analysis (optional) '
+        'data streams and provide a GUI to display them and configure the post-processing.')
+    cmd_parser.add_argument('--waveform_file', default='stdin', \
+        help='Path of waveform file stream or pipe.')
+    cmd_parser.add_argument('--analysis_file', default=None, \
+        help='Path of analysis file stream or pipe.')
     program_name = cmd_parser.prog
     args = cmd_parser.parse_args()
     return (program_name, args)
@@ -472,8 +474,8 @@ def main():
     # the list of 'other programs' is used to send signals when we change
     # settings in this program. We call st.send_to_all() and then
     # these programs are each told to re-read the settings file.
-    st = Settings(other_programs = [ 'scaler.py', 'trigger.py', 'mapper.py',\
-            'analyser.py' ], reload_on_signal=True)
+    st = Settings(other_programs = [ 'scaler.py', 'framer.py', 'analyser.py' ], \
+        reload_on_signal=True)
 
     # create objects that hold the state of the application, data buffers and UI
     data_comms   = Data_comms(args.waveform_file, args.analysis_file)

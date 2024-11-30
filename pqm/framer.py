@@ -13,6 +13,9 @@
 
 import sys
 import signal
+import argparse
+
+# local
 from settings import Settings
 
 
@@ -53,9 +56,10 @@ class Buffer:
     # a function reference is assigned to process_fn when trigger settings are updated
     process_fn = lambda line: 0  # dummy function -- this will be replaced at runtime
 
-    def __init__(self, st, size=BUFFER_SIZE):
+    def __init__(self, st, pixels=True, size=BUFFER_SIZE):
         """buffer memory initialised with empty data"""
         # *** performance optimisation: could consider memoryview object here ***
+        self.pixels = pixels    # boolean flag controls whether output is mapped to pixels
         self.size = size
         self.buf = [ [0.0, 0.0, 0.0, 0.0, 0.0] for i in range(size) ]
         self.st = st
@@ -124,6 +128,28 @@ class Buffer:
         return True if self.sp >= self.frame_endp else False
 
 
+    def value_mapper(self, vs):
+        t, c0, c1, c2, c3 = vs 
+        return f'{t:12.4f} {c0:10.3f} {c1:10.5f} {c2:10.3f} {c3:12.7f}'
+
+
+    def pixel_mapper(self, vs):
+        t, c0, c1, c2, c3 = vs 
+        # % st.x_pixels forces x coordinate to be between 0 and 699
+        # CHANGE: form half_y_pixels locally, doesn't need to be in settings   
+        x = int(((t + self.st.time_shift) 
+                 * self.st.horizontal_pixels_per_division/self.st.time_axis_per_division) % self.st.x_pixels)
+        y0 = (int(- float(c0) * self.st.vertical_pixels_per_division / self.st.voltage_axis_per_division) 
+                  + self.st.half_y_pixels)
+        y1 = (int(- float(c1) * self.st.vertical_pixels_per_division /self.st.current_axis_per_division)
+                  + self.st.half_y_pixels)
+        y2 = (int(- float(c2) * self.st.vertical_pixels_per_division / self.st.power_axis_per_division) 
+                  + self.st.half_y_pixels)
+        y3 = (int(- float(c3) * self.st.vertical_pixels_per_division / self.st.earth_leakage_current_axis_per_division) 
+                  + self.st.half_y_pixels)
+        return f'{x :4d} {y0 :4d} {y1 :4d} {y2 :4d} {y3 :4d}'
+
+
     def output_frame(self):
         """output the correct array slice with a time shift"""
         if self.st.trigger_mode == 'sync' or self.st.trigger_mode == 'inrush':
@@ -136,10 +162,11 @@ class Buffer:
             sample = self.buf[s % self.size]
             # modify the timestamp
             timestamp = self.st.interval * (s - trigger_offset)
+            vs = [ timestamp, *sample[1:] ]
+            out = self.pixel_mapper(vs) if self.pixels else self.value_mapper(vs)
             # if it's the last sample in the frame, add an 'END' marker
             em = '*END*' if s == self.frame_endp - 1 else ''
-            print(f'{timestamp:12.4f} {sample[1]:10.3f} '
-                  f'{sample[2]:10.5f} {sample[3]:10.3f} {sample[4]:12.7f} {em}')
+            print(f'{out} {em}')
         self.outp = self.frame_endp
         sys.stdout.flush()
 
@@ -215,7 +242,19 @@ class Buffer:
             self.output_frame()
 
 
+def get_command_args():
+    cmd_parser = argparse.ArgumentParser(description='Frames waveform data with or '
+        'without synchronisation trigger, and buffers waveform for re-transmission in stopped mode.')
+    cmd_parser.add_argument('--pixels', default=True, action=argparse.BooleanOptionalAction, \
+        help='Enable or disable mapping to pixels.')
+    program_name = cmd_parser.prog
+    args = cmd_parser.parse_args()
+    return (program_name, args)
+
+
 def main():
+    program_name, args = get_command_args()
+         
     # flag to reload settings into st object
     settings_were_updated = True
 
@@ -225,12 +264,12 @@ def main():
 
     # when we receive a SISUSR1 signal, the st object will flip the flag
     st = Settings(flip_new_settings_flag,
-                     other_programs = [ 'scaler.py', 'mapper.py', 'hellebores.py', 'analyser.py' ])
+        other_programs = [ 'scaler.py', 'hellebores.py', 'analyser.py' ])
     
     # we make a buffer to temporarily hold a history of samples -- this allows us to output
     # a frame of waveform that includes samples 'before and after the trigger'
     # in 'stopped' mode, it allows us to change the framing (extent of time axis) around the trigger
-    buf = Buffer(st)
+    buf = Buffer(st, pixels=args.pixels)
 
     # process data from standard input
     try:
@@ -252,7 +291,7 @@ def main():
 
     except ValueError:
         print(
-            f"trigger.py, main(): Failed to read contents of line '{line}'.",
+            f"{program_name}, main(): Failed to read contents of line '{line}'.",
             file=sys.stderr)
 
 

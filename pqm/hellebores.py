@@ -188,7 +188,6 @@ def get_screen_hardware_size():
 class Sample_Buffer:
 
     def __init__(self, st, data_comms):
-        self.frame_count = 0
         # local reference to settings and app_actions
         self.st = st
         self.data_comms = data_comms
@@ -211,7 +210,6 @@ class Sample_Buffer:
         wfs.increment()
         # reset the working buffer
         self.ps = [ [],[],[],[] ]
-        self.frame_count += 1
 
     def add_sample(self, sample):
         self.ps[0].append((sample[0], sample[1]))
@@ -257,6 +255,11 @@ class Sample_Buffer:
         sample_counter = 0
         while sample_counter < 1000 and (l := self.data_comms.get_waveform_line(0.02)):
             try:
+                # in stopped mode, framer will send a block of '.' characters in one line
+                # to flush the pipe buffer in the kernel.
+                if l[0] == '.':
+                    # drop this line and read another
+                    continue
                 ws = l.split()
                 sample = [ int(w) for w in ws[:5] ]
                 if ws[-1] == '*END*':
@@ -499,7 +502,6 @@ def main():
     buffer.clear_accumulators()
 
     try:
-        fc = 0
         # main loop
         while True:
             # ALWAYS read new data, even if we are not capturing it, to keep the incoming data
@@ -512,10 +514,6 @@ def main():
             # if multi_trace is active, read multiple frames into the buffer, otherwise just one
             for i in range(app_actions.multi_trace):
                 buffer.load_waveform(app_actions.capturing, wfs)
-                if buffer.frame_count > fc:
-                    fc = buffer.frame_count 
-                    print(f'READ WAVEFORM: {buffer.frame_count}', file=sys.stderr)
-                    sys.stderr.flush()
     
             # read new analysis results, if available 
             analysis_updated = buffer.load_analysis(app_actions.capturing)
@@ -571,8 +569,6 @@ def main():
             # will be drawn as necessary.
             if ui.mode == 'waveform' or events or analysis_updated:
                 ui.refresh(buffer, screen)
-                print('.', end='', file=sys.stderr)
-                sys.stderr.flush()
  
             # ui.get_updater().update() is an expensive function, so we use the simplest possible
             # thorpy theme to achieve the quickest redraw time. Then, we only update/redraw when

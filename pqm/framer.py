@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 
 
-#  _        _                                   
-# | |_ _ __(_) __ _  __ _  ___ _ __ _ __  _   _ 
-# | __| '__| |/ _` |/ _` |/ _ \ '__| '_ \| | | |
-# | |_| |  | | (_| | (_| |  __/ | _| |_) | |_| |
-#  \__|_|  |_|\__, |\__, |\___|_|(_) .__/ \__, |
-#             |___/ |___/          |_|    |___/ 
-#
+#   __                                           
+#  / _|_ __ __ _ _ __ ___   ___ _ __ _ __  _   _ 
+# | |_| '__/ _` | '_ ` _ \ / _ \ '__| '_ \| | | |
+# |  _| | | (_| | | | | | |  __/ | _| |_) | |_| |
+# |_| |_|  \__,_|_| |_| |_|\___|_|(_) .__/ \__, |
+#                                   |_|    |___/ 
+# 
 # Monitors signal and detects signal event eg voltage crossing zero
 # Offsets time axis with respect to the trigger (trigger time is t=0)
 
@@ -21,10 +21,12 @@ from settings import Settings
 
 BUFFER_SIZE = 65536                  # size of circular sample buffer
 MAX_FORWARD_READ = BUFFER_SIZE // 4  # maximum reads, post frame end pointer
+FLUSH_PIPE_BUFFER = '.' * 8192       # used in stopped mode to make sure 
+                                     # all data is flushed through
 
 class Buffer:
-    st = None            # will hold settings object
-    buf = None           # array of 5*floats, ie BUFFER_SIZE * 5
+    st = None                # will hold settings object
+    buf = None               # array of 5*floats, ie BUFFER_SIZE * 5
     # Frame pointers are set after trigger pointer is set, in triggered mode,
     # immediately after frame output in free-run mode, and when settings are changed,
     # including in stopped mode.
@@ -32,12 +34,14 @@ class Buffer:
     # accessing the circular buffer. This is to make it easier to do numeric comparison
     # between pointers and to calculate new frame pointers after each new trigger or
     # after settings have changed.
-    frame_startp = 0     # beginning of frame to be output
-    frame_endp = 0       # end of frame to be output
-    outp = 0             # end of last output
-    sp = 0               # storage pointer (advances by 1 for every new sample)
-    tp = 0               # trigger pointer (in running mode, this is moved forward when
-                         # trigger condition is next satisfied)
+    frame_startp = 0         # beginning of frame to be output
+    frame_endp = 0           # end of frame to be output
+    outp = 0                 # end of last output
+    sp = 0                   # storage pointer (advances by 1 for every new sample)
+    tp = 0                   # trigger pointer (in running mode, this is moved
+                             # forward when trigger condition is next satisfied)
+    # new_frame flag indicates that the data in the frame is fresh
+    new_frame = True
     # triggered flag is raised when a new trigger is detected, and lowered after we
     # have output a frame
     triggered = False
@@ -96,6 +100,7 @@ class Buffer:
         else:
             self.frame_startp = self.tp - self.st.pre_trigger_samples
             self.frame_endp = self.tp + self.st.post_trigger_samples - 1
+        self.new_frame = True
 
     def reprime_trigger(self):
         """Set the earliest trigger position to be at least the hold-off time after the
@@ -126,29 +131,30 @@ class Buffer:
     def ready_for_output(self):
         """Check if we have triggered and/or we have stored enough samples to
         commence output"""
-        return True if self.sp >= self.frame_endp else False
+        return True if self.new_frame and self.sp >= self.frame_endp else False
 
 
-    def value_mapper(self, vs):
+    def mapper(self, vs, pixels=True):
         t, c0, c1, c2, c3 = vs 
-        return f'{t:12.4f} {c0:10.3f} {c1:10.5f} {c2:10.3f} {c3:12.7f}'
-
-
-    def pixel_mapper(self, vs):
-        t, c0, c1, c2, c3 = vs 
-        # % st.x_pixels forces x coordinate to be between 0 and 699
-        # CHANGE: form half_y_pixels locally, doesn't need to be in settings   
-        x = int(((t + self.st.time_shift) 
-                 * self.st.horizontal_pixels_per_division/self.st.time_axis_per_division) % self.st.x_pixels)
-        y0 = (int(- float(c0) * self.st.vertical_pixels_per_division / self.st.voltage_axis_per_division) 
-                  + self.st.half_y_pixels)
-        y1 = (int(- float(c1) * self.st.vertical_pixels_per_division /self.st.current_axis_per_division)
-                  + self.st.half_y_pixels)
-        y2 = (int(- float(c2) * self.st.vertical_pixels_per_division / self.st.power_axis_per_division) 
-                  + self.st.half_y_pixels)
-        y3 = (int(- float(c3) * self.st.vertical_pixels_per_division / self.st.earth_leakage_current_axis_per_division) 
-                  + self.st.half_y_pixels)
-        return f'{x :4d} {y0 :4d} {y1 :4d} {y2 :4d} {y3 :4d}'
+        # output pixels
+        if pixels:
+            # % st.x_pixels forces x coordinate to be between 0 and 699
+            # CHANGE: form half_y_pixels locally, doesn't need to be in settings   
+            x = int(((t + self.st.time_shift) 
+                     * self.st.horizontal_pixels_per_division/self.st.time_axis_per_division) % self.st.x_pixels)
+            y0 = (int(- float(c0) * self.st.vertical_pixels_per_division / self.st.voltage_axis_per_division) 
+                      + self.st.half_y_pixels)
+            y1 = (int(- float(c1) * self.st.vertical_pixels_per_division /self.st.current_axis_per_division)
+                      + self.st.half_y_pixels)
+            y2 = (int(- float(c2) * self.st.vertical_pixels_per_division / self.st.power_axis_per_division) 
+                      + self.st.half_y_pixels)
+            y3 = (int(- float(c3) * self.st.vertical_pixels_per_division / self.st.earth_leakage_current_axis_per_division) 
+                      + self.st.half_y_pixels)
+            out = f'{x :4d} {y0 :4d} {y1 :4d} {y2 :4d} {y3 :4d}'
+        # output values
+        else:
+            out = f'{t:12.4f} {c0:10.3f} {c1:10.5f} {c2:10.3f} {c3:12.7f}'
+        return out
 
 
     def output_frame(self):
@@ -164,11 +170,15 @@ class Buffer:
             # modify the timestamp
             timestamp = self.st.interval * (s - trigger_offset)
             vs = [ timestamp, *sample[1:] ]
-            out = self.pixel_mapper(vs) if self.pixels else self.value_mapper(vs)
+            out = self.mapper(vs, self.pixels)
             # if it's the last sample in the frame, add an 'END' marker
-            em = '*END*' if s == self.frame_endp - 1 else ''
+            em = f'*END*' if s == self.frame_endp - 1 else ''
             print(f'{out} {em}')
+        # some frame data will be held in the kernel pipe buffer, unless we flush it through
+        if self.st.run_mode == 'stopped':
+            print(f'{FLUSH_PIPE_BUFFER}')
         self.outp = self.frame_endp
+        self.new_frame = False
         sys.stdout.flush()
 
 
@@ -269,24 +279,24 @@ def main():
     # process data from standard input
     try:
         for line in sys.stdin:
+            # output frame if we have something ready
+            if buf.ready_for_output():
+                buf.output_frame()
+                # if running, reset for the next frame
+                if st.run_mode == 'running':
+                    # stop running if we are in inrush mode
+                    if st.trigger_mode == 'inrush':
+                        st.run_mode = 'stopped'
+                        st.send_to_all()
+                    else:
+                        buf.reprime_trigger()
+                        buf.update_frame_markers()
             # the function that process_fn will execute changes dynamically
             # depending on trigger settings. This is setup in 'update_trigger_settings(buf)'
             if settings_were_updated:
                 buf.update_trigger_settings()
                 settings_were_updated = False
-                # output the buffer if in stopped mode, since the framing boundary or scaling may
-                # have changed with these new settings
-                if st.run_mode == 'stopped':
-                    buf.update_frame_markers()
-                    buf.output_frame()
-            if st.run_mode == 'running' and buf.ready_for_output():
-                buf.output_frame()
-                buf.reprime_trigger()
                 buf.update_frame_markers()
-                # stop running if we are in inrush mode
-                if st.trigger_mode == 'inrush':
-                    st.run_mode = 'stopped'
-                    st.send_to_all()
             # process the incoming line with the current trigger settings
             buf.process_fn(line.rstrip())
 

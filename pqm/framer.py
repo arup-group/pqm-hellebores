@@ -26,7 +26,7 @@ FLUSH_PIPE_BUFFER = '.' * 8192       # used in stopped mode to make sure
 
 class Buffer:
     st = None                # will hold settings object
-    buf = None               # array of 5*floats, ie BUFFER_SIZE * 5
+    buf = None               # array of 5*float vectors, ie BUFFER_SIZE * 5
     # Frame pointers are set after trigger pointer is set, in triggered mode,
     # immediately after frame output in free-run mode, and when settings are changed,
     # including in stopped mode.
@@ -57,57 +57,54 @@ class Buffer:
     # the function) is met
     trigger_test_ch = 1
     trigger_test_fn = None
-    # a function reference is assigned to process_fn when trigger settings are updated
-    process_fn = lambda line: 0  # dummy function -- this will be replaced at runtime
 
-    def __init__(self, st, pixels=True, size=BUFFER_SIZE):
+    def __init__(self, st, pixels_mode=True):
         """buffer memory initialised with empty data"""
         # *** performance optimisation: could consider memoryview object here ***
-        self.pixels = pixels    # boolean flag controls whether output is mapped to pixels
-        self.size = size
-        self.buf = [ [0.0, 0.0, 0.0, 0.0, 0.0] for i in range(size) ]
+        self.buf = [ [0.0, 0.0, 0.0, 0.0, 0.0] for i in range(BUFFER_SIZE) ]
         self.st = st
         self.frame_startp = 0
         self.frame_endp = st.frame_samples
+        self.pixels_mode = pixels_mode    # controls whether output is mapped to pixels
+
 
     def store_line(self, line):
         """store a line of new data into the next buffer location"""
         # the storage location is determined by the input pointer sp, which is not intended
         # to be manipulated other than here.
         try:
-            self.buf[self.sp % self.size] = [ float(w) for w in line.split() ]
+            self.buf[self.sp % BUFFER_SIZE] = [ float(w) for w in line.split() ]
         except ValueError:
-            self.buf[self.sp % self.size] = [ 0.0, 0.0, 0.0, 0.0, 0.0 ]
+            self.buf[self.sp % BUFFER_SIZE] = [ 0.0, 0.0, 0.0, 0.0, 0.0 ]
             print(f"trigger.py, store_line(): Couldn't interpret '{line}'.",
                 file=sys.stderr)
         self.sp += 1
 
 
     def update_frame_markers(self):
-        """Call this after a frame has been output or a new trigger is detected, to set the frame
+        """Call this after frame is re-primed or a new trigger is detected, to set the frame
         markers for the next output."""
-        # in running mode, we move both frame markers forward
+        self.frame_startp = self.tp - self.st.pre_trigger_samples
+        self.frame_endp = self.tp + self.st.post_trigger_samples - 1
+        # in running mode, make sure the start marker doesn't precede previous output marker
         if self.st.run_mode == 'running':
-            if self.st.trigger_mode == 'sync' or self.st.trigger_mode == 'inrush':
-                # make sure the start marker does not precede the end marker of the previous output
-                self.frame_startp = max(self.outp, self.tp - self.st.pre_trigger_samples)
-                self.frame_endp = self.tp + self.st.post_trigger_samples - 1
-            elif self.st.trigger_mode == 'freerun':
-                # in freerun mode, we just run frames back to back with one another
-                self.frame_startp = self.outp
-                self.frame_endp = self.frame_startp + self.st.frame_samples
-        # in stopped mode, we move the existing frame boundaries around the current trigger
-        else:
-            self.frame_startp = self.tp - self.st.pre_trigger_samples
-            self.frame_endp = self.tp + self.st.post_trigger_samples - 1
+            self.frame_startp = max(self.outp, self.frame_startp)
+        # signal that this is a new frame
         self.new_frame = True
 
-    def reprime_trigger(self):
+
+    def reprime(self):
         """Set the earliest trigger position to be at least the hold-off time after the
         previous trigger (dependent on the time axis, so we don't trigger too early in the
         frame)"""
-        self.tp = max(self.outp, self.tp + self.st.holdoff_samples)
-        self.triggered = False
+        if self.st.trigger_mode == 'sync' or self.st.trigger_mode == 'inrush':
+            # new trigger is required, but we wait for at least holdoff samples
+            self.tp = max(self.outp, self.tp + self.st.holdoff_samples)
+            self.triggered = False
+        else:
+            # in freerun mode, we advance by exactly one frame and immediately trigger
+            self.tp = self.tp + self.st.frame_samples
+            self.triggered = True
 
 
     def trigger_test(self):
@@ -117,8 +114,8 @@ class Buffer:
                 self.trigger_test_fn(
                     # take the channel reading for two successive samples and compare
                     # against the trigger criteria
-                    self.buf[(self.tp - 1) % self.size][self.trigger_test_ch], 
-                    self.buf[self.tp % self.size][self.trigger_test_ch]))
+                    self.buf[(self.tp - 1) % BUFFER_SIZE][self.trigger_test_ch], 
+                    self.buf[self.tp % BUFFER_SIZE][self.trigger_test_ch]))
             if self.triggered == True:
                 self.update_frame_markers()
                 break
@@ -135,9 +132,10 @@ class Buffer:
 
 
     def mapper(self, vs, pixels=True):
+        """prepare a line of stored buffer for output, defaults to pixel scaling, otherwise raw values"""
         t, c0, c1, c2, c3 = vs 
-        # output pixels
         if pixels:
+            # output pixels
             # % st.x_pixels forces x coordinate to be between 0 and 699
             # CHANGE: form half_y_pixels locally, doesn't need to be in settings   
             x = int(((t + self.st.time_shift) 
@@ -151,8 +149,8 @@ class Buffer:
             y3 = (int(- float(c3) * self.st.vertical_pixels_per_division / self.st.earth_leakage_current_axis_per_division) 
                       + self.st.half_y_pixels)
             out = f'{x :4d} {y0 :4d} {y1 :4d} {y2 :4d} {y3 :4d}'
-        # output values
         else:
+            # output values
             out = f'{t:12.4f} {c0:10.3f} {c1:10.5f} {c2:10.3f} {c3:12.7f}'
         return out
 
@@ -166,44 +164,38 @@ class Buffer:
         else:
             trigger_offset = 0
         for s in range(self.frame_startp, self.frame_endp):
-            sample = self.buf[s % self.size]
+            sample = self.buf[s % BUFFER_SIZE]
             # modify the timestamp
-            timestamp = self.st.interval * (s - trigger_offset)
-            vs = [ timestamp, *sample[1:] ]
-            out = self.mapper(vs, self.pixels)
+            if self.st.trigger_mode == 'freerun':
+                vs = sample
+            else:
+                timestamp = self.st.interval * (s - trigger_offset)
+                vs = [ timestamp, *sample[1:] ]
+            out = self.mapper(vs, self.pixels_mode)
             # if it's the last sample in the frame, add an 'END' marker
-            em = f'*END*' if s == self.frame_endp - 1 else ''
+            em = '*END*' if s == self.frame_endp - 1 else ''
             print(f'{out} {em}')
-        # some frame data will be held in the kernel pipe buffer, unless we flush it through
+        # some frame data will be held in the kernel pipe buffer
+        # if we're in stopped mode, flush it through
         if self.st.run_mode == 'stopped':
-            print(f'{FLUSH_PIPE_BUFFER}')
+            print(FLUSH_PIPE_BUFFER)
         self.outp = self.frame_endp
         self.new_frame = False
         sys.stdout.flush()
 
 
-    def via_trigger(self, line):
-        # store samples even in stopped mode up to MAX_SAMPLES
+    def build_frame(self, line):
+        """store samples even in stopped mode up to MAX_SAMPLES"""
         if self.sp - self.frame_endp < MAX_FORWARD_READ:
             self.store_line(line)
             if not self.triggered:
                 self.trigger_test()
+
     
-
-    def pass_through(self, line):
-        # pretty simple, no triggering at all, just copy the input to the output
-        if self.sp - self.frame_endp < MAX_FORWARD_READ:
-            self.store_line(line)
-
-
     def update_trigger_settings(self):
-
         # interpolation fraction
         def i_frac(s1, s2, threshold):
-            if s1 == s2:
-                return 0.0
-            else:
-                return (threshold-s1)/(s2-s1)
+            return (threshold - s1) / (s2 - s1) if s1 != s2 else 0.0
 
         def trigger_fn_generator(trigger_mode, slope, threshold):
             if trigger_mode == 'sync' or trigger_mode == 'inrush':
@@ -225,24 +217,10 @@ class Buffer:
             else:
                 return None
 
-        # we define the signal processing function 'process_fn' to point to different
-        # behaviours depending on the mode of triggering that is specified
-        if self.st.trigger_mode == 'freerun':
-            # would prefer to implement in a consolidated function (via_trigger, renamed)
-            self.process_fn = lambda line: self.pass_through(line)
-        elif self.st.trigger_mode == 'sync':
-            self.process_fn = lambda line: self.via_trigger(line)
-            self.trigger_test_fn = trigger_fn_generator('sync', self.st.trigger_slope, 0.0)
-            self.trigger_test_ch = 1
-        elif self.st.trigger_mode == 'inrush':
-            self.process_fn = lambda line: self.via_trigger(line)
+        if self.st.trigger_mode == 'inrush':
             self.trigger_test_fn = trigger_fn_generator('inrush', self.st.trigger_slope, self.st.trigger_level)
             self.trigger_test_ch = 3
         else:
-            print(
-                "trigger.py, Buffer:trigger_fn_generator(): Trigger_mode not recognised, defaulting to sync.",
-                file=sys.stderr)
-            self.process_fn = lambda line: self.via_trigger(line)
             self.trigger_test_fn = trigger_fn_generator('sync', self.st.trigger_slope, 0.0)
             self.trigger_test_ch = 1
 
@@ -274,31 +252,31 @@ def main():
     # we make a buffer to temporarily hold a history of samples -- this allows us to output
     # a frame of waveform that includes samples 'before and after the trigger'
     # in 'stopped' mode, it allows us to change the framing (extent of time axis) around the trigger
-    buf = Buffer(st, pixels=args.pixels)
+    buf = Buffer(st, pixels_mode=args.pixels)
 
     # process data from standard input
     try:
         for line in sys.stdin:
+            # new settings received, update the trigger settings and the frame boundary
+            if settings_were_updated:
+                buf.update_trigger_settings()
+                buf.update_frame_markers()
+                settings_were_updated = False
+            # process the incoming line with the current trigger settings
+            buf.build_frame(line.rstrip())
             # output frame if we have something ready
             if buf.ready_for_output():
                 buf.output_frame()
                 # if running, reset for the next frame
                 if st.run_mode == 'running':
-                    # stop running if we are in inrush mode
                     if st.trigger_mode == 'inrush':
+                        # stop running if we are in inrush mode
                         st.run_mode = 'stopped'
                         st.send_to_all()
                     else:
-                        buf.reprime_trigger()
+                        # otherwise move the trigger and frame forwards
+                        buf.reprime()
                         buf.update_frame_markers()
-            # the function that process_fn will execute changes dynamically
-            # depending on trigger settings. This is setup in 'update_trigger_settings(buf)'
-            if settings_were_updated:
-                buf.update_trigger_settings()
-                settings_were_updated = False
-                buf.update_frame_markers()
-            # process the incoming line with the current trigger settings
-            buf.process_fn(line.rstrip())
 
     except ValueError:
         print(

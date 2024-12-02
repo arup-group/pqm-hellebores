@@ -407,8 +407,13 @@ class App_Actions:
     def post_draw_controls_event(self):
         pygame.event.post(pygame.event.Event(self.draw_controls_event, {}))
 
-    def start_stop(self):
-        self.capturing = not self.capturing
+    def start_stop(self, action='flip'):
+        if action == 'flip':
+            self.capturing = not self.capturing
+        elif action == 'run':
+            self.capturing = True
+        elif action == 'stop':
+            self.capturing = False
         if self.capturing:
             self.st.run_mode = 'running'
         else:
@@ -547,9 +552,9 @@ def main():
                 elif e.type == pygame.KEYDOWN and e.key == pygame.K_l:     # lines
                     waveform.plot_mode('lines')
                 elif e.type == pygame.KEYDOWN and e.key == pygame.K_r:     # run
-                    app_actions.capturing = True
+                    app_actions.start_stop('run')
                 elif e.type == pygame.KEYDOWN and e.key == pygame.K_s:     # stop
-                    app_actions.capturing = False
+                    app_actions.start_stop('stop')
                 elif e.type == app_actions.clear_screen_event:
                     # this event is posted when the 'mode' of the software is changed and we
                     # want to clear the screen completely

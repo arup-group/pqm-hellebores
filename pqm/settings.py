@@ -56,12 +56,15 @@ class Settings():
         self.power_axis_per_division    = self.power_display_ranges[self.power_display_index]
         self.earth_leakage_current_axis_per_division  = \
             self.earth_leakage_current_display_ranges[self.earth_leakage_current_display_index]
-        self.pre_trigger_time           = self.time_axis_pre_trigger_divisions * self.time_axis_per_division
-        self.post_trigger_time          = self.time_axis_divisions * self.time_axis_per_division - self.pre_trigger_time
-        self.post_trigger_samples       = int(self.post_trigger_time / self.interval)
-        self.pre_trigger_samples        = int(self.pre_trigger_time / self.interval)
-        # sometimes rounding errors give us 1 too many samples, so reduce by 1.
-        self.frame_samples              = self.pre_trigger_samples + self.post_trigger_samples - 1
+        #self.pre_trigger_time           = self.time_axis_pre_trigger_divisions * self.time_axis_per_division
+        #self.post_trigger_time          = self.time_axis_divisions * self.time_axis_per_division - self.pre_trigger_time
+        self.pre_trigger_samples        = int(self.time_axis_pre_trigger_divisions * self.time_axis_per_division \
+                                              / self.interval)
+        #self.pre_trigger_samples        = int(self.pre_trigger_time / self.interval)
+        self.frame_samples              = int(self.time_axis_divisions * self.time_axis_per_division \
+                                              / self.interval)
+        self.post_trigger_samples       = self.frame_samples - self.pre_trigger_samples
+        #self.post_trigger_samples       = int(self.post_trigger_time / self.interval)
         # we set a hold-off threshold (minimum number of samples to next trigger) to be slightly less
         # (2ms) than one full screenful of data, and minimum time of 10ms.
         self.holdoff_samples            = max(int(0.010 * self.sample_rate), self.frame_samples - int(0.002 * self.sample_rate))

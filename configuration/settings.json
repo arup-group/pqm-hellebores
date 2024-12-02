@@ -76,7 +76,7 @@
     ],
     "trigger_channel": 0,
     "trigger_slope": "rising",
-    "trigger_level": 0.0,
+    "inrush_trigger_level": 0.2,
     "trigger_position": 5,
     "trigger_mode": "sync",
     "run_mode": "running"

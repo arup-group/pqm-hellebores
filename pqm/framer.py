@@ -21,7 +21,8 @@ from settings import Settings
 
 BUFFER_SIZE = 65536                  # size of circular sample buffer
 MAX_FORWARD_READ = BUFFER_SIZE // 4  # maximum reads, post frame end pointer
-FLUSH_PIPE_BUFFER = '.' * 8192       # used in stopped mode to make sure 
+SHORT_DOTS = '.' * 25                # used in running mode to mark end of frame
+LONG_DOTS = '.' * 8192               # used in stopped mode to make sure
                                      # all data is flushed through
 
 class Buffer:
@@ -138,7 +139,8 @@ class Buffer:
     def ready_for_output(self):
         """Check if we have triggered and/or we have stored enough samples to
         commence output"""
-        return True if self.new_frame and self.sp >= self.frame_endp else False
+        return True if self.new_frame and self.triggered and self.sp >= self.frame_endp \
+            else False
 
 
     def mapper(self, vs, pixels=True):
@@ -148,8 +150,8 @@ class Buffer:
             # output pixels
             # % st.x_pixels forces x coordinate to be between 0 and 699
             # CHANGE: form half_y_pixels locally, doesn't need to be in settings   
-            x = int(((t + self.st.time_shift) 
-                     * self.st.horizontal_pixels_per_division/self.st.time_axis_per_division) % self.st.x_pixels)
+            x = int((t + self.st.time_shift)
+                     * self.st.horizontal_pixels_per_division/self.st.time_axis_per_division)
             y0 = (int(- float(c0) * self.st.vertical_pixels_per_division / self.st.voltage_axis_per_division) 
                       + self.st.half_y_pixels)
             y1 = (int(- float(c1) * self.st.vertical_pixels_per_division /self.st.current_axis_per_division)
@@ -170,28 +172,18 @@ class Buffer:
         # exact trigger position occurred between the sample self.tp - 1 and self.tp
         # time=0 at exactly the trigger position corrected by an interpolation fraction
         trigger_offset = self.tp - 1 + self.interpolation_fraction
-        # if self.st.trigger_mode == 'freerun':
-        #     trigger_offset = self.tp - 1 + self.framing_time_position_error
-        # else:
-        #     trigger_offset = self.tp - 1 + self.interpolation_fraction
         for s in range(self.frame_startp, self.frame_endp):
             sample = self.buf[s % BUFFER_SIZE]
             timestamp = self.st.interval * (s - trigger_offset)
             vs = [ timestamp, *sample[1:] ]
-            # if self.st.trigger_mode == 'freerun':
-            #     vs = sample
-            # else:
-            #      # modify the timestamp
-            #     timestamp = self.st.interval * (s - trigger_offset)
-            #     vs = [ timestamp, *sample[1:] ]
             out = self.mapper(vs, self.pixels_mode)
-            # if it's the last sample in the frame, add an 'END' marker
-            em = '*END*' if s == self.frame_endp - 1 else ''
-            print(f'{out} {em}')
+            print(out)
         # some frame data will be held in the kernel pipe buffer
         # if we're in stopped mode, flush it through
         if self.st.run_mode == 'stopped':
-            print(FLUSH_PIPE_BUFFER)
+            print(LONG_DOTS)
+        else:
+            print(SHORT_DOTS)
         self.outp = self.frame_endp
         self.new_frame = False
         sys.stdout.flush()

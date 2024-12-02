@@ -56,24 +56,19 @@ class Settings():
         self.power_axis_per_division    = self.power_display_ranges[self.power_display_index]
         self.earth_leakage_current_axis_per_division  = \
             self.earth_leakage_current_display_ranges[self.earth_leakage_current_display_index]
-        #self.pre_trigger_time           = self.time_axis_pre_trigger_divisions * self.time_axis_per_division
-        #self.post_trigger_time          = self.time_axis_divisions * self.time_axis_per_division - self.pre_trigger_time
-        self.pre_trigger_samples        = int(self.time_axis_pre_trigger_divisions * self.time_axis_per_division \
+        self.pre_trigger_samples        = int(self.time_axis_pre_trigger_divisions * self.time_axis_per_division
                                               / self.interval)
-        #self.pre_trigger_samples        = int(self.pre_trigger_time / self.interval)
-        self.frame_samples              = int(self.time_axis_divisions * self.time_axis_per_division \
+        self.frame_samples              = int(self.time_axis_divisions * self.time_axis_per_division
                                               / self.interval)
         self.post_trigger_samples       = self.frame_samples - self.pre_trigger_samples
-        #self.post_trigger_samples       = int(self.post_trigger_time / self.interval)
         # we set a hold-off threshold (minimum number of samples between triggers) to be slightly less
         # (2ms) than the frame samples.
         self.holdoff_samples            = self.frame_samples - int(0.002 * self.sample_rate)
-        # self.holdoff_samples            = max(int(0.010 * self.sample_rate), self.frame_samples - int(0.002 * self.sample_rate))
-        self.time_shift                 = self.time_axis_pre_trigger_divisions * self.time_axis_per_division
         self.x_pixels                   = self.time_axis_divisions * self.horizontal_pixels_per_division
         self.y_pixels                   = self.vertical_axis_divisions * self.vertical_pixels_per_division
-        self.half_y_pixels              = self.y_pixels // 2
- 
+        self.x_offset                   = (self.time_axis_pre_trigger_divisions *
+                                              self.horizontal_pixels_per_division)
+        self.y_offset                   = self.y_pixels // 2
 
     def set_settings(self, js):
         self.analysis_max_min_reset                    = js['analysis_max_min_reset']
@@ -102,7 +97,7 @@ class Settings():
         self.scale_factors                             = js['scale_factors']
         self.trigger_channel                           = js['trigger_channel']
         self.trigger_slope                             = js['trigger_slope']
-        self.trigger_level                             = js['trigger_level']
+        self.inrush_trigger_level                      = js['inrush_trigger_level']
         self.trigger_position                          = js['trigger_position']
         self.trigger_mode                              = js['trigger_mode']
         self.run_mode                                  = js['run_mode']
@@ -138,7 +133,7 @@ class Settings():
         js['scale_factors']                            = self.scale_factors
         js['trigger_channel']                          = self.trigger_channel
         js['trigger_slope']                            = self.trigger_slope
-        js['trigger_level']                            = self.trigger_level
+        js['inrush_trigger_level']                     = self.inrush_trigger_level
         js['trigger_position']                         = self.trigger_position
         js['trigger_mode']                             = self.trigger_mode
         js['run_mode']                                 = self.run_mode
@@ -364,7 +359,7 @@ default_settings = '''
     ],
     "trigger_channel": 0,
     "trigger_slope": "rising",
-    "trigger_level": 0.0,
+    "inrush_trigger_level": 0.2,
     "trigger_position": 5,
     "trigger_mode": "sync",
     "run_mode": "running"

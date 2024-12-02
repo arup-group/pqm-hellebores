@@ -49,6 +49,8 @@ class Buffer:
     # of the fractional time offset between samples when the trigger took place.
     # The interpolation fraction is used to create an accurate time offset which helps
     # to stabilise the position of successive waveforms on screen.
+    # In freerun mode, we use the same parameter to correct for framing time errors so
+    # that framing drift is compensated.
     interpolation_fraction = 0.0
     # trigger_test_ch defines the input channel that will be used for triggering
     # normally left on the voltage channel, but could be changed.
@@ -84,9 +86,10 @@ class Buffer:
     def update_frame_markers(self):
         """Call this after frame is re-primed or a new trigger is detected, to set the frame
         markers for the next output."""
+        # set the start and end markers
         self.frame_startp = self.tp - self.st.pre_trigger_samples
-        self.frame_endp = self.tp + self.st.post_trigger_samples - 1
-        # in running mode, make sure the start marker doesn't precede previous output marker
+        self.frame_endp = self.frame_startp + self.st.frame_samples - 1
+        # in running mode, make sure the start marker doesn't precede the previous end marker
         if self.st.run_mode == 'running':
             self.frame_startp = max(self.outp, self.frame_startp)
         # signal that this is a new frame
@@ -104,6 +107,13 @@ class Buffer:
         else:
             # in freerun mode, we advance by exactly one frame and immediately trigger
             self.tp = self.tp + self.st.frame_samples
+            # the interpolation_fraction corrects for creeping time error -- the frame_samples do not
+            # necessarily correspond to exactly one frame of time
+            self.interpolation_fraction += (self.st.time_axis_divisions * self.st.time_axis_per_division \
+                / 1000 * self.st.sample_rate) % 1
+            if self.interpolation_fraction > 1.0:
+                self.tp += int(self.interpolation_fraction)
+                self.interpolation_fraction = self.interpolation_fraction % 1
             self.triggered = True
 
 
@@ -157,20 +167,23 @@ class Buffer:
 
     def output_frame(self):
         """output the correct array slice with a time shift"""
-        if self.st.trigger_mode == 'sync' or self.st.trigger_mode == 'inrush':
-            # exact trigger position occurred between the sample self.tp - 1 and self.tp
-            # time=0 at exactly the trigger position corrected by an interpolation fraction
-            trigger_offset = self.tp - 1 + self.interpolation_fraction
-        else:
-            trigger_offset = 0
+        # exact trigger position occurred between the sample self.tp - 1 and self.tp
+        # time=0 at exactly the trigger position corrected by an interpolation fraction
+        trigger_offset = self.tp - 1 + self.interpolation_fraction
+        # if self.st.trigger_mode == 'freerun':
+        #     trigger_offset = self.tp - 1 + self.framing_time_position_error
+        # else:
+        #     trigger_offset = self.tp - 1 + self.interpolation_fraction
         for s in range(self.frame_startp, self.frame_endp):
             sample = self.buf[s % BUFFER_SIZE]
-            # modify the timestamp
-            if self.st.trigger_mode == 'freerun':
-                vs = sample
-            else:
-                timestamp = self.st.interval * (s - trigger_offset)
-                vs = [ timestamp, *sample[1:] ]
+            timestamp = self.st.interval * (s - trigger_offset)
+            vs = [ timestamp, *sample[1:] ]
+            # if self.st.trigger_mode == 'freerun':
+            #     vs = sample
+            # else:
+            #      # modify the timestamp
+            #     timestamp = self.st.interval * (s - trigger_offset)
+            #     vs = [ timestamp, *sample[1:] ]
             out = self.mapper(vs, self.pixels_mode)
             # if it's the last sample in the frame, add an 'END' marker
             em = '*END*' if s == self.frame_endp - 1 else ''

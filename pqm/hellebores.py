@@ -198,16 +198,10 @@ class Sample_Buffer:
         # sample buffer history
         # allows 'multitrace' to work
         self.waveforms = [ [] for i in range(SAMPLE_BUFFER_SIZE) ]
-        # tracks previous 'x coordinate'
-        self.xp = -1
 
-    def end_frame(self, capturing, wfs):
+    def end_frame(self):
         # shift the history buffer along and add the new capture
         self.waveforms = [ self.ps, *self.waveforms[1:] ]
-        #self.sample_waveform_history = self.sample_waveform_history[1:]
-        #self.sample_waveform_history.append(self.ps)
-        #self.sample_waveform_history[SAMPLE_BUFFER_SIZE] = self.ps
-        wfs.increment()
         # reset the working buffer
         self.ps = [ [],[],[],[] ]
 
@@ -245,41 +239,27 @@ class Sample_Buffer:
             return False
 
 
-    def load_waveform(self, capturing, wfs):
+    def load_waveform(self, wfs):
         # the loop will exit if:
         # (a) there is no data currently waiting to be read, 
-        # (b) *END* marker at the end of the current line,
-        # (c) the x coordinate 'goes backwards' indicating a new frame has started,
-        # (d) the line is empty, can't be split() or any other kind of read error,
-        # (e) more than 1000 samples have been read (this keeps the UI responsive)
+        # (b) '.' end-of-frame marker in current line
+        # (c) the line is empty, can't be split() or any other kind of read error,
+        # (d) more than 1000 samples have been read (this keeps the UI responsive)
         sample_counter = 0
         while sample_counter < 1000 and (l := self.data_comms.get_waveform_line(0.02)):
             try:
-                # in stopped mode, framer will send a block of '.' characters in one line
+                # lines beginning with '.' end the frame
+                # in stopped mode, framer will send a larger block of '.' characters in one line
                 # to flush the pipe buffer in the kernel.
                 if l[0] == '.':
-                    # drop this line and read another
-                    continue
-                ws = l.split()
-                sample = [ int(w) for w in ws[:5] ]
-                if ws[-1] == '*END*':
-                    # add current sample then end the frame
-                    self.add_sample(sample)
-                    self.end_frame(capturing, wfs)
-                    self.xp = -1
-                    break
-                elif sample[0] < self.xp:
-                    # x coordinate has reset to indicate start of new frame...
-                    # end the frame before adding current sample to a new one
-                    self.end_frame(capturing, wfs)    
-                    self.add_sample(sample)
-                    self.xp = -1
+                    # end the current frame
+                    self.end_frame()
+                    wfs.increment()
                     break
                 else:
-                    # an ordinary, non-special, sample
-                    self.add_sample(sample)
-                self.xp = sample[0]
-                sample_counter = sample_counter + 1
+                    # add a sample
+                    self.add_sample([ int(w) for w in l.split() ])
+                    sample_counter += 1
             except (IndexError, ValueError):
                 print('hellebores.py: Sample_Buffer.load_analysis()'
                       ' file reading error.', file=sys.stderr) 
@@ -518,7 +498,7 @@ def main():
     
             # if multi_trace is active, read multiple frames into the buffer, otherwise just one
             for i in range(app_actions.multi_trace):
-                buffer.load_waveform(app_actions.capturing, wfs)
+                buffer.load_waveform(wfs)
     
             # read new analysis results, if available 
             analysis_updated = buffer.load_analysis(app_actions.capturing)

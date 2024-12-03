@@ -89,6 +89,13 @@ class UI_groups:
         for k in ['mode', 'current_sensitivity', 'vertical', 'horizontal', 'trigger', 'options', 'clear']:
             self.elements[k].set_topright(*SETTINGS_BOX_POSITION)
 
+    def catch_latest_results(self, buffer):
+        """At the point of stopping, capture the latest analysis results into the UI objects."""
+        self.instruments['multimeter'].update_multimeter_display(buffer.cs)
+        self.instruments['voltage_harmonic'].update_harmonic_display(buffer.cs)
+        self.instruments['current_harmonic'].update_harmonic_display(buffer.cs)
+
+
     def refresh(self, buffer, screen):
         """dispatch to the refresh method of the element group currently selected."""
         if self.mode == 'waveform':
@@ -225,7 +232,7 @@ class Sample_Buffer:
         self.st.send_to_all()
 
 
-    def load_analysis(self, capturing):
+    def load_analysis(self):
         # incoming analysis data is optional: returns false if no data source
         if l:=self.data_comms.get_analysis_line(0.0):
             try:
@@ -477,6 +484,7 @@ def main():
     v_harmonics  = Harmonic(st, app_actions, harmonic_of_what='voltage')
     i_harmonics  = Harmonic(st, app_actions, harmonic_of_what='current')
     ui           = UI_groups(st, buffer, waveform, multimeter, v_harmonics, i_harmonics, app_actions)
+    # ************ CAN'T EASILY FIRE FUNCTION IN UI FROM APP_ACTIONS ***********
 
     # start up in the waveform mode
     ui.app_actions.set_updater('waveform')
@@ -501,7 +509,7 @@ def main():
                 buffer.load_waveform(wfs)
     
             # read new analysis results, if available 
-            analysis_updated = buffer.load_analysis(app_actions.capturing)
+            analysis_updated = buffer.load_analysis()
     
             if not data_comms.pipes_ok:
                 # one or both incoming data pipes were closed, quit the application

@@ -51,6 +51,7 @@ class UI_groups:
         # make a local reference to app_actions and st
         self.app_actions = app_actions
         self.st = st
+        self.buffer = buffer
 
         # re-point the updater function in the app_actions object to target the function in this object
         # NB dynamically altering a function definition in another object is a relatively unusual
@@ -89,14 +90,15 @@ class UI_groups:
         for k in ['mode', 'current_sensitivity', 'vertical', 'horizontal', 'trigger', 'options', 'clear']:
             self.elements[k].set_topright(*SETTINGS_BOX_POSITION)
 
-    def catch_latest_results(self, buffer):
+
+    def catch_latest_results(self):
         """At the point of stopping, capture the latest analysis results into the UI objects."""
-        self.instruments['multimeter'].update_multimeter_display(buffer.cs)
-        self.instruments['voltage_harmonic'].update_harmonic_display(buffer.cs)
-        self.instruments['current_harmonic'].update_harmonic_display(buffer.cs)
+        self.instruments['multimeter'].update_multimeter_display(self.buffer.cs)
+        self.instruments['voltage_harmonic'].update_harmonic_display(self.buffer.cs)
+        self.instruments['current_harmonic'].update_harmonic_display(self.buffer.cs)
 
 
-    def refresh(self, buffer, screen):
+    def refresh(self, screen):
         """dispatch to the refresh method of the element group currently selected."""
         if self.mode == 'waveform':
             # waveform mode
@@ -106,10 +108,10 @@ class UI_groups:
             else:
                 # but just one frame if in stopped mode
                 traces = 1
-            self.instruments[self.mode].refresh(buffer, traces, screen, self.elements['datetime'])
+            self.instruments[self.mode].refresh(self.buffer, traces, screen, self.elements['datetime'])
         else:
             # non-waveform mode
-            self.instruments[self.mode].refresh(self.app_actions.capturing, buffer, \
+            self.instruments[self.mode].refresh(self.app_actions.capturing, self.buffer, \
                 screen, self.elements['datetime'])
 
     def draw_texts(self, capturing):
@@ -374,9 +376,11 @@ class Data_comms:
 
 class App_Actions:
 
-    def __init__(self, st, data_comms):
-        self.st = st
-        self.data_comms = data_comms
+    def __init__(self):
+        self.st = None             # links to other objects
+        self.ui = None             # need to be immediately
+        self.buffer = None         # set up after they are
+        self.data_comms = None     # created, by calling set_other_objects()
         # allow/stop update of the lines on the screen
         self.capturing = True
         # multi_trace mode overlays traces on one background and is used to optimise
@@ -386,6 +390,13 @@ class App_Actions:
         # and triggering a redraw of the controls
         self.clear_screen_event = pygame.event.custom_type()
         self.draw_controls_event = pygame.event.custom_type()
+
+
+    def set_other_objects(self, st, ui, buffer, data_comms):
+        self.st = st
+        self.ui = ui
+        self.buffer = buffer
+        self.data_comms = data_comms
 
 
     def post_clear_screen_event(self):
@@ -405,6 +416,7 @@ class App_Actions:
             self.st.run_mode = 'running'
         else:
             self.st.run_mode = 'stopped'
+            self.ui.catch_latest_results()
         self.st.send_to_all()
 
     def set_updater(self, mode):
@@ -414,11 +426,11 @@ class App_Actions:
               'should be substituted prior to calling it.', file=sys.stderr)
 
     def exit_application(self, option='quit'):
-        exit_codes = { 'quit': 0,
-                       'error': 1,
-                       'restart': 2,
+        exit_codes = { 'quit'           : 0,
+                       'error'          : 1,
+                       'restart'        : 2,
                        'software_update': 3,
-                       'shutdown': 4 }
+                       'shutdown'       : 4 }
         try:
             code = exit_codes[option]
         except KeyError:
@@ -476,15 +488,17 @@ def main():
 
     # create objects that hold the state of the application, data buffers and UI
     data_comms   = Data_comms(args.waveform_file, args.analysis_file)
-    app_actions  = App_Actions(st, data_comms)
     buffer       = Sample_Buffer(st, data_comms)
     wfs          = WFS_Counter()
+    app_actions  = App_Actions()
     waveform     = Waveform(st, wfs, app_actions)
     multimeter   = Multimeter(st, app_actions)
     v_harmonics  = Harmonic(st, app_actions, harmonic_of_what='voltage')
     i_harmonics  = Harmonic(st, app_actions, harmonic_of_what='current')
     ui           = UI_groups(st, buffer, waveform, multimeter, v_harmonics, i_harmonics, app_actions)
-    # ************ CAN'T EASILY FIRE FUNCTION IN UI FROM APP_ACTIONS ***********
+
+    # tell app_actions how to access the other objects it needs to manipulate
+    app_actions.set_other_objects(st, ui, buffer, data_comms)
 
     # start up in the waveform mode
     ui.app_actions.set_updater('waveform')
@@ -561,7 +575,7 @@ def main():
             # time round the loop. Depending on the current mode, waveforms, meter readings etc
             # will be drawn as necessary.
             if ui.mode == 'waveform' or events or analysis_updated:
-                ui.refresh(buffer, screen)
+                ui.refresh(screen)
  
             # ui.get_updater().update() is an expensive function, so we use the simplest possible
             # thorpy theme to achieve the quickest redraw time. Then, we only update/redraw when

@@ -91,7 +91,7 @@ class UI_groups:
             self.elements[k].set_topright(*SETTINGS_BOX_POSITION)
 
 
-    def catch_latest_results(self):
+    def catch_latest_analysis(self):
         """At the point of stopping, capture the latest analysis results into the UI objects."""
         self.instruments['multimeter'].update_multimeter_display(self.buffer.cs)
         self.instruments['voltage_harmonic'].update_harmonic_display(self.buffer.cs)
@@ -406,18 +406,24 @@ class App_Actions:
         pygame.event.post(pygame.event.Event(self.draw_controls_event, {}))
 
     def start_stop(self, action='flip'):
+        former_capturing_state = self.capturing
         if action == 'flip':
             self.capturing = not self.capturing
         elif action == 'run':
             self.capturing = True
         elif action == 'stop':
             self.capturing = False
+        # update mode communicated to other programs
         if self.capturing:
             self.st.run_mode = 'running'
         else:
             self.st.run_mode = 'stopped'
-            self.ui.catch_latest_results()
         self.st.send_to_all()
+        # make sure we catch latest analysis results if we are entering stopped
+        # state from running state, even if those results are not currently
+        # being displayed
+        if former_capturing_state == True and self.capturing == False:
+            self.ui.catch_latest_analysis()
 
     def set_updater(self, mode):
         # this placeholder function is replaced dynamically by the implementation

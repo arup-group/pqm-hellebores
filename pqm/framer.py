@@ -146,19 +146,23 @@ class Buffer:
 
     def mapper(self, timestamp, sample, pixels_out):
         """prepare a line of stored buffer for output, defaults to pixel scaling, otherwise raw values"""
+
         c0, c1, c2, c3 = sample
+        # Clamping function to avoid exception errors in plotting.
+        y_clamp = lambda v: min(max(0, v), self.st.y_pixels-1)
+
         if pixels_out:
             # output pixels
             x  = int(timestamp * self.st.horizontal_pixels_per_division \
                       / self.st.time_axis_per_division) + self.st.x_offset
-            y0 = int(- float(c0) * self.st.vertical_pixels_per_division \
-                      / self.st.voltage_axis_per_division) + self.st.y_offset
-            y1 = int(- float(c1) * self.st.vertical_pixels_per_division \
-                      / self.st.current_axis_per_division) + self.st.y_offset
-            y2 = int(- float(c2) * self.st.vertical_pixels_per_division \
-                      / self.st.power_axis_per_division) + self.st.y_offset
-            y3 = int(- float(c3) * self.st.vertical_pixels_per_division \
-                      / self.st.earth_leakage_current_axis_per_division) + self.st.y_offset
+            y0 = y_clamp(int(- float(c0) * self.st.vertical_pixels_per_division
+                      / self.st.voltage_axis_per_division) + self.st.y_offset)
+            y1 = y_clamp(int(- float(c1) * self.st.vertical_pixels_per_division
+                      / self.st.current_axis_per_division) + self.st.y_offset)
+            y2 = y_clamp(int(- float(c2) * self.st.vertical_pixels_per_division
+                      / self.st.power_axis_per_division) + self.st.y_offset)
+            y3 = y_clamp(int(- float(c3) * self.st.vertical_pixels_per_division
+                      / self.st.earth_leakage_current_axis_per_division) + self.st.y_offset)
             out = f'{x :4d} {y0 :4d} {y1 :4d} {y2 :4d} {y3 :4d}'
         else:
             # output values

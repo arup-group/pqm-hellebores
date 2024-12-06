@@ -4,6 +4,13 @@ import time
 from hellebores_constants import *
 from version import Version
 
+
+###
+#
+# Controls class for retaining 'up/down' adjustment of values within a range
+#
+###
+
 class Range_controller:
     ranges = []
     range_selector = 0
@@ -31,14 +38,162 @@ class Range_controller:
                 file=sys.stderr) 
 
 
+
+###
+#
+# Class for holding and manipulating status annunciators
+#
+###
+
+
+# annunciator text object enumerations
+ANNUNCIATOR_RUNSTOP     = 0
+ANNUNCIATOR_WFS         = 1
+ANNUNCIATOR_LOWRANGE    = 1
+ANNUNCIATOR_TIMEDIV     = 2
+ANNUNCIATOR_VOLTSDIV    = 3
+ANNUNCIATOR_AMPSDIV     = 4
+ANNUNCIATOR_WATTSDIV    = 5
+ANNUNCIATOR_LEAKDIV     = 6
+
+
+class Annunciators:
+    # Annunciators can have pre-determined enumerated state, or
+    # single state with free text
+    # We need to define location and width, foreground/background
+    # colour and text for each state
+    # list of annunciators
+    # Running, Wait, Stopped
+    # -, LOW RANGE
+    # /ms
+    # V /div
+    # A /div
+    # W /div
+    # mA /div
+    # timestamp
+    # wfs
+    text_colours = [BLACK, WHITE, WHITE, *SIGNAL_COLOURS]
+    background_colours = [] # state dependent!
+
+    def __init__(self, st, wfs, app_actions):
+        self.states = []   # list of states that select
+                           # text object and format for each
+                           # required state
+        self.st = st
+        self.wfs = wfs
+        self.app_actions = app_actions
+        for s in range(7):
+            t = thorpy.Text('')
+            t.set_size(TEXT_SIZE)
+            self.texts.append(t)
+
+    def add_annunciator(self, location, width, states):
+        """Set up an individual annunciator and add it to the list."""
+        # states is a list of tuples containing state name, foreground
+        # and background colours and format string for each state
+        # Example: [ (A_RUN,BLACK,GREEN,'Running'), \
+        #            (A_WAIT,BLACK,ORANGE,'Wait'),
+        #            (A_STOP,BLACK,RED,'Stopped') ]
+        t = thorpy.Text('')    # GUI text object
+        t.set_size(TEXT_SIZE)
+        for s in states:
+            name, foreground_colour, background_colour, template = s
+            self.states[name] = (t, foreground_colour, background_colour, template)
+
+    def set_annunciator(self, name, text=''):
+        """Set specific annunciator to a selected state and (optional) text value."""
+        t, foreground_colour, background_colour, format_string = self.states[name]
+        t.set_font_color(foreground_colour)
+        t.set_bck_color(background_colour)
+        if text != '':
+            t.set_text = template.format(text)
+        else:
+            t.set_text = template
+
+    def configure_annunciators(self, mode):
+        """Configure annunciators to suit required display mode."""
+        if mode == 'waveform':
+            self.add_annunciator(location, width,
+                [ (A_RUN,BLACK,GREEN,'Running'),
+                  (A_WAIT,BLACK,ORANGE,'Wait'),
+                  (A_STOP,BLACK,RED,'Stopped') ])
+            self.add_annunciator(location, width,
+                [ (A_FULL,WHITE,BLACK,'Full'),
+                  (A_LOWRANGE,WHITE,ORANGE,'LOW RANGE') ])
+            self.add_annunciator(location, width,
+                [ (A_TBASE,WHITE,BLACK,'{0} ms/div') ])
+
+
+
+        elif mode == 'multimeter':
+
+        elif mode == 'voltage_harmonic':
+
+        elif mode == 'current_harmonic':
+
+
+
+    def set_text_colours(self):
+        # the boolean filter allows us to temporarily grey out lines
+        # that are currently inactive/switched off
+        colour_filter = [
+            True,
+            True,
+            True,
+            self.st.voltage_display_status,
+            self.st.current_display_status,
+            self.st.power_display_status,
+            self.st.earth_leakage_current_display_status,
+            ]
+        colours = [ c if p == True else DARK_GREY for p, c in zip(colour_filter, self.text_colours) ]
+        for i in range(len(self.texts)):
+            self.texts[i].set_font_color(colours[i])
+
+    def set_text(self, item, value):
+        self.texts[item].set_text(value)
+
+    def draw_texts(self, capturing):
+        self.set_text_colours()
+        if capturing:
+            self.texts[T_RUNSTOP].set_bck_color(GREEN)
+            self.texts[T_RUNSTOP].set_text('Running', adapt_parent=False)
+        else:
+            self.texts[T_RUNSTOP].set_bck_color(RED)
+            self.texts[T_RUNSTOP].set_text('Stopped', adapt_parent=False)
+        self.texts[T_WFS].set_text(f'{self.wfs.get()} wfm/s', adapt_parent=False)
+        self.texts[T_TIMEDIV].set_text(
+            f'{self.st.time_display_ranges[self.st.time_display_index]} ms/',
+            adapt_parent=False)
+        self.texts[T_VOLTSDIV].set_text(
+            f'{self.st.voltage_display_ranges[self.st.voltage_display_index]} V/',
+            adapt_parent=False)
+        self.texts[T_AMPSDIV].set_text(
+            f'{self.st.current_display_ranges[self.st.current_display_index]} A/',
+            adapt_parent=False)
+        self.texts[T_WATTSDIV].set_text(
+            f'{self.st.power_display_ranges[self.st.power_display_index]} W/',
+            adapt_parent=False)
+        elv = (self.st.earth_leakage_current_display_ranges
+               [self.st.earth_leakage_current_display_index] * 1000)
+        self.texts[T_LEAKDIV].set_text(f'{elv} mA/', adapt_parent=False)
+
+
+
 def create_datetime():
-    #####
-    # Datetime display
-    #####
+    """Datetime display."""
     text_datetime = thorpy.Text(time.ctime())
     text_datetime.set_font_color(WHITE)
     text_datetime.set_topleft(0,0)
     return text_datetime
+
+
+
+###
+#
+# Function definitions to create various button controls for insertion into the
+# display.
+#
+###
 
 def configure_button_decorations(button, callback_function):
     button.set_bck_color(VERY_LIGHT_GREY, 'normal')
@@ -501,12 +656,3 @@ def create_options(waveform, app_actions):
     for e in options.get_all_descendants():
         e.hand_cursor = False    
     return options
-
-
-
-def voltage_harmonics_reaction():
-    pass
-
-def current_harmonics_reaction():
-    pass
-

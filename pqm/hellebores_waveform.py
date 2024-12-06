@@ -5,7 +5,7 @@ from hellebores_constants import *
 from hellebores_controls import *
 
 
-# text message cell enumerations
+# annunciator text object enumerations
 T_RUNSTOP     = 0
 T_WFS         = 1
 T_TIMEDIV     = 2

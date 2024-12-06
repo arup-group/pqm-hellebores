@@ -12,6 +12,8 @@ GREY = (75, 75, 75)
 LIGHT_GREY = (100, 100, 100)
 VERY_LIGHT_GREY = (150, 150, 150)
 LIGHTEST_GREY = (220, 220, 220)
+# set colours for voltage, current, power and earth leakage current
+SIGNAL_COLOURS = [ GREEN, YELLOW, MAGENTA, CYAN ]
 PI_SCREEN_SIZE = (800,480)
 SCOPE_BOX_SIZE = (700,480)
 CONTROLS_BOX_SIZE = (100,480)        # main buttons and status texts
@@ -28,7 +30,7 @@ TEXT_METER_SIZE = (184,64)
 FONT = 'font/RobotoMono-Medium.ttf'
 FONT_SIZE = 14
 LARGE_FONT_SIZE = 64
-SAMPLE_BUFFER_SIZE = 100 
+SAMPLE_BUFFER_SIZE = 16
 
 # Default pygame font: freesansbold
 # Ubuntu monospaced fonts:

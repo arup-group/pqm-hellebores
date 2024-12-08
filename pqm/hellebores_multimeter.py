@@ -12,10 +12,10 @@ T_RANGE_WARNING = 1
 
 class Multimeter:
 
-    def __init__(self, st, app_actions):
-        self.texts = []
+    def __init__(self, st, ann, app_actions):
         self.multimeter_display = []
         self.st = st
+        self.ann = ann
         # this will contain the text objects to push readings into, keyed by analysis result key
         self.multimeter_value_objects = {}
         self.app_actions = app_actions
@@ -29,22 +29,12 @@ class Multimeter:
         # all the elements
         self.multimeter_elements = [ self.multimeter_controls, self.multimeter_display ]
 
-    def set_text(self, item, value):
-        self.texts[item].set_text(value)
 
-    def draw_texts(self, capturing):
-        if self.st.current_sensor=='low':
-            self.texts[T_RANGE_WARNING].set_bck_color(ORANGE)
-            self.texts[T_RANGE_WARNING].set_text('LOW RANGE', adapt_parent=False)
-        else:
-            self.texts[T_RANGE_WARNING].set_bck_color(LIGHT_GREY)
-            self.texts[T_RANGE_WARNING].set_text('', adapt_parent=False)
-        if capturing:
-            self.texts[T_RUNSTOP].set_bck_color(GREEN)
-            self.texts[T_RUNSTOP].set_text('Running', adapt_parent=False)
-        else:
-            self.texts[T_RUNSTOP].set_bck_color(RED)
-            self.texts[T_RUNSTOP].set_text('Stopped', adapt_parent=False)
+    def update_annunciators(self):
+        ann = self.ann
+        ann.set(ann.A_RUN) if self.app_actions.capturing else ann.set(ann.A_STOP)
+        ann.set(ann.A_FULL if self.st.current_sensor=='low' else ann.A_LOWRANGE)
+
 
     def refresh(self, capturing, buffer, screen, datetime):
         """display all the readings"""
@@ -56,12 +46,6 @@ class Multimeter:
            
     def create_multimeter_controls(self):
         """Multimeter controls, on right of screen"""
-        control_texts = []
-        for s in range(2):
-            t = thorpy.Text('')
-            t.set_size(TEXT_SIZE)
-            t.set_font_color(BLACK)
-            control_texts.append(t)
         button_setup = [
             ('Run/Stop', self.app_actions.start_stop),
             ('Mode', lambda: self.app_actions.set_updater('mode')), 
@@ -70,13 +54,13 @@ class Multimeter:
             ('Options', lambda: self.app_actions.set_updater('options'))
             ]
         buttons = [ configure_button(BUTTON_SIZE, bt, bf) for bt, bf in button_setup ]
+        ts = self.ann.get_text_objects()
         # Now add the multimeter controls
-        multimeter_controls = thorpy.Box([ *control_texts[:2], *buttons, *control_texts[2:] ])
+        multimeter_controls = thorpy.Box([ *ts, *buttons ])
         multimeter_controls.set_topright(*CONTROLS_BOX_POSITION)
         multimeter_controls.set_bck_color(LIGHT_GREY)
         for e in multimeter_controls.get_all_descendants():
             e.hand_cursor = False    
-        self.texts = control_texts
         return multimeter_controls
 
     def update_multimeter_display(self, readings):

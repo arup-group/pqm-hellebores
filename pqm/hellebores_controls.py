@@ -6,9 +6,9 @@ from version import Version
 
 
 ###
-#
+###
 # Controls class for retaining 'up/down' adjustment of values within a range
-#
+###
 ###
 
 class Range_controller:
@@ -38,145 +38,86 @@ class Range_controller:
                 file=sys.stderr) 
 
 
-
 ###
-#
+###
 # Class for holding and manipulating status annunciators
-#
 ###
-
-
-# annunciator text object enumerations
-ANNUNCIATOR_RUNSTOP     = 0
-ANNUNCIATOR_WFS         = 1
-ANNUNCIATOR_LOWRANGE    = 1
-ANNUNCIATOR_TIMEDIV     = 2
-ANNUNCIATOR_VOLTSDIV    = 3
-ANNUNCIATOR_AMPSDIV     = 4
-ANNUNCIATOR_WATTSDIV    = 5
-ANNUNCIATOR_LEAKDIV     = 6
-
+###
 
 class Annunciators:
     # Annunciators can have pre-determined enumerated state, or
     # single state with free text
-    # We need to define location and width, foreground/background
-    # colour and text for each state
-    # list of annunciators
-    # Running, Wait, Stopped
-    # -, LOW RANGE
-    # /ms
-    # V /div
-    # A /div
-    # W /div
-    # mA /div
-    # timestamp
-    # wfs
-    text_colours = [BLACK, WHITE, WHITE, *SIGNAL_COLOURS]
-    background_colours = [] # state dependent!
+    # annunciator text object enumerations
+    A_RUN        = 0
+    A_WAIT       = 1
+    A_STOP       = 2
+    A_FULL       = 3
+    A_LOWRANGE   = 4
+    A_TBASE      = 5
+    A_VON        = 6
+    A_VOFF       = 7
+    A_ION        = 8
+    A_IOFF       = 9
+    A_PON        = 10
+    A_POFF       = 11
+    A_ELON       = 12
+    A_ELOFF      = 13
 
-    def __init__(self, st, wfs, app_actions):
-        self.states = []   # list of states that select
-                           # text object and format for each
-                           # required state
+    def __init__(self, st):
+        self.states = [None] * 14  # list of states that select
+                                   # text object and format for each
+                                   # required state
         self.st = st
-        self.wfs = wfs
-        self.app_actions = app_actions
-        for s in range(7):
-            t = thorpy.Text('')
-            t.set_size(TEXT_SIZE)
-            self.texts.append(t)
+        self.configure_annunciators()
 
-    def add_annunciator(self, location, width, states):
+
+    def add(self, states):
         """Set up an individual annunciator and add it to the list."""
         # states is a list of tuples containing state name, foreground
         # and background colours and format string for each state
-        # Example: [ (A_RUN,BLACK,GREEN,'Running'), \
-        #            (A_WAIT,BLACK,ORANGE,'Wait'),
-        #            (A_STOP,BLACK,RED,'Stopped') ]
+        # Example: [ (self.A_RUN,BLACK,GREEN,'Running'), \
+        #            (self.A_WAIT,BLACK,ORANGE,'Wait'),
+        #            (self.A_STOP,BLACK,RED,'Stopped') ]
         t = thorpy.Text('')    # GUI text object
         t.set_size(TEXT_SIZE)
         for s in states:
             name, foreground_colour, background_colour, template = s
             self.states[name] = (t, foreground_colour, background_colour, template)
 
-    def set_annunciator(self, name, text=''):
+
+    def set(self, name, value=''):
         """Set specific annunciator to a selected state and (optional) text value."""
-        t, foreground_colour, background_colour, format_string = self.states[name]
+        # Example call:
+        # annunciators.set_annunciator(VON,'20')
+        t, foreground_colour, background_colour, template = self.states[name]
         t.set_font_color(foreground_colour)
         t.set_bck_color(background_colour)
-        if text != '':
-            t.set_text = template.format(text)
-        else:
-            t.set_text = template
-
-    def configure_annunciators(self, mode):
-        """Configure annunciators to suit required display mode."""
-        if mode == 'waveform':
-            self.add_annunciator(location, width,
-                [ (A_RUN,BLACK,GREEN,'Running'),
-                  (A_WAIT,BLACK,ORANGE,'Wait'),
-                  (A_STOP,BLACK,RED,'Stopped') ])
-            self.add_annunciator(location, width,
-                [ (A_FULL,WHITE,BLACK,'Full'),
-                  (A_LOWRANGE,WHITE,ORANGE,'LOW RANGE') ])
-            self.add_annunciator(location, width,
-                [ (A_TBASE,WHITE,BLACK,'{0} ms/div') ])
+        if value != '':
+            t.set_text(template.format(value), adapt_parent=False)
 
 
-
-        elif mode == 'multimeter':
-
-        elif mode == 'voltage_harmonic':
-
-        elif mode == 'current_harmonic':
+    def get_text_objects(self):
+        """Get the list of Thorpy text objects that will be displayed."""
+        ts = [ t[0] for t in self.states ]
+        return ts
 
 
-
-    def set_text_colours(self):
-        # the boolean filter allows us to temporarily grey out lines
-        # that are currently inactive/switched off
-        colour_filter = [
-            True,
-            True,
-            True,
-            self.st.voltage_display_status,
-            self.st.current_display_status,
-            self.st.power_display_status,
-            self.st.earth_leakage_current_display_status,
-            ]
-        colours = [ c if p == True else DARK_GREY for p, c in zip(colour_filter, self.text_colours) ]
-        for i in range(len(self.texts)):
-            self.texts[i].set_font_color(colours[i])
-
-    def set_text(self, item, value):
-        self.texts[item].set_text(value)
-
-    def draw_texts(self, capturing):
-        self.set_text_colours()
-        if capturing:
-            self.texts[T_RUNSTOP].set_bck_color(GREEN)
-            self.texts[T_RUNSTOP].set_text('Running', adapt_parent=False)
-        else:
-            self.texts[T_RUNSTOP].set_bck_color(RED)
-            self.texts[T_RUNSTOP].set_text('Stopped', adapt_parent=False)
-        self.texts[T_WFS].set_text(f'{self.wfs.get()} wfm/s', adapt_parent=False)
-        self.texts[T_TIMEDIV].set_text(
-            f'{self.st.time_display_ranges[self.st.time_display_index]} ms/',
-            adapt_parent=False)
-        self.texts[T_VOLTSDIV].set_text(
-            f'{self.st.voltage_display_ranges[self.st.voltage_display_index]} V/',
-            adapt_parent=False)
-        self.texts[T_AMPSDIV].set_text(
-            f'{self.st.current_display_ranges[self.st.current_display_index]} A/',
-            adapt_parent=False)
-        self.texts[T_WATTSDIV].set_text(
-            f'{self.st.power_display_ranges[self.st.power_display_index]} W/',
-            adapt_parent=False)
-        elv = (self.st.earth_leakage_current_display_ranges
-               [self.st.earth_leakage_current_display_index] * 1000)
-        self.texts[T_LEAKDIV].set_text(f'{elv} mA/', adapt_parent=False)
-
+    def configure_annunciators(self):
+        """Configure annunciators with available modes and template text."""
+        self.add([ (self.A_RUN,BLACK,GREEN,'Running'),
+                   (self.A_WAIT,BLACK,ORANGE,'Wait'),
+                   (self.A_STOP,BLACK,RED,'Stopped') ])
+        self.add([ (self.A_FULL,WHITE,BLACK,'Full'),
+                   (self.A_LOWRANGE,WHITE,ORANGE,'LOW RANGE') ])
+        self.add([ (self.A_TBASE,WHITE,BLACK,'{0} ms/') ])
+        self.add([ (self.A_VON,SIGNAL_COLOURS[0],BLACK,'{0} V/'),
+                   (self.A_VOFF,GREY,BLACK,'{0} V/') ])
+        self.add([ (self.A_ION,SIGNAL_COLOURS[1],BLACK,'{0} A/'),
+                   (self.A_IOFF,GREY,BLACK,'{0} A/') ])
+        self.add([ (self.A_PON,SIGNAL_COLOURS[2],BLACK,'{0} W/'),
+                   (self.A_POFF,GREY,BLACK,'{0} W/') ])
+        self.add([ (self.A_ELON,SIGNAL_COLOURS[3],BLACK,'{0} mA/'),
+                   (self.A_ELOFF,GREY,BLACK,'{0} mA/') ])
 
 
 def create_datetime():
@@ -189,10 +130,10 @@ def create_datetime():
 
 
 ###
-#
+###
 # Function definitions to create various button controls for insertion into the
 # display.
-#
+###
 ###
 
 def configure_button_decorations(button, callback_function):

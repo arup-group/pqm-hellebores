@@ -12,15 +12,16 @@ T_RANGE_WARNING = 1
 
 class Harmonic:
 
-    def __init__(self, st, app_actions, harmonic_of_what):
+    def __init__(self, st, ann, app_actions, harmonic_of_what):
         self.status_texts = []         # list of status text elements
         self.harmonic_controls = []    # control buttons
         self.harmonic_display = []     # harmonic display (labels and values)
         self.harmonic_elements = []    # self.harmonic_controls + self.harmonic_display
         # this will hold a lookup of ui value objects, keyed by reading key
         self.harmonic_value_objects = {}
-        # store a local copy of st and app_actions
+        # store a local copy of st, ann and app_actions
         self.st = st
+        self.ann = ann
         self.app_actions = app_actions
         # create an empty background to draw onto
         self.harmonic_background = pygame.Surface(SCOPE_BOX_SIZE)
@@ -32,19 +33,12 @@ class Harmonic:
         # combine all the elements
         self.harmonic_elements = [ self.harmonic_controls, self.harmonic_display ]
 
-    def draw_texts(self, capturing):
-        if self.st.current_sensor=='low':
-            self.status_texts[T_RANGE_WARNING].set_bck_color(ORANGE)
-            self.status_texts[T_RANGE_WARNING].set_text('LOW RANGE', adapt_parent=False)
-        else:
-            self.status_texts[T_RANGE_WARNING].set_bck_color(LIGHT_GREY)
-            self.status_texts[T_RANGE_WARNING].set_text('', adapt_parent=False)
-        if capturing:
-            self.status_texts[T_RUNSTOP].set_bck_color(GREEN)
-            self.status_texts[T_RUNSTOP].set_text('Running', adapt_parent=False)
-        else:
-            self.status_texts[T_RUNSTOP].set_bck_color(RED)
-            self.status_texts[T_RUNSTOP].set_text('Stopped', adapt_parent=False)
+
+    def update_annunciators(self):
+        ann = self.ann
+        ann.set(ann.A_RUN) if self.app_actions.capturing else ann.set(ann.A_STOP)
+        ann.set(ann.A_FULL if self.st.current_sensor=='low' else ann.A_LOWRANGE)
+
 
     def refresh(self, capturing, buffer, screen, datetime):
         """display all the readings"""
@@ -54,13 +48,9 @@ class Harmonic:
         self.harmonic_display.draw()
         datetime.draw()
 
+
     def create_harmonic_controls(self):
         """Harmonic controls, on right of screen"""
-        for s in range(2):
-            t = thorpy.Text('')
-            t.set_size(TEXT_SIZE)
-            t.set_font_color(BLACK)
-            self.status_texts.append(t)
         button_setup = [
             ('Run/Stop', self.app_actions.start_stop),
             ('Mode', lambda: self.app_actions.set_updater('mode')),
@@ -69,8 +59,9 @@ class Harmonic:
             ('Options', lambda: self.app_actions.set_updater('options'))
             ]
         buttons = [ configure_button(BUTTON_SIZE, bt, bf) for bt, bf in button_setup ]
+        ts = self.ann.get_text_objects()
         # Now add the harmonic controls
-        harmonic_controls = thorpy.Box([ *self.status_texts, *buttons ])
+        harmonic_controls = thorpy.Box([ *ts, *buttons ])
         harmonic_controls.set_topright(*CONTROLS_BOX_POSITION)
         harmonic_controls.set_bck_color(LIGHT_GREY)
         for e in harmonic_controls.get_all_descendants():

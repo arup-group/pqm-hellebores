@@ -47,11 +47,12 @@ class UI_groups:
     # the flag helps to reduce workload of screen refresh when there are overlay menus.
     overlay_dialog_active = False
 
-    def __init__(self, st, buffer, waveform, multimeter, v_harmonics, i_harmonics, app_actions):
+    def __init__(self, st, buffer, ann, waveform, multimeter, v_harmonics, i_harmonics, app_actions):
         # make a local reference to app_actions and st
         self.app_actions = app_actions
         self.st = st
         self.buffer = buffer
+        self.ann = ann
 
         # re-point the updater function in the app_actions object to target the function in this object
         # NB dynamically altering a function definition in another object is a relatively unusual
@@ -114,8 +115,8 @@ class UI_groups:
             self.instruments[self.mode].refresh(self.app_actions.capturing, self.buffer, \
                 screen, self.elements['datetime'])
 
-    def draw_texts(self, capturing):
-        self.instruments[self.mode].draw_texts(capturing)
+    def update_annunciators(self):
+        self.instruments[self.mode].update_annunciators()
 
     def set_multi_trace(self):
         # need to run this at least when the timebase changes or when there is an overlay dialog
@@ -497,11 +498,12 @@ def main():
     buffer       = Sample_Buffer(st, data_comms)
     wfs          = WFS_Counter()
     app_actions  = App_Actions()
-    waveform     = Waveform(st, wfs, app_actions)
-    multimeter   = Multimeter(st, app_actions)
-    v_harmonics  = Harmonic(st, app_actions, harmonic_of_what='voltage')
-    i_harmonics  = Harmonic(st, app_actions, harmonic_of_what='current')
-    ui           = UI_groups(st, buffer, waveform, multimeter, v_harmonics, i_harmonics, app_actions)
+    ann          = Annunciators(st)
+    waveform     = Waveform(st, ann, wfs, app_actions)
+    multimeter   = Multimeter(st, ann, app_actions)
+    v_harmonics  = Harmonic(st, ann, app_actions, harmonic_of_what='voltage')
+    i_harmonics  = Harmonic(st, ann, app_actions, harmonic_of_what='current')
+    ui           = UI_groups(st, buffer, ann, waveform, multimeter, v_harmonics, i_harmonics, app_actions)
 
     # tell app_actions how to access the other objects it needs to manipulate
     app_actions.set_other_objects(st, ui, buffer, data_comms)
@@ -546,7 +548,7 @@ def main():
             if wfs.time_to_update():
                 if app_actions.capturing == True:
                     ui.get_element('datetime').set_text(time.ctime())
-                ui.draw_texts(app_actions.capturing)
+                ui.update_annunciators()
                 # force controls - including new text - to be re-drawn
                 app_actions.post_draw_controls_event()
     

@@ -12,10 +12,10 @@ T_RANGE_WARNING = 1
 
 class Multimeter:
 
-    def __init__(self, st, ann, app_actions):
+    def __init__(self, st, app_actions):
         self.multimeter_display = []
         self.st = st
-        self.ann = ann
+        self.ann = Annunciators(st, app_actions)
         # this will contain the text objects to push readings into, keyed by analysis result key
         self.multimeter_value_objects = {}
         self.app_actions = app_actions
@@ -31,9 +31,7 @@ class Multimeter:
 
 
     def update_annunciators(self):
-        ann = self.ann
-        ann.set(ann.A_RUN) if self.app_actions.capturing else ann.set(ann.A_STOP)
-        ann.set(ann.A_FULL if self.st.current_sensor=='low' else ann.A_LOWRANGE)
+        self.ann.update_annunciators()
 
 
     def refresh(self, capturing, buffer, screen, datetime):
@@ -43,6 +41,7 @@ class Multimeter:
             self.update_multimeter_display(buffer.cs)
         self.multimeter_display.draw()
         datetime.draw()
+
            
     def create_multimeter_controls(self):
         """Multimeter controls, on right of screen"""
@@ -54,7 +53,7 @@ class Multimeter:
             ('Options', lambda: self.app_actions.set_updater('options'))
             ]
         buttons = [ configure_button(BUTTON_SIZE, bt, bf) for bt, bf in button_setup ]
-        ts = self.ann.get_text_objects()
+        ts = self.ann.get_text_objects()[:2]   # first two annunciators only
         # Now add the multimeter controls
         multimeter_controls = thorpy.Box([ *ts, *buttons ])
         multimeter_controls.set_topright(*CONTROLS_BOX_POSITION)
@@ -62,6 +61,7 @@ class Multimeter:
         for e in multimeter_controls.get_all_descendants():
             e.hand_cursor = False    
         return multimeter_controls
+
 
     def update_multimeter_display(self, readings):
         """Takes a set of analysis results and pushes them into the display."""
@@ -73,8 +73,10 @@ class Multimeter:
                 tp_value.set_text(f'{readings[key]*display_scaling:7.{decimals}f}'.rjust(padding),\
                         adapt_parent=False)
 
+
     def update_position(self, p_move=(0,0)):
         self._item_position = (self._item_position[0] + p_move[0], self._item_position[1] + p_move[1])
+
     
     def add_ui_text(self, text='999.9', text_length=10, font_size=FONT_SIZE, font_colour=WHITE, \
         scale_factor=1, dp_fix=1, value_key=None, p_offset=(0,0), p_move=(0,0)):
@@ -93,6 +95,7 @@ class Multimeter:
         self._hd_items.append(tp_text)
         # update insertion point for next item, if required
         self.update_position(p_move)
+
 
     def create_multimeter_display(self):
         """Multimeter display, on main part of screen"""

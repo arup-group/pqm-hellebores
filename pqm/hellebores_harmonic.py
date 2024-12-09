@@ -12,16 +12,16 @@ T_RANGE_WARNING = 1
 
 class Harmonic:
 
-    def __init__(self, st, ann, app_actions, harmonic_of_what):
+    def __init__(self, st, app_actions, harmonic_of_what):
         self.status_texts = []         # list of status text elements
         self.harmonic_controls = []    # control buttons
         self.harmonic_display = []     # harmonic display (labels and values)
         self.harmonic_elements = []    # self.harmonic_controls + self.harmonic_display
         # this will hold a lookup of ui value objects, keyed by reading key
         self.harmonic_value_objects = {}
-        # store a local copy of st, ann and app_actions
+        # store a local copy of st and app_actions
         self.st = st
-        self.ann = ann
+        self.ann = Annunciators(st, app_actions)
         self.app_actions = app_actions
         # create an empty background to draw onto
         self.harmonic_background = pygame.Surface(SCOPE_BOX_SIZE)
@@ -35,9 +35,7 @@ class Harmonic:
 
 
     def update_annunciators(self):
-        ann = self.ann
-        ann.set(ann.A_RUN) if self.app_actions.capturing else ann.set(ann.A_STOP)
-        ann.set(ann.A_FULL if self.st.current_sensor=='low' else ann.A_LOWRANGE)
+        self.ann.update_annunciators()
 
 
     def refresh(self, capturing, buffer, screen, datetime):
@@ -59,7 +57,7 @@ class Harmonic:
             ('Options', lambda: self.app_actions.set_updater('options'))
             ]
         buttons = [ configure_button(BUTTON_SIZE, bt, bf) for bt, bf in button_setup ]
-        ts = self.ann.get_text_objects()
+        ts = self.ann.get_text_objects()[:2]  # first two annunciators only
         # Now add the harmonic controls
         harmonic_controls = thorpy.Box([ *ts, *buttons ])
         harmonic_controls.set_topright(*CONTROLS_BOX_POSITION)
@@ -67,6 +65,7 @@ class Harmonic:
         for e in harmonic_controls.get_all_descendants():
             e.hand_cursor = False
         return harmonic_controls
+
 
     def update_harmonic_display(self, readings):
         """Takes a set of analysis results and pushes them into the display."""

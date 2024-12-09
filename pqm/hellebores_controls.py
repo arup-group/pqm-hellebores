@@ -63,11 +63,12 @@ class Annunciators:
     A_ELON       = 12
     A_ELOFF      = 13
 
-    def __init__(self, st):
+    def __init__(self, st, app_actions):
         self.states = [None] * 14  # list of states that select
                                    # text object and format for each
                                    # required state
         self.st = st
+        self.app_actions = app_actions
         self.configure_annunciators()
 
 
@@ -78,7 +79,7 @@ class Annunciators:
         # Example: [ (self.A_RUN,BLACK,GREEN,'Running'), \
         #            (self.A_WAIT,BLACK,ORANGE,'Wait'),
         #            (self.A_STOP,BLACK,RED,'Stopped') ]
-        t = thorpy.Text('')    # GUI text object
+        t = thorpy.Text('')    # make a new GUI text object
         t.set_size(TEXT_SIZE)
         for s in states:
             name, foreground_colour, background_colour, template = s
@@ -92,14 +93,18 @@ class Annunciators:
         t, foreground_colour, background_colour, template = self.states[name]
         t.set_font_color(foreground_colour)
         t.set_bck_color(background_colour)
-        if value != '':
-            t.set_text(template.format(value), adapt_parent=False)
+        t.set_text(template.format(value), adapt_parent=False)
 
 
     def get_text_objects(self):
         """Get the list of Thorpy text objects that will be displayed."""
-        ts = [ t[0] for t in self.states ]
-        return ts
+        text_objects = []
+        for s in self.states:
+            t = s[0]
+            # don't add duplicates of the text object
+            if t not in text_objects:
+                text_objects.append(t)
+        return text_objects
 
 
     def configure_annunciators(self):
@@ -107,17 +112,32 @@ class Annunciators:
         self.add([ (self.A_RUN,BLACK,GREEN,'Running'),
                    (self.A_WAIT,BLACK,ORANGE,'Wait'),
                    (self.A_STOP,BLACK,RED,'Stopped') ])
-        self.add([ (self.A_FULL,WHITE,BLACK,'Full'),
+        self.add([ (self.A_FULL,WHITE,LIGHT_GREY,'Full range'),
                    (self.A_LOWRANGE,WHITE,ORANGE,'LOW RANGE') ])
-        self.add([ (self.A_TBASE,WHITE,BLACK,'{0} ms/') ])
-        self.add([ (self.A_VON,SIGNAL_COLOURS[0],BLACK,'{0} V/'),
-                   (self.A_VOFF,GREY,BLACK,'{0} V/') ])
-        self.add([ (self.A_ION,SIGNAL_COLOURS[1],BLACK,'{0} A/'),
-                   (self.A_IOFF,GREY,BLACK,'{0} A/') ])
-        self.add([ (self.A_PON,SIGNAL_COLOURS[2],BLACK,'{0} W/'),
-                   (self.A_POFF,GREY,BLACK,'{0} W/') ])
-        self.add([ (self.A_ELON,SIGNAL_COLOURS[3],BLACK,'{0} mA/'),
-                   (self.A_ELOFF,GREY,BLACK,'{0} mA/') ])
+        self.add([ (self.A_TBASE,WHITE,LIGHT_GREY,'{0} ms/') ])
+        self.add([ (self.A_VON,SIGNAL_COLOURS[0],LIGHT_GREY,'{0} V/'),
+                   (self.A_VOFF,GREY,LIGHT_GREY,'{0} V/') ])
+        self.add([ (self.A_ION,SIGNAL_COLOURS[1],LIGHT_GREY,'{0} A/'),
+                   (self.A_IOFF,GREY,LIGHT_GREY,'{0} A/') ])
+        self.add([ (self.A_PON,SIGNAL_COLOURS[2],LIGHT_GREY,'{0} W/'),
+                   (self.A_POFF,GREY,LIGHT_GREY,'{0} W/') ])
+        self.add([ (self.A_ELON,SIGNAL_COLOURS[3],LIGHT_GREY,'{0} mA/'),
+                   (self.A_ELOFF,GREY,LIGHT_GREY,'{0} mA/') ])
+
+
+    def update_annunciators(self):
+        self.set(self.A_RUN) if self.app_actions.capturing else self.set(self.A_STOP)
+        self.set(self.A_FULL if self.st.current_sensor=='full' else self.A_LOWRANGE)
+        self.set(self.A_TBASE, self.st.time_display_ranges[self.st.time_display_index])
+        self.set(self.A_VON if self.st.voltage_display_status else self.A_VOFF,
+                    self.st.voltage_display_ranges[self.st.voltage_display_index])
+        self.set(self.A_ION if self.st.current_display_status else self.A_IOFF,
+                    self.st.current_display_ranges[self.st.current_display_index])
+        self.set(self.A_PON if self.st.power_display_status else self.A_POFF,
+                    self.st.power_display_ranges[self.st.power_display_index])
+        self.set(self.A_ELON if self.st.earth_leakage_current_display_status
+                    else self.A_ELOFF, self.st.earth_leakage_current_display_ranges
+                        [self.st.earth_leakage_current_display_index])
 
 
 def create_datetime():

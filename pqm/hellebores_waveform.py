@@ -8,9 +8,9 @@ from hellebores_controls import *
 
 class Waveform:
     # array of thorpy text objects
-    def __init__(self, st, ann, wfs, app_actions):
+    def __init__(self, st, wfs, app_actions):
         self.st = st
-        self.ann = ann
+        self.ann = Annunciators(st, app_actions)
         self.wfs = wfs
         self.app_actions = app_actions
         self.draw_background()
@@ -20,19 +20,7 @@ class Waveform:
          
 
     def update_annunciators(self):
-        ann = self.ann
-        ann.set(ann.A_RUN) if self.app_actions.capturing else ann.set(ann.A_STOP)
-        ann.set(ann.A_FULL if self.st.current_sensor=='low' else ann.A_LOWRANGE)
-        ann.set(ann.A_TBASE, self.st.time_display_ranges[self.st.time_display_index])
-        ann.set(ann.A_VON if self.st.voltage_display_status else ann.A_VOFF,
-                    self.st.voltage_display_ranges[self.st.voltage_display_index])
-        ann.set(ann.A_ION if self.st.current_display_status else ann.A_IOFF,
-                    self.st.current_display_ranges[self.st.current_display_index])
-        ann.set(ann.A_PON if self.st.power_display_status else ann.A_POFF,
-                    self.st.power_display_ranges[self.st.power_display_index])
-        ann.set(ann.A_ELON if self.st.earth_leakage_current_display_status
-                    else ann.A_ELOFF, self.st.earth_leakage_current_display_ranges
-                        [self.st.earth_leakage_current_display_index])
+        self.ann.update_annunciators()
 
 
     def draw_background(self):
@@ -72,10 +60,12 @@ class Waveform:
                     pa[pixel[0], pixel[1]] = SIGNAL_COLOURS[i]
         pa.close()
 
+
     def _plot_lines(self, screen, buffer, display_status):
         for i in range(len(buffer)):
             if display_status[i] == True:
                 pygame.draw.lines(screen, SIGNAL_COLOURS[i], False, buffer[i], 2)
+
     
     def plot(self, buffer, multi_trace, screen):
         display_status = [
@@ -102,6 +92,7 @@ class Waveform:
         screen.blit(self.waveform_background, (0,0))
         self.plot(buffer, multi_trace, screen)
         datetime.draw()
+
 
     def plot_mode(self, mode):
         if mode == 'dots':

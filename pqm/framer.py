@@ -79,6 +79,7 @@ class Buffer:
         """buffer memory initialised with empty data"""
         # *** performance optimisation: could consider memoryview object here ***
         self.buf = [ [0.0, 0.0, 0.0, 0.0, 0.0] for i in range(BUFFER_SIZE) ]
+        print('hi', file=sys.stderr)
 
 
     def store_line(self, line):
@@ -103,7 +104,7 @@ class Buffer:
         # in running mode, make sure the start marker doesn't precede the previous end marker
         if self.st.run_mode == 'running':
             self.frame_startp = max(self.outp, self.frame_startp)
-        # signal that this is a new frame
+        # signal that we have set up a new frame
         self.new_frame = True
 
 
@@ -112,11 +113,12 @@ class Buffer:
         in freerun mode"""
         if self.st.trigger_mode == 'sync':
             # new trigger is required, but we wait for at least holdoff samples
-            self.tp = max(self.outp, self.tp + self.st.holdoff_samples)
+            self.tp = max(self.outp, self.sp + self.st.holdoff_samples)
             self.triggered = False
         elif self.st.trigger_mode == 'inrush':
-            # we make sure to prime the trigger to the 'now' position
-            self.tp = self.sp
+            # for inrush, we are usually leaving stopped mode so we need to allow pre-trigger
+            # lead-in for continuity of the samples through the capture
+            self.tp = self.sp + self.st.pre_trigger_samples
             self.triggered = False
         elif self.st.trigger_mode == 'freerun':
             # in freerun mode, we advance by exactly one frame and immediately trigger
@@ -189,20 +191,21 @@ class Buffer:
         precise_trigger_position = self.tp - 1 + self.interpolation_fraction
         pixels_out = True if self.output_mode == 'pixels' else False
         for s in range(self.frame_startp, self.frame_endp):
+            # timestamp = 0.0ms at the trigger position
             timestamp = self.st.interval * (s - precise_trigger_position)
             sample = self.buf[s % BUFFER_SIZE][VOLTAGE_INDEX:]
             out = self.mapper(timestamp, sample, pixels_out)
             print(out)
         # some frame data will be held in the kernel pipe buffer
         # if we're in stopped mode or inrush trigger mode (which will be followed by
-        # stopped mode), flush it through with a long line of dots
+        # stopped mode), flush it through with a longer line of dots
         if self.st.run_mode == 'stopped' or self.st.trigger_mode == 'inrush':
             print(LONG_DOTS)
         else:
             print(SHORT_DOTS)
         self.outp = self.frame_endp
-        self.new_frame = False
         sys.stdout.flush()
+        self.new_frame = False
 
 
     def build_frame(self, line):
@@ -229,7 +232,7 @@ class Buffer:
             return trigger_fn
 
         def inrush_trigger(trigger_level):
-            trigger_fn = (lambda s1, s2: (True, i_frac(s1,s2,trigger_level))
+            trigger_fn = (lambda s1, s2: (True, 0.0)
                              if abs(s2) >= trigger_level else (False, 0.0))
             return trigger_fn
 
@@ -252,6 +255,7 @@ def get_command_args():
 
 
 def main():
+    # Launch program with --unmapped option to get output as values rather than pixels.
     program_name, args = get_command_args()
          
     # flag to reload settings into st object
@@ -279,21 +283,20 @@ def main():
                 # if we are in running mode, then re-prime the trigger
                 # regardless of the trigger mode
                 if st.run_mode == 'running':
+                    if st.trigger_mode == 'inrush':
+                        # clear out old data if we reprime in inrush mode
+                        buf.clear_buffer()
+                        buf.output_frame()
                     buf.reprime()
                 # frame boundary can change, even in stopped mode
                 buf.update_frame_markers()
                 # lower the flag
                 settings_were_updated = False
             # process the incoming line with the current trigger settings
-            # if we fail to trigger after storing a lot of samples, raise a
-            # 'buffer_is_full' flag
-            buffer_is_full = not buf.build_frame(line.rstrip())
+            buf.build_frame(line.rstrip())
             if not buf.triggered:
                 buf.trigger_test()
-            not_syncing = (buffer_is_full and st.trigger_mode == 'sync'
-                               and st.run_mode == 'running')
-            # output frame if we have something ready
-            if buf.ready_for_output() or not_syncing:
+            if buf.ready_for_output():
                 buf.output_frame()
                 # if running, reset for the next frame
                 if st.run_mode == 'running':

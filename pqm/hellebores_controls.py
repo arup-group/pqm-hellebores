@@ -45,9 +45,7 @@ class Range_controller:
 ###
 
 class Annunciators:
-    # Annunciators can have pre-determined enumerated state, or
-    # single state with free text
-    # annunciator text object enumerations
+    # Individual annunciator state enumerations
     A_RUN        = 0
     A_WAIT       = 1
     A_STOP       = 2
@@ -112,7 +110,7 @@ class Annunciators:
         self.add([ (self.A_RUN,BLACK,GREEN,'Running'),
                    (self.A_WAIT,BLACK,ORANGE,'Wait'),
                    (self.A_STOP,BLACK,RED,'Stopped') ])
-        self.add([ (self.A_FULL,WHITE,LIGHT_GREY,'Full range'),
+        self.add([ (self.A_FULL,WHITE,LIGHT_GREY,''),
                    (self.A_LOWRANGE,WHITE,ORANGE,'LOW RANGE') ])
         self.add([ (self.A_TBASE,WHITE,LIGHT_GREY,'{0} ms/') ])
         self.add([ (self.A_VON,SIGNAL_COLOURS[0],LIGHT_GREY,'{0} V/'),
@@ -126,7 +124,15 @@ class Annunciators:
 
 
     def update_annunciators(self):
-        self.set(self.A_RUN) if self.app_actions.capturing else self.set(self.A_STOP)
+        """Update the text and colours of the annunciators in line with the latest
+        status information."""
+        if self.st.run_mode == 'running':
+            if self.st.trigger_mode == 'sync' or self.st.trigger_mode == 'freerun':
+                self.set(self.A_RUN)
+            elif self.st.trigger_mode == 'inrush':
+                self.set(self.A_WAIT)
+        else:
+            self.set(self.A_STOP)
         self.set(self.A_FULL if self.st.current_sensor=='full' else self.A_LOWRANGE)
         self.set(self.A_TBASE, self.st.time_display_ranges[self.st.time_display_index])
         self.set(self.A_VON if self.st.voltage_display_status else self.A_VOFF,

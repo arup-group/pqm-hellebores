@@ -399,6 +399,13 @@ class App_Actions:
         self.data_comms = data_comms
 
 
+    def new_settings_received(self):
+        if self.st.run_mode == 'running':
+            self.capturing = True
+        else:
+            self.capturing = False
+
+
     def post_clear_screen_event(self):
         pygame.event.post(pygame.event.Event(self.clear_screen_event, {}))
 
@@ -485,18 +492,21 @@ def main():
     thorpy.set_default_font(FONT, FONT_SIZE)
     thorpy.init(screen, thorpy.theme_simple)
 
+    # object holding the state of the application and the incoming communication streams
+    app_actions  = App_Actions()
+    data_comms   = Data_comms(args.waveform_file, args.analysis_file)
+
     # load configuration settings from settings.json into a settings object 'st'.
     # the list of 'other programs' is used to send signals when we change
     # settings in this program. We call st.send_to_all() and then
     # these programs are each told to re-read the settings file.
-    st = Settings(other_programs = [ 'scaler.py', 'framer.py', 'analyser.py' ], \
+    st = Settings(callback_fn = app_actions.new_settings_received, \
+        other_programs = [ 'scaler.py', 'framer.py', 'analyser.py' ], \
         reload_on_signal=True)
 
-    # create objects that hold the state of the application, data buffers and UI
-    data_comms   = Data_comms(args.waveform_file, args.analysis_file)
+    # objects that hold the data buffers and UI
     buffer       = Sample_Buffer(st, data_comms)
     wfs          = WFS_Counter()
-    app_actions  = App_Actions()
     waveform     = Waveform(st, wfs, app_actions)
     multimeter   = Multimeter(st, app_actions)
     v_harmonics  = Harmonic(st, app_actions, harmonic_of_what='voltage')

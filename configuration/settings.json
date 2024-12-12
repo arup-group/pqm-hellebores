@@ -74,7 +74,7 @@
         0.00122,
         0.0489
     ],
-    "trigger_channel": 0,
+    "trigger_channel": 1,
     "trigger_slope": "rising",
     "inrush_trigger_level": 0.2,
     "trigger_position": 5,

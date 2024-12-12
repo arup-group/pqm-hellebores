@@ -437,19 +437,6 @@ def create_trigger(st, waveform, app_actions):
         st.send_to_all()
 
     def update_trigger_mode(mode, status):
-        if mode == 'freerun':
-            st.trigger_channel = -1
-            waveform.draw_background()
-        elif mode == 'sync':
-            st.trigger_channel = 0
-            st.trigger_level = 0.0
-        elif mode == 'inrush':
-            st.trigger_channel = 2
-            st.trigger_level = 0.1
-        else:
-            print(
-                'hellebores.py: update_trigger_mode(), invalid condition requested.',
-                sys.stderr)
         st.trigger_mode = mode
         waveform.draw_background()
         update_trigger_status(status)
@@ -463,12 +450,12 @@ def create_trigger(st, waveform, app_actions):
         elif st.trigger_mode == 'sync':
             status.set_text(
                 f'Sync: the trigger is enabled to find the {st.trigger_slope}' \
-                ' edge of the voltage signal at magitude 0.0V.',
+                f' edge of the voltage signal at magnitude 0.0V.',
                 adapt_parent=False)
         elif st.trigger_mode == 'inrush':
             status.set_text(
                 f'Inrush: the trigger is enabled for single-shot current'
-                'detection, magnitude +/- {st.trigger_level}A. Press Run/Stop to reset.',
+                f'detection, magnitude +/- {st.inrush_trigger_level}A. Press Run/Stop to reset.',
                 adapt_parent=False)
         else:
             print(

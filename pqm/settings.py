@@ -17,9 +17,6 @@ CALIBRATIONS_FILE = 'calibrations.json'
 
 class Settings():
 
-    def __init__(self):
-        pass
-
     def resolve_path(self, path, file):
         file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), path, file)
         resolved_path = os.path.abspath(file_path)

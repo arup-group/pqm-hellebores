@@ -143,7 +143,7 @@ class Annunciators:
                     self.st.power_display_ranges[self.st.power_display_index])
         self.set(self.A_ELON if self.st.earth_leakage_current_display_status
                     else self.A_ELOFF, self.st.earth_leakage_current_display_ranges
-                        [self.st.earth_leakage_current_display_index])
+                        [self.st.earth_leakage_current_display_index] * 1000.0)
 
 
 def create_datetime():

@@ -449,13 +449,14 @@ def create_trigger(st, waveform, app_actions):
                 adapt_parent=False)
         elif st.trigger_mode == 'sync':
             status.set_text(
-                f'Sync: the trigger is enabled to find the {st.trigger_slope}' \
+                f'Sync: the trigger is enabled to find the {st.trigger_slope}'
                 f' edge of the voltage signal at magnitude 0.0V.',
                 adapt_parent=False)
         elif st.trigger_mode == 'inrush':
             status.set_text(
-                f'Inrush: the trigger is enabled for single-shot current'
-                f'detection, magnitude +/- {st.inrush_trigger_level}A. Press Run/Stop to reset.',
+                f'Inrush: the capture will stop when current '
+                f'threshold +/- {st.inrush_trigger_level}A is exceeded. '
+                f'Press Run/Stop to re-prime.',
                 adapt_parent=False)
         else:
             print(

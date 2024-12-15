@@ -100,22 +100,18 @@ class UI_groups:
 
     def refresh(self, screen):
         """dispatch to the refresh method of the element group currently selected."""
-        if self.mode == 'waveform':
-            # waveform mode
-            if self.app_actions.capturing:
-                # if capturing, we might display multiple frames in one display
-                traces = self.app_actions.multi_trace
-            else:
-                # but just one frame if in stopped mode
-                traces = 1
-            self.instruments[self.mode].refresh(self.buffer, traces, screen, self.elements['datetime'])
+        if self.mode == 'waveform' and self.st.run_mode == 'running':
+            # plot multiple traces if we're running in waveform mode
+            traces = self.app_actions.multi_trace
+            self.instruments[self.mode].refresh(self.buffer, screen, \
+                self.elements['datetime'], multi_trace=self.app_actions.multi_trace)
         else:
-            # non-waveform mode
-            self.instruments[self.mode].refresh(self.app_actions.capturing, self.buffer, \
-                screen, self.elements['datetime'])
+            self.instruments[self.mode].refresh(self.buffer, screen, self.elements['datetime'])
+
 
     def update_annunciators(self):
         self.instruments[self.mode].update_annunciators()
+
 
     def set_multi_trace(self):
         # need to run this at least when the timebase changes or when there is an overlay dialog
@@ -381,8 +377,6 @@ class App_Actions:
         self.ui = None             # need to be immediately
         self.buffer = None         # set up after they are
         self.data_comms = None     # created, by calling set_other_objects()
-        # allow/stop update of the lines on the screen
-        self.capturing = True
         # multi_trace mode overlays traces on one background and is used to optimise
         # for high frame rates or dialog overlay
         self.multi_trace = 1
@@ -399,44 +393,34 @@ class App_Actions:
         self.data_comms = data_comms
 
 
-    def new_settings_received(self):
-        if self.st.run_mode == 'running':
-            self.capturing = True
-        else:
-            self.capturing = False
-
-
     def post_clear_screen_event(self):
         pygame.event.post(pygame.event.Event(self.clear_screen_event, {}))
+
 
     def post_draw_controls_event(self):
         pygame.event.post(pygame.event.Event(self.draw_controls_event, {}))
 
+
     def start_stop(self, action='flip'):
-        former_capturing_state = self.capturing
-        if action == 'flip':
-            self.capturing = not self.capturing
-        elif action == 'run':
-            self.capturing = True
-        elif action == 'stop':
-            self.capturing = False
-        # update mode communicated to other programs
-        if self.capturing:
+        former_run_mode = self.st.run_mode
+        if (action=='flip' and former_run_mode=='stopped') or action=='run':
             self.st.run_mode = 'running'
-        else:
+        elif (action=='flip' and former_run_mode=='running') or action == 'stop':
             self.st.run_mode = 'stopped'
         self.st.send_to_all()
         # make sure we catch latest analysis results if we are entering stopped
         # state from running state, even if those results are not currently
         # being displayed
-        if former_capturing_state == True and self.capturing == False:
+        if former_run_mode=='running' and self.st.run_mode=='stopped':
             self.ui.catch_latest_analysis()
+
 
     def set_updater(self, mode):
         # this placeholder function is replaced dynamically by the implementation
         # inside the ui object
         print('hellebores.py: App_Actions.set_updater() virtual function '
               'should be substituted prior to calling it.', file=sys.stderr)
+
 
     def exit_application(self, option='quit'):
         exit_codes = { 'quit'           : 0,
@@ -500,8 +484,7 @@ def main():
     # the list of 'other programs' is used to send signals when we change
     # settings in this program. We call st.send_to_all() and then
     # these programs are each told to re-read the settings file.
-    st = Settings(callback_fn = app_actions.new_settings_received, \
-        other_programs = [ 'scaler.py', 'framer.py', 'analyser.py' ], \
+    st = Settings(other_programs = [ 'scaler.py', 'framer.py', 'analyser.py' ], \
         reload_on_signal=True)
 
     # objects that hold the data buffers and UI
@@ -554,7 +537,7 @@ def main():
     
             # we update status texts and datetime every second
             if wfs.time_to_update():
-                if app_actions.capturing == True:
+                if st.run_mode=='running':
                     ui.get_element('datetime').set_text(time.ctime())
                 ui.update_annunciators()
                 # force controls - including new text - to be re-drawn

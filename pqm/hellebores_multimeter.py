@@ -227,7 +227,7 @@ class Multimeter:
 
         self.add_ui_text(text='Earth leakage /mA', text_length=24)
         self.add_ui_text(text_length=24, font_colour=CYAN, \
-            dp_fix=3, value_key='rms_leakage_current', p_offset=(0,18), p_move=(0,38))
+            scale_factor=1000, dp_fix=3, value_key='rms_leakage_current', p_offset=(0,18), p_move=(0,38))
 
         # insert all text elements into a group, then position group in display
 

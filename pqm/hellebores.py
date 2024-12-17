@@ -31,13 +31,6 @@ if os.name == 'nt':
     from mswin_pipes import Pipe, peek_pipe, get_pipe_from_stream
 
 
-# More UI is needed for the following:
-#
-# Measurements-1 (summary)
-# Measurements-2 (harmonics)
-# rollback NOT IMPLEMENTED
-# About (including software version, kernel version, sha256 of Pi and Pico)
-
 # The instance of this class will hold all the user interface states or 'groups'
 # that can be displayed together with the currently active selection
 class UI_groups:
@@ -384,6 +377,7 @@ class App_Actions:
         # and triggering a redraw of the controls
         self.clear_screen_event = pygame.event.custom_type()
         self.draw_controls_event = pygame.event.custom_type()
+        self.former_run_mode = ''  # we keep track of when run mode changes
 
 
     def set_other_objects(self, st, ui, buffer, data_comms):
@@ -401,6 +395,15 @@ class App_Actions:
         pygame.event.post(pygame.event.Event(self.draw_controls_event, {}))
 
 
+    def settings_changed(self):
+        """make sure we catch latest analysis results if we are entering stopped
+        state from running state, even if those results are not currently
+        being displayed."""
+        if self.former_run_mode!='stopped' and self.st.run_mode=='stopped':
+            self.ui.catch_latest_analysis()
+        self.former_run_mode = self.st.run_mode
+
+
     def start_stop(self, action='flip'):
         former_run_mode = self.st.run_mode
         if (action=='flip' and former_run_mode=='stopped') or action=='run':
@@ -408,11 +411,7 @@ class App_Actions:
         elif (action=='flip' and former_run_mode=='running') or action == 'stop':
             self.st.run_mode = 'stopped'
         self.st.send_to_all()
-        # make sure we catch latest analysis results if we are entering stopped
-        # state from running state, even if those results are not currently
-        # being displayed
-        if former_run_mode=='running' and self.st.run_mode=='stopped':
-            self.ui.catch_latest_analysis()
+        self.settings_changed()
 
 
     def set_updater(self, mode):
@@ -484,8 +483,9 @@ def main():
     # the list of 'other programs' is used to send signals when we change
     # settings in this program. We call st.send_to_all() and then
     # these programs are each told to re-read the settings file.
-    st = Settings(other_programs = [ 'scaler.py', 'framer.py', 'analyser.py' ], \
-        reload_on_signal=True)
+    st = Settings(callback_fn = app_actions.settings_changed, \
+                  other_programs = [ 'scaler.py', 'framer.py', 'analyser.py' ], \
+                  reload_on_signal=True)
 
     # objects that hold the data buffers and UI
     buffer       = Sample_Buffer(st, data_comms)

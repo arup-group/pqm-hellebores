@@ -35,7 +35,7 @@ class Waveform:
         for dx in range(1, self.st.time_axis_divisions):
             x = self.st.horizontal_pixels_per_division * dx
             # mark the trigger position (t=0) with an emphasized line
-            if (dx == self.st.time_axis_pre_trigger_divisions) and (self.st.trigger_channel != -1):
+            if dx == self.st.time_axis_pre_trigger_divisions and self.st.trigger_mode != 'freerun':
                 lc = WHITE
             else:
                 lc = LIGHT_GREY

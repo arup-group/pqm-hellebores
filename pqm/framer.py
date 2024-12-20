@@ -46,6 +46,7 @@ class Buffer:
     sp = 0                   # storage pointer (advances by 1 for every new sample)
     tp = 0                   # trigger pointer (in running mode, this is moved
                              # forward when trigger condition is next satisfied)
+    ip = 0                   # inrush trigger pointer
     # new_frame flag indicates that the data in the frame is fresh
     new_frame = True
     # triggered flag is raised when a new trigger is detected, and lowered after we

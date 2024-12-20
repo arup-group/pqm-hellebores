@@ -92,7 +92,6 @@ class Settings():
         self.earth_leakage_current_display_index       = js['earth_leakage_current_display_index']
         self.earth_leakage_current_display_status      = js['earth_leakage_current_display_status']
         self.scale_factors                             = js['scale_factors']
-        self.trigger_channel                           = js['trigger_channel']
         self.trigger_slope                             = js['trigger_slope']
         self.inrush_trigger_level                      = js['inrush_trigger_level']
         self.trigger_position                          = js['trigger_position']
@@ -128,7 +127,6 @@ class Settings():
         js['earth_leakage_current_display_index']      = self.earth_leakage_current_display_index
         js['earth_leakage_current_display_status']     = self.earth_leakage_current_display_status
         js['scale_factors']                            = self.scale_factors
-        js['trigger_channel']                          = self.trigger_channel
         js['trigger_slope']                            = self.trigger_slope
         js['inrush_trigger_level']                     = self.inrush_trigger_level
         js['trigger_position']                         = self.trigger_position
@@ -354,7 +352,6 @@ default_settings = '''
         0.00122,
         0.0489
     ],
-    "trigger_channel": 0,
     "trigger_slope": "rising",
     "inrush_trigger_level": 0.2,
     "trigger_position": 5,

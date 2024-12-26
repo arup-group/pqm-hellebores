@@ -88,10 +88,9 @@ class Waveform:
                 file=sys.stderr)
 
     
-    def refresh(self, buffer, screen, datetime, multi_trace=1):
+    def refresh(self, buffer, screen, multi_trace=1):
         screen.blit(self.waveform_background, (0,0))
         self.plot(buffer, multi_trace, screen)
-        datetime.draw()
 
 
     def plot_mode(self, mode):

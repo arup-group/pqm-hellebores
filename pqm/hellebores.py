@@ -40,7 +40,8 @@ class UI_groups:
     # the flag helps to reduce workload of screen refresh when there are overlay menus.
     overlay_dialog_active = False
 
-    def __init__(self, st, buffer, waveform, multimeter, v_harmonics, i_harmonics, app_actions):
+    def __init__(self, st, buffer, datetime, wfs, waveform, multimeter, v_harmonics, \
+                     i_harmonics, app_actions):
         # make a local reference to app_actions and st
         self.app_actions = app_actions
         self.st = st
@@ -53,7 +54,10 @@ class UI_groups:
         app_actions.set_updater = self.set_updater
 
         # datetime group
-        self.elements['datetime'] = create_datetime()
+        self.elements['datetime'] = datetime
+        
+        # waveforms-per-second group
+        self.elements['wfs'] = wfs
 
         # waveform group
         self.instruments['waveform'] = waveform
@@ -98,10 +102,11 @@ class UI_groups:
             traces = self.app_actions.multi_trace
             self.instruments[self.mode].refresh(self.buffer, screen, \
                 multi_trace=self.app_actions.multi_trace)
+            self.elements['datetime'].draw()
+            self.elements['wfs'].draw()
         else:
             self.instruments[self.mode].refresh(self.buffer, screen)
-        # update the status line
-        self.elements['datetime'].draw()
+            self.elements['datetime'].draw()
 
 
     def update_annunciators(self):
@@ -151,34 +156,6 @@ class UI_groups:
     def get_element(self, element):
         return self.elements[element]
 
-
-class WFS_Counter:
-
-    def __init__(self):
-        self.wfs          = 0    # last computed wfs
-        self.counter      = 0    # number of waveforms since last posting
-        self.update_time  = 0    # time when the wfs/s was lasted posted to screen
-
-    # called whenever we update the waveform on screen 
-    def increment(self):
-        self.counter += 1
-
-    def time_to_update(self):
-        # time now 
-        tn = time.time()
-        # if the time has increased by at least 1.0 second, update the wfm/s text
-        elapsed = tn - self.update_time
-        if elapsed >= 1.0:
-            self.wfs = int(self.counter/elapsed)
-            self.update_time = tn
-            self.counter = 0
-            return True
-        else:
-            return False
- 
-    def get(self):
-        return self.wfs
-        
 
 def get_screen_hardware_size():
     i = pygame.display.Info()
@@ -491,12 +468,14 @@ def main():
 
     # objects that hold the data buffers and UI
     buffer       = Sample_Buffer(st, data_comms)
-    wfs          = WFS_Counter()
+    datetime     = Datetime()
+    wfs          = WFS()
     waveform     = Waveform(st, wfs, app_actions)
     multimeter   = Multimeter(st, app_actions)
     v_harmonics  = Harmonic(st, app_actions, harmonic_of_what='voltage')
     i_harmonics  = Harmonic(st, app_actions, harmonic_of_what='current')
-    ui           = UI_groups(st, buffer, waveform, multimeter, v_harmonics, i_harmonics, app_actions)
+    ui           = UI_groups(st, buffer, datetime, wfs, waveform, multimeter, \
+                                 v_harmonics, i_harmonics, app_actions)
 
     # tell app_actions how to access the other objects it needs to manipulate
     app_actions.set_other_objects(st, ui, buffer, data_comms)
@@ -540,7 +519,7 @@ def main():
             # we update status texts and datetime every second
             if wfs.time_to_update():
                 if st.run_mode=='running':
-                    ui.get_element('datetime').set_text(time.ctime())
+                    ui.get_element('datetime').update()
                 ui.update_annunciators()
                 # force controls - including new text - to be re-drawn
                 app_actions.post_draw_controls_event()

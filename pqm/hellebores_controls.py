@@ -146,14 +146,64 @@ class Annunciators:
                         [self.st.earth_leakage_current_display_index] * 1000.0)
 
 
-def create_datetime():
-    """Datetime display."""
-    text_datetime = thorpy.Text(time.ctime())
-    text_datetime.set_font_color(WHITE)
-    text_datetime.set_topleft(0,0)
-    return text_datetime
 
+class WFS:
 
+    def __init__(self):
+        self.wfs          = 0    # last computed wfs
+        self.counter      = 0    # number of waveforms since last posting
+        self.update_time  = 0    # time when the wfs/s was lasted posted to screen
+        self.create_text_object()
+
+    # called whenever we update the waveform on screen 
+    def increment(self):
+        self.counter += 1
+
+    def time_to_update(self):
+        # time now 
+        tn = time.time()
+        # if the time has increased by at least 1.0 second, update the wfm/s text
+        elapsed = tn - self.update_time
+        if elapsed >= 1.0:
+            self.wfs = int(self.counter/elapsed)
+            self.tt.set_text(f'{self.wfs :3d} wf/s')
+            self.update_time = tn
+            self.counter = 0
+            return True
+        else:
+            return False
+ 
+    def get(self):
+        return self.wfs
+
+    def create_text_object(self):
+        """WFS display."""
+        self.tt = thorpy.Text('')
+        self.tt.set_font_color(WHITE)
+        self.tt.set_topleft(*WFS_POSITION)
+
+    def draw(self):
+        self.tt.draw()
+    
+
+class Datetime:
+
+    def __init__(self):
+        self.time = time.ctime()
+        self.create_text_object()
+
+    def create_text_object(self):
+        """Datetime display."""
+        self.tt = thorpy.Text(' ' * 25)
+        self.tt.set_font_color(WHITE)
+        self.tt.set_topleft(*DATETIME_POSITION)
+
+    def update(self):
+        self.time = time.ctime()
+        self.tt.set_text(self.time)
+
+    def draw(self):
+        self.tt.draw()
 
 ###
 ###

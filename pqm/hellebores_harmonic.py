@@ -38,13 +38,12 @@ class Harmonic:
         self.ann.update_annunciators()
 
 
-    def refresh(self, buffer, screen, datetime):
+    def refresh(self, buffer, screen):
         """display all the readings"""
         screen.blit(self.harmonic_background, (0,0))
         if self.st.run_mode == 'running':
             self.update_harmonic_display(buffer.cs)
         self.harmonic_display.draw()
-        datetime.draw()
 
 
     def create_harmonic_controls(self):

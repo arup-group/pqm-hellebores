@@ -97,9 +97,11 @@ class UI_groups:
             # plot multiple traces if we're running in waveform mode
             traces = self.app_actions.multi_trace
             self.instruments[self.mode].refresh(self.buffer, screen, \
-                self.elements['datetime'], multi_trace=self.app_actions.multi_trace)
+                multi_trace=self.app_actions.multi_trace)
         else:
-            self.instruments[self.mode].refresh(self.buffer, screen, self.elements['datetime'])
+            self.instruments[self.mode].refresh(self.buffer, screen)
+        # update the status line
+        self.elements['datetime'].draw()
 
 
     def update_annunciators(self):
@@ -159,7 +161,7 @@ class WFS_Counter:
 
     # called whenever we update the waveform on screen 
     def increment(self):
-        self.counter = self.counter + 1
+        self.counter += 1
 
     def time_to_update(self):
         # time now 

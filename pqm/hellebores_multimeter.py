@@ -34,13 +34,12 @@ class Multimeter:
         self.ann.update_annunciators()
 
 
-    def refresh(self, buffer, screen, datetime):
+    def refresh(self, buffer, screen):
         """display all the readings"""
         screen.blit(self.multimeter_background, (0,0))
         if self.st.run_mode == 'running':
             self.update_multimeter_display(buffer.cs)
         self.multimeter_display.draw()
-        datetime.draw()
 
            
     def create_multimeter_controls(self):

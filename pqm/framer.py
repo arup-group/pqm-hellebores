@@ -114,7 +114,7 @@ class Buffer:
         in freerun mode"""
         if self.st.trigger_mode == 'sync':
             # new trigger is required, but we wait for at least holdoff samples
-            self.tp = max(self.outp, self.sp + self.st.holdoff_samples)
+            self.tp = max(self.outp, self.tp + self.st.holdoff_samples)
             self.triggered = False
         elif self.st.trigger_mode == 'inrush':
             # for inrush, we are usually leaving stopped mode so we need to allow pre-trigger

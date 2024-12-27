@@ -521,8 +521,8 @@ def main():
     
             if app_actions.time_to_update_status():
                 if st.run_mode=='running':
-                    ui.get_element('datetime').update()
-                    ui.get_element('wfs').update()
+                    datetime.update()
+                    wfs.update()
                 # update the annunciators in both running and stopped mode
                 # force controls - including new text - to be re-drawn
                 ui.update_annunciators()

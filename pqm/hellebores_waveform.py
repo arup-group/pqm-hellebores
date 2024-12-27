@@ -8,10 +8,9 @@ from hellebores_controls import *
 
 class Waveform:
     # array of thorpy text objects
-    def __init__(self, st, wfs, app_actions):
+    def __init__(self, st, app_actions):
         self.st = st
         self.ann = Annunciators(st, app_actions)
-        self.wfs = wfs
         self.app_actions = app_actions
         self.draw_background()
         self.create_waveform_controls()

@@ -155,11 +155,11 @@ class WFS:
         self.update_time  = 0    # time when the wfs/s was lasted posted to screen
         self.create_text_object()
 
-    # called whenever we update the waveform on screen 
+    # call whenever we update the waveform on screen 
     def increment(self):
         self.counter += 1
 
-    def time_to_update(self):
+    def update(self):
         # time now 
         tn = time.time()
         # if the time has increased by at least 1.0 second, update the wfm/s text
@@ -169,13 +169,7 @@ class WFS:
             self.tt.set_text(f'{self.wfs :3d} wf/s')
             self.update_time = tn
             self.counter = 0
-            return True
-        else:
-            return False
  
-    def get(self):
-        return self.wfs
-
     def create_text_object(self):
         """WFS display."""
         self.tt = thorpy.Text('')

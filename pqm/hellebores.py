@@ -175,12 +175,7 @@ class Sample_Buffer:
         # sample buffer history
         # allows 'multitrace' to work
         self.waveforms = [ [] for i in range(SAMPLE_BUFFER_SIZE) ]
-
-    def end_frame(self):
-        # shift the history buffer along and add the new capture
-        self.waveforms = [ self.ps, *self.waveforms[1:] ]
-        # reset the working buffer
-        self.ps = [ [],[],[],[] ]
+        self.frame_completed = False        # flag to track completed frames
 
     def add_sample(self, sample):
         self.ps[0].append((sample[0], sample[1]))
@@ -194,13 +189,11 @@ class Sample_Buffer:
         self.st.analysis_max_min_reset += 1
         self.st.send_to_all() 
 
-
     def clear_accumulators(self):
         """Incrementing the analysis_accumulators_reset setting triggers a function in analyser.py
         to reset all the accumulators."""
         self.st.analysis_accumulators_reset += 1
         self.st.send_to_all()
-
 
     def load_analysis(self):
         # incoming analysis data is optional: returns false if no data source
@@ -215,23 +208,25 @@ class Sample_Buffer:
         else:
             return False
 
-
-    def load_waveform(self, wfs):
+    def load_waveform(self):
         # the loop will exit if:
         # (a) there is no data currently waiting to be read, 
         # (b) '.' end-of-frame marker in current line
         # (c) the line is empty, can't be split() or any other kind of read error,
         # (d) more than 1000 samples have been read (this keeps the UI responsive)
         sample_counter = 0
+        self.frame_completed = False
         while sample_counter < 1000 and (l := self.data_comms.get_waveform_line(0.02)):
             try:
                 # lines beginning with '.' end the frame
                 # in stopped mode, framer will send a larger block of '.' characters in one line
                 # to flush the pipe buffer in the kernel.
                 if l[0] == '.':
-                    # end the current frame
-                    self.end_frame()
-                    wfs.increment()
+                    self.frame_completed = True
+                    # shift the history buffer along and add the new capture
+                    self.waveforms = [ self.ps, *self.waveforms[1:] ]
+                    # reset the working buffer
+                    self.ps = [ [],[],[],[] ]
                     break
                 else:
                     # add a sample
@@ -352,12 +347,13 @@ class App_Actions:
         # multi_trace mode overlays traces on one background and is used to optimise
         # for high frame rates or dialog overlay
         self.multi_trace = 1
+        # keep track of time to update the status texts on screen periodically
+        self.update_time = time.time()
         # create custom pygame events, which we use for clearing the screen
         # and triggering a redraw of the controls
         self.clear_screen_event = pygame.event.custom_type()
         self.draw_controls_event = pygame.event.custom_type()
         self.former_run_mode = ''  # we keep track of when run mode changes
-
 
     def set_other_objects(self, st, ui, buffer, data_comms):
         self.st = st
@@ -365,14 +361,22 @@ class App_Actions:
         self.buffer = buffer
         self.data_comms = data_comms
 
-
+    def time_to_update_status(self):
+        # time now 
+        tn = time.time()
+        # if the time has increased by at least 0.5 second, update the wfm/s text
+        elapsed = tn - self.update_time
+        if elapsed >= 0.2:
+            self.update_time = tn
+            return True
+        else:
+            return False
+ 
     def post_clear_screen_event(self):
         pygame.event.post(pygame.event.Event(self.clear_screen_event, {}))
 
-
     def post_draw_controls_event(self):
         pygame.event.post(pygame.event.Event(self.draw_controls_event, {}))
-
 
     def settings_changed(self):
         """make sure we catch latest analysis results if we are entering stopped
@@ -381,7 +385,6 @@ class App_Actions:
         if self.former_run_mode!='stopped' and self.st.run_mode=='stopped':
             self.ui.catch_latest_analysis()
         self.former_run_mode = self.st.run_mode
-
 
     def start_stop(self, action='flip'):
         former_run_mode = self.st.run_mode
@@ -392,13 +395,11 @@ class App_Actions:
         self.st.send_to_all()
         self.settings_changed()
 
-
     def set_updater(self, mode):
         # this placeholder function is replaced dynamically by the implementation
         # inside the ui object
         print('hellebores.py: App_Actions.set_updater() virtual function '
               'should be substituted prior to calling it.', file=sys.stderr)
-
 
     def exit_application(self, option='quit'):
         exit_codes = { 'quit'           : 0,
@@ -470,7 +471,7 @@ def main():
     buffer       = Sample_Buffer(st, data_comms)
     datetime     = Datetime()
     wfs          = WFS()
-    waveform     = Waveform(st, wfs, app_actions)
+    waveform     = Waveform(st, app_actions)
     multimeter   = Multimeter(st, app_actions)
     v_harmonics  = Harmonic(st, app_actions, harmonic_of_what='voltage')
     i_harmonics  = Harmonic(st, app_actions, harmonic_of_what='current')
@@ -500,7 +501,9 @@ def main():
     
             # if multi_trace is active, read multiple frames into the buffer, otherwise just one
             for i in range(app_actions.multi_trace):
-                buffer.load_waveform(wfs)
+                buffer.load_waveform()
+                if buffer.frame_completed:
+                    wfs.increment()
     
             # read new analysis results, if available 
             analysis_updated = buffer.load_analysis()
@@ -516,12 +519,13 @@ def main():
                 pygame.mouse.set_cursor(
                     (8,8), (0,0), (0,0,0,0,0,0,0,0), (0,0,0,0,0,0,0,0))
     
-            # we update status texts and datetime every second
-            if wfs.time_to_update():
+            if app_actions.time_to_update_status():
                 if st.run_mode=='running':
                     ui.get_element('datetime').update()
-                ui.update_annunciators()
+                    ui.get_element('wfs').update()
+                # update the annunciators in both running and stopped mode
                 # force controls - including new text - to be re-drawn
+                ui.update_annunciators()
                 app_actions.post_draw_controls_event()
     
             # here we process mouse/touch/keyboard events.

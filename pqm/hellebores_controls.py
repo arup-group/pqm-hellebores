@@ -46,23 +46,24 @@ class Range_controller:
 
 class Annunciators:
     # Individual annunciator state enumerations
-    A_RUN        = 0
-    A_WAIT       = 1
-    A_STOP       = 2
-    A_FULL       = 3
-    A_LOWRANGE   = 4
-    A_TBASE      = 5
-    A_VON        = 6
-    A_VOFF       = 7
-    A_ION        = 8
-    A_IOFF       = 9
-    A_PON        = 10
-    A_POFF       = 11
-    A_ELON       = 12
-    A_ELOFF      = 13
+    A_SYNC       = 0
+    A_FREERUN    = 1
+    A_INRUSH     = 2
+    A_STOP       = 3
+    A_FULL       = 4
+    A_LOWRANGE   = 5
+    A_TBASE      = 6
+    A_VON        = 7
+    A_VOFF       = 8
+    A_ION        = 9
+    A_IOFF       = 10
+    A_PON        = 11
+    A_POFF       = 12
+    A_ELON       = 13
+    A_ELOFF      = 14
 
     def __init__(self, st, app_actions):
-        self.states = [None] * 14  # list of states that select
+        self.states = [None] * 15  # list of states that select
                                    # text object and format for each
                                    # required state
         self.st = st
@@ -107,8 +108,9 @@ class Annunciators:
 
     def configure_annunciators(self):
         """Configure annunciators with available modes and template text."""
-        self.add([ (self.A_RUN,BLACK,GREEN,'Running'),
-                   (self.A_WAIT,BLACK,ORANGE,'Wait'),
+        self.add([ (self.A_SYNC,BLACK,GREEN,'Sync'),
+                   (self.A_FREERUN,BLACK,GREEN,'Freerun'),
+                   (self.A_INRUSH,BLACK,ORANGE,'Inrush'),
                    (self.A_STOP,BLACK,RED,'Stopped') ])
         self.add([ (self.A_FULL,WHITE,LIGHT_GREY,''),
                    (self.A_LOWRANGE,WHITE,ORANGE,'LOW RANGE') ])
@@ -127,10 +129,12 @@ class Annunciators:
         """Update the text and colours of the annunciators in line with the latest
         status information."""
         if self.st.run_mode == 'running':
-            if self.st.trigger_mode == 'sync' or self.st.trigger_mode == 'freerun':
-                self.set(self.A_RUN)
+            if self.st.trigger_mode == 'sync':
+                self.set(self.A_SYNC)
+            elif self.st.trigger_mode == 'freerun':
+                self.set(self.A_FREERUN)
             elif self.st.trigger_mode == 'inrush':
-                self.set(self.A_WAIT)
+                self.set(self.A_INRUSH)
         else:
             self.set(self.A_STOP)
         self.set(self.A_FULL if self.st.current_sensor=='full' else self.A_LOWRANGE)

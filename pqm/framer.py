@@ -10,6 +10,13 @@
 # 
 # Monitors signal and detects signal event eg voltage crossing zero
 # Offsets time axis with respect to the trigger (trigger time is t=0)
+#
+# This is hard!! There are many gotchas with triggering and framing the display --
+# ensure enough lead-in (continuity of capture before the trigger), prevent
+# early re-trigger via 'holdoff' samples, allow inrush trigger to override
+# sync trigger. The logic is inter-twined and edits are liable to have unintended
+# consequences. So edit with care!
+#
 
 import sys
 import signal
@@ -43,14 +50,14 @@ class Buffer:
     # after settings have changed.
     frame_startp = 0            # beginning of frame to be output
     frame_endp = 0              # end of frame to be output
-    outp = 0                    # end of last output
+    outp = 0                    # end of previous output
     sp = 0                      # storage pointer (advances by 1 for every new sample)
-    tp = 0                      # sync trigger pointer (in running mode, this is moved
+    tp = 0                      # trigger pointer (in running mode, this is moved
                                 # forward when trigger condition is next satisfied)
     sync_holdoff_counter = 0    # inhibits the sync trigger for N samples
     inrush_holdoff_counter = 0  # inhibits the inrush trigger for N samples
     # reframed flag indicates that the data in the frame is fresh
-    reframed = True
+    reframed = False
     # trigger flag(s) are raised when a new trigger is detected, and lowered after we
     # have output a frame
     sync_triggered = False
@@ -114,7 +121,6 @@ class Buffer:
         if self.st.trigger_mode == 'freerun':
             # in freerun mode, we advance by exactly one frame and immediately trigger
             self.sync_triggered = True
-            self.inrush_triggered = False
             self.tp = self.tp + self.st.frame_samples
             # the interpolation_fraction corrects for creeping time error -- the frame_samples do not
             # necessarily correspond to exactly one frame of time
@@ -124,7 +130,7 @@ class Buffer:
                 self.tp += int(self.interpolation_fraction)
                 self.interpolation_fraction = self.interpolation_fraction % 1
         else:
-            # in sync or inrush mode, clear the trigger flag and wait for at least holdoff samples
+            # in sync or inrush mode, clear the trigger flags
             self.sync_triggered = False
             self.inrush_triggered = False
 
@@ -136,7 +142,7 @@ class Buffer:
             # against the trigger criteria
             self.buf[(self.sp - 1) % BUFFER_SIZE],
             self.buf[self.sp % BUFFER_SIZE])
-
+        # we only update frame markers and set holdoff if this is a 'new' trigger
         if (self.sync_triggered and not self.reframed) or self.inrush_triggered:
             self.sync_holdoff_counter = self.st.sync_holdoff_samples
             self.update_frame_markers()

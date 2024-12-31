@@ -130,9 +130,10 @@ class Buffer:
                 self.tp += int(self.interpolation_fraction)
                 self.interpolation_fraction = self.interpolation_fraction % 1
         else:
-            # in sync or inrush mode, clear the trigger flags
+            # in sync or inrush mode, clear the sync trigger flag
             self.sync_triggered = False
-            self.inrush_triggered = False
+        # always clear the inrush trigger flag
+        self.inrush_triggered = False
 
 
     def trigger_test(self):
@@ -257,12 +258,12 @@ class Buffer:
 
     def configure_for_new_settings(self):
         self.update_trigger_settings()
-        # frame boundary can change, even in stopped mode
-        self.update_frame_markers()
         # if we are in running mode, then advance buffer pointers
         if self.st.run_mode == 'running':
             self.tp = self.sp   # advance buffer pointers, in case we exited stopped mode
             self.inrush_holdoff_counter = self.st.pre_trigger_samples
+        # frame boundary can change, even in stopped mode
+        self.update_frame_markers()
 
     def update_trigger_settings(self):
         """We don't want to process 'mode' logic every time we read a sample. Therefore we create

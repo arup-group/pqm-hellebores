@@ -5,79 +5,21 @@ from hellebores_constants import *
 from hellebores_controls import *
 
 
-# text message cell enumerations
-T_RUNSTOP     = 0
-T_WFS         = 1
-T_TIMEDIV     = 2
-T_VOLTSDIV    = 3
-T_AMPSDIV     = 4
-T_WATTSDIV    = 5
-T_LEAKDIV     = 6
-
 
 class Waveform:
     # array of thorpy text objects
-    waveform_colours = [ GREEN, YELLOW, MAGENTA, CYAN ]
-    text_colours = [BLACK, WHITE, WHITE] + waveform_colours
-    blit_toggle = True
-    def __init__(self, st, wfs, app_actions):
-        self.texts = []
+    def __init__(self, st, app_actions):
         self.st = st
-        self.wfs = wfs
+        self.ann = Annunciators(st, app_actions)
         self.app_actions = app_actions
-        for s in range(7):
-            t = thorpy.Text('')
-            t.set_size(TEXT_SIZE)
-            self.texts.append(t)
         self.draw_background()
         self.create_waveform_controls()
         # initial set up is lines
         self.plot_mode('lines')
          
 
-    def set_text_colours(self):
-        # the boolean filter allows us to temporarily grey out lines
-        # that are currently inactive/switched off
-        colour_filter = [
-            True,
-            True,
-            True,
-            self.st.voltage_display_status,
-            self.st.current_display_status,
-            self.st.power_display_status,
-            self.st.earth_leakage_current_display_status,
-            ]
-        colours = [ c if p == True else DARK_GREY for p, c in zip(colour_filter, self.text_colours) ]
-        for i in range(len(self.texts)):
-            self.texts[i].set_font_color(colours[i])
-
-    def set_text(self, item, value):
-        self.texts[item].set_text(value)
-
-    def draw_texts(self, capturing):
-        self.set_text_colours()
-        if capturing:
-            self.texts[T_RUNSTOP].set_bck_color(GREEN)
-            self.texts[T_RUNSTOP].set_text('Running', adapt_parent=False)
-        else:
-            self.texts[T_RUNSTOP].set_bck_color(RED)
-            self.texts[T_RUNSTOP].set_text('Stopped', adapt_parent=False)
-        self.texts[T_WFS].set_text(f'{self.wfs.get()} wfm/s', adapt_parent=False)
-        self.texts[T_TIMEDIV].set_text(
-            f'{self.st.time_display_ranges[self.st.time_display_index]} ms/',
-            adapt_parent=False)
-        self.texts[T_VOLTSDIV].set_text(
-            f'{self.st.voltage_display_ranges[self.st.voltage_display_index]} V/',
-            adapt_parent=False)
-        self.texts[T_AMPSDIV].set_text(
-            f'{self.st.current_display_ranges[self.st.current_display_index]} A/',
-            adapt_parent=False)
-        self.texts[T_WATTSDIV].set_text(
-            f'{self.st.power_display_ranges[self.st.power_display_index]} W/',
-            adapt_parent=False)
-        elv = (self.st.earth_leakage_current_display_ranges
-               [self.st.earth_leakage_current_display_index] * 1000)
-        self.texts[T_LEAKDIV].set_text(f'{elv} mA/', adapt_parent=False)
+    def update_annunciators(self):
+        self.ann.update_annunciators()
 
 
     def draw_background(self):
@@ -92,7 +34,7 @@ class Waveform:
         for dx in range(1, self.st.time_axis_divisions):
             x = self.st.horizontal_pixels_per_division * dx
             # mark the trigger position (t=0) with an emphasized line
-            if (dx == self.st.time_axis_pre_trigger_divisions) and (self.st.trigger_channel != -1):
+            if dx == self.st.time_axis_pre_trigger_divisions and self.st.trigger_mode != 'freerun':
                 lc = WHITE
             else:
                 lc = LIGHT_GREY
@@ -114,13 +56,15 @@ class Waveform:
         for i in range(len(buffer)):
             if display_status[i] == True:
                 for pixel in buffer[i]:
-                    pa[pixel[0], pixel[1]] = self.waveform_colours[i]
+                    pa[pixel[0], pixel[1]] = SIGNAL_COLOURS[i]
         pa.close()
+
 
     def _plot_lines(self, screen, buffer, display_status):
         for i in range(len(buffer)):
             if display_status[i] == True:
-                pygame.draw.lines(screen, self.waveform_colours[i], False, buffer[i], 2)
+                pygame.draw.lines(screen, SIGNAL_COLOURS[i], False, buffer[i], 2)
+
     
     def plot(self, buffer, multi_trace, screen):
         display_status = [
@@ -143,10 +87,10 @@ class Waveform:
                 file=sys.stderr)
 
     
-    def refresh(self, buffer, multi_trace, screen, datetime):
+    def refresh(self, buffer, screen, multi_trace=1):
         screen.blit(self.waveform_background, (0,0))
         self.plot(buffer, multi_trace, screen)
-        datetime.draw()
+
 
     def plot_mode(self, mode):
         if mode == 'dots':
@@ -154,8 +98,10 @@ class Waveform:
         elif mode == 'lines':
             self.plot_fn = self._plot_lines
 
+
     def create_waveform_controls(self):
         """Waveform controls, on right of screen"""
+        # Create buttons
         button_setup = [
             ('Run/Stop', self.app_actions.start_stop),
             ('Mode', lambda: self.app_actions.set_updater('mode')), 
@@ -165,7 +111,9 @@ class Waveform:
             ('Options', lambda: self.app_actions.set_updater('options'))
             ]
         buttons = [ configure_button(BUTTON_SIZE, bt, bf) for bt, bf in button_setup ]
-        self.waveform_controls = thorpy.Box([ *self.texts[0:2], *buttons, *self.texts[2:] ])
+        ts = self.ann.get_text_objects()
+        # Assemble annunciators and buttons into a group
+        self.waveform_controls = thorpy.Box([ *ts[0:2], *buttons, *ts[2:] ])
         self.waveform_controls.set_topright(*CONTROLS_BOX_POSITION)
         self.waveform_controls.set_bck_color(LIGHT_GREY)
         for e in self.waveform_controls.get_all_descendants():

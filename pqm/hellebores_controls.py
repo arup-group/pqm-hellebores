@@ -4,6 +4,13 @@ import time
 from hellebores_constants import *
 from version import Version
 
+
+###
+###
+# Controls class for retaining 'up/down' adjustment of values within a range
+###
+###
+
 class Range_controller:
     ranges = []
     range_selector = 0
@@ -31,14 +38,182 @@ class Range_controller:
                 file=sys.stderr) 
 
 
-def create_datetime():
-    #####
-    # Datetime display
-    #####
-    text_datetime = thorpy.Text(time.ctime())
-    text_datetime.set_font_color(WHITE)
-    text_datetime.set_topleft(0,0)
-    return text_datetime
+###
+###
+# Class for holding and manipulating status annunciators
+###
+###
+
+class Annunciators:
+    # Individual annunciator state enumerations
+    A_RUN        = 0
+    A_SYNC       = 1
+    A_FREERUN    = 2
+    A_INRUSH     = 3
+    A_STOP       = 4
+    A_FULL       = 5
+    A_LOWRANGE   = 6
+    A_TBASE      = 7
+    A_VON        = 8
+    A_VOFF       = 9
+    A_ION        = 10
+    A_IOFF       = 11
+    A_PON        = 12
+    A_POFF       = 13
+    A_ELON       = 14
+    A_ELOFF      = 15
+
+    def __init__(self, st, app_actions):
+        self.states = [None] * 16  # list of states that select
+                                   # text object and format for each
+                                   # required state
+        self.st = st
+        self.app_actions = app_actions
+        self.configure_annunciators()
+
+
+    def add(self, states):
+        """Set up an individual annunciator and add it to the list."""
+        # states is a list of tuples containing state name, foreground
+        # and background colours and format string for each state
+        # Example: [ (self.A_RUN,BLACK,GREEN,'Running'), \
+        #            (self.A_WAIT,BLACK,ORANGE,'Wait'),
+        #            (self.A_STOP,BLACK,RED,'Stopped') ]
+        t = thorpy.Text('')    # make a new GUI text object
+        t.set_size(TEXT_SIZE)
+        for s in states:
+            name, foreground_colour, background_colour, template = s
+            self.states[name] = (t, foreground_colour, background_colour, template)
+
+
+    def set(self, name, value=''):
+        """Set specific annunciator to a selected state and (optional) text value."""
+        # Example call:
+        # annunciators.set_annunciator(VON,'20')
+        t, foreground_colour, background_colour, template = self.states[name]
+        t.set_font_color(foreground_colour)
+        t.set_bck_color(background_colour)
+        t.set_text(template.format(value), adapt_parent=False)
+
+
+    def get_text_objects(self):
+        """Get the list of Thorpy text objects that will be displayed."""
+        text_objects = []
+        for s in self.states:
+            t = s[0]
+            # don't add duplicates of the text object
+            if t not in text_objects:
+                text_objects.append(t)
+        return text_objects
+
+
+    def configure_annunciators(self):
+        """Configure annunciators with available modes and template text."""
+        self.add([ (self.A_RUN,BLACK,GREEN,'Run'),
+                   (self.A_SYNC,BLACK,GREEN,'Sync'),
+                   (self.A_FREERUN,BLACK,GREEN,'Freerun'),
+                   (self.A_INRUSH,BLACK,ORANGE,'Inrush'),
+                   (self.A_STOP,BLACK,RED,'Stopped') ])
+        self.add([ (self.A_FULL,WHITE,LIGHT_GREY,''),
+                   (self.A_LOWRANGE,WHITE,ORANGE,'LOW RANGE') ])
+        self.add([ (self.A_TBASE,WHITE,LIGHT_GREY,'{0} ms/') ])
+        self.add([ (self.A_VON,SIGNAL_COLOURS[0],LIGHT_GREY,'{0} V/'),
+                   (self.A_VOFF,GREY,LIGHT_GREY,'{0} V/') ])
+        self.add([ (self.A_ION,SIGNAL_COLOURS[1],LIGHT_GREY,'{0} A/'),
+                   (self.A_IOFF,GREY,LIGHT_GREY,'{0} A/') ])
+        self.add([ (self.A_PON,SIGNAL_COLOURS[2],LIGHT_GREY,'{0} W/'),
+                   (self.A_POFF,GREY,LIGHT_GREY,'{0} W/') ])
+        self.add([ (self.A_ELON,SIGNAL_COLOURS[3],LIGHT_GREY,'{0} mA/'),
+                   (self.A_ELOFF,GREY,LIGHT_GREY,'{0} mA/') ])
+
+
+    def update_annunciators(self):
+        """Update the text and colours of the annunciators in line with the latest
+        status information."""
+        if self.st.run_mode == 'running':
+            if self.app_actions.ui.mode == 'waveform':
+                if self.st.trigger_mode == 'sync':
+                    self.set(self.A_SYNC)
+                elif self.st.trigger_mode == 'freerun':
+                    self.set(self.A_FREERUN)
+                elif self.st.trigger_mode == 'inrush':
+                    self.set(self.A_INRUSH)
+            else:
+                self.set(self.A_RUN)
+        else:
+            self.set(self.A_STOP)
+        self.set(self.A_FULL if self.st.current_sensor=='full' else self.A_LOWRANGE)
+        self.set(self.A_TBASE, self.st.time_display_ranges[self.st.time_display_index])
+        self.set(self.A_VON if self.st.voltage_display_status else self.A_VOFF,
+                    self.st.voltage_display_ranges[self.st.voltage_display_index])
+        self.set(self.A_ION if self.st.current_display_status else self.A_IOFF,
+                    self.st.current_display_ranges[self.st.current_display_index])
+        self.set(self.A_PON if self.st.power_display_status else self.A_POFF,
+                    self.st.power_display_ranges[self.st.power_display_index])
+        self.set(self.A_ELON if self.st.earth_leakage_current_display_status
+                    else self.A_ELOFF, self.st.earth_leakage_current_display_ranges
+                        [self.st.earth_leakage_current_display_index] * 1000.0)
+
+
+
+class WFS:
+
+    def __init__(self):
+        self.wfs          = 0    # last computed wfs
+        self.counter      = 0    # number of waveforms since last posting
+        self.update_time  = 0    # time when the wfs/s was lasted posted to screen
+        self.create_text_object()
+
+    # call whenever we update the waveform on screen
+    def increment(self):
+        self.counter += 1
+
+    def update(self):
+        # time now
+        tn = time.time()
+        # if the time has increased by at least 1.0 second, update the wfm/s text
+        elapsed = tn - self.update_time
+        if elapsed >= 1.0:
+            self.wfs = int(self.counter/elapsed)
+            self.tt.set_text(f'{self.wfs :3d} wf/s')
+            self.update_time = tn
+            self.counter = 0
+
+    def create_text_object(self):
+        """WFS display."""
+        self.tt = thorpy.Text('')
+        self.tt.set_font_color(WHITE)
+        self.tt.set_topleft(*WFS_POSITION)
+
+    def draw(self):
+        self.tt.draw()
+
+
+class Datetime:
+
+    def __init__(self):
+        self.time = time.ctime()
+        self.create_text_object()
+
+    def create_text_object(self):
+        """Datetime display."""
+        self.tt = thorpy.Text(' ' * 25)
+        self.tt.set_font_color(WHITE)
+        self.tt.set_topleft(*DATETIME_POSITION)
+
+    def update(self):
+        self.time = time.ctime()
+        self.tt.set_text(self.time)
+
+    def draw(self):
+        self.tt.draw()
+
+###
+###
+# Function definitions to create various button controls for insertion into the
+# display.
+###
+###
 
 def configure_button_decorations(button, callback_function):
     button.set_bck_color(VERY_LIGHT_GREY, 'normal')
@@ -315,19 +490,6 @@ def create_trigger(st, waveform, app_actions):
         st.send_to_all()
 
     def update_trigger_mode(mode, status):
-        if mode == 'freerun':
-            st.trigger_channel = -1
-            waveform.draw_background()
-        elif mode == 'sync':
-            st.trigger_channel = 0
-            st.trigger_level = 0.0
-        elif mode == 'inrush':
-            st.trigger_channel = 2
-            st.trigger_level = 0.1
-        else:
-            print(
-                'hellebores.py: update_trigger_mode(), invalid condition requested.',
-                sys.stderr)
         st.trigger_mode = mode
         waveform.draw_background()
         update_trigger_status(status)
@@ -336,17 +498,18 @@ def create_trigger(st, waveform, app_actions):
     def update_trigger_status(status):
         if st.trigger_mode == 'freerun':
             status.set_text(
-                f'Free-run: the trigger is disabled.',
+                f'Freerun: the trigger is disabled.',
                 adapt_parent=False)
         elif st.trigger_mode == 'sync':
             status.set_text(
-                f'Sync: the trigger is enabled to find the {st.trigger_slope}' \
-                ' edge of the voltage signal at magitude 0.0V.',
+                f'Sync: the trigger is enabled to find the {st.trigger_slope}'
+                f' edge of the voltage signal at magnitude 0.0V.',
                 adapt_parent=False)
         elif st.trigger_mode == 'inrush':
             status.set_text(
-                f'Inrush: the trigger is enabled for single-shot current'
-                'detection, magnitude +/- {st.trigger_level}A. Press Run/Stop to reset.',
+                f'Inrush: the capture will stop when current '
+                f'threshold +/- {st.inrush_trigger_level}A is exceeded. '
+                f'Press Run/Stop to re-prime.',
                 adapt_parent=False)
         else:
             print(
@@ -363,7 +526,7 @@ def create_trigger(st, waveform, app_actions):
     button_done = configure_button(
         BUTTON_SIZE, 'Done', lambda: app_actions.set_updater('back'))
     button_freerun = configure_button(
-        BUTTON_SIZE, 'Free-run',
+        BUTTON_SIZE, 'Freerun',
         lambda: update_trigger_mode('freerun', text_trigger_status))
     button_sync = configure_button(
         BUTTON_SIZE, 'Sync',
@@ -501,12 +664,3 @@ def create_options(waveform, app_actions):
     for e in options.get_all_descendants():
         e.hand_cursor = False    
     return options
-
-
-
-def voltage_harmonics_reaction():
-    pass
-
-def current_harmonics_reaction():
-    pass
-

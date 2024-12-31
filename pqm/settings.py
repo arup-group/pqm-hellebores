@@ -17,9 +17,6 @@ CALIBRATIONS_FILE = 'calibrations.json'
 
 class Settings():
 
-    def __init__(self):
-        pass
-
     def resolve_path(self, path, file):
         file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), path, file)
         resolved_path = os.path.abspath(file_path)
@@ -56,20 +53,19 @@ class Settings():
         self.power_axis_per_division    = self.power_display_ranges[self.power_display_index]
         self.earth_leakage_current_axis_per_division  = \
             self.earth_leakage_current_display_ranges[self.earth_leakage_current_display_index]
-        self.pre_trigger_time           = self.time_axis_pre_trigger_divisions * self.time_axis_per_division
-        self.post_trigger_time          = self.time_axis_divisions * self.time_axis_per_division - self.pre_trigger_time
-        self.post_trigger_samples       = int(self.post_trigger_time / self.interval)
-        self.pre_trigger_samples        = int(self.pre_trigger_time / self.interval)
-        # sometimes rounding errors give us 1 too many samples, so reduce by 1.
-        self.frame_samples              = self.pre_trigger_samples + self.post_trigger_samples - 1
-        # we set a hold-off threshold (minimum number of samples to next trigger) to be slightly less
-        # (2ms) than one full screenful of data, and minimum time of 10ms.
-        self.holdoff_samples            = max(int(0.010 * self.sample_rate), self.frame_samples - int(0.002 * self.sample_rate))
-        self.time_shift                 = self.time_axis_pre_trigger_divisions * self.time_axis_per_division
+        self.pre_trigger_samples        = int(self.time_axis_pre_trigger_divisions * self.time_axis_per_division
+                                              / self.interval)
+        self.frame_samples              = int(self.time_axis_divisions * self.time_axis_per_division
+                                              / self.interval)
+        self.post_trigger_samples       = self.frame_samples - self.pre_trigger_samples
+        # we set a hold-off threshold (minimum number of samples between triggers) to be slightly less
+        # (2ms) than the frame samples.
+        self.sync_holdoff_samples       = self.frame_samples - int(0.002 * self.sample_rate)
         self.x_pixels                   = self.time_axis_divisions * self.horizontal_pixels_per_division
         self.y_pixels                   = self.vertical_axis_divisions * self.vertical_pixels_per_division
-        self.half_y_pixels              = self.y_pixels // 2
- 
+        self.x_offset                   = (self.time_axis_pre_trigger_divisions *
+                                              self.horizontal_pixels_per_division)
+        self.y_offset                   = self.y_pixels // 2
 
     def set_settings(self, js):
         self.analysis_max_min_reset                    = js['analysis_max_min_reset']
@@ -96,11 +92,11 @@ class Settings():
         self.earth_leakage_current_display_index       = js['earth_leakage_current_display_index']
         self.earth_leakage_current_display_status      = js['earth_leakage_current_display_status']
         self.scale_factors                             = js['scale_factors']
-        self.trigger_channel                           = js['trigger_channel']
         self.trigger_slope                             = js['trigger_slope']
-        self.trigger_level                             = js['trigger_level']
+        self.inrush_trigger_level                      = js['inrush_trigger_level']
         self.trigger_position                          = js['trigger_position']
         self.trigger_mode                              = js['trigger_mode']
+        self.run_mode                                  = js['run_mode']
         # now settings that are derived from the above
         self.set_derived_settings()
 
@@ -131,11 +127,11 @@ class Settings():
         js['earth_leakage_current_display_index']      = self.earth_leakage_current_display_index
         js['earth_leakage_current_display_status']     = self.earth_leakage_current_display_status
         js['scale_factors']                            = self.scale_factors
-        js['trigger_channel']                          = self.trigger_channel
         js['trigger_slope']                            = self.trigger_slope
-        js['trigger_level']                            = self.trigger_level
+        js['inrush_trigger_level']                     = self.inrush_trigger_level
         js['trigger_position']                         = self.trigger_position
         js['trigger_mode']                             = self.trigger_mode
+        js['run_mode']                                 = self.run_mode
         # return the resulting json dictionary 
         return js 
  
@@ -160,6 +156,8 @@ class Settings():
         try:
             with open(self.sfile, 'w') as f:
                 f.write(json.dumps(self.make_json(), indent=4))
+                #f.flush()
+                #os.fsync(f.fileno())
         except (PermissionError, IOError):
             print(
                 "settings.py, save_settings(): couldn't write settings.json.",
@@ -264,7 +262,8 @@ class Settings():
 
     def show_settings(self):
         print('Settings:')
-        items = self.make_json()
+        #items = self.make_json()
+        items = vars(self)
         for i in items:
             print(f'  {i:40s}: {items[i]}')
 
@@ -353,11 +352,11 @@ default_settings = '''
         0.00122,
         0.0489
     ],
-    "trigger_channel": 0,
     "trigger_slope": "rising",
-    "trigger_level": 0.0,
+    "inrush_trigger_level": 0.2,
     "trigger_position": 5,
-    "trigger_mode": "sync"
+    "trigger_mode": "sync",
+    "run_mode": "running"
 }
 '''
 

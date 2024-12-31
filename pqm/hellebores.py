@@ -31,13 +31,6 @@ if os.name == 'nt':
     from mswin_pipes import Pipe, peek_pipe, get_pipe_from_stream
 
 
-# More UI is needed for the following:
-#
-# Measurements-1 (summary)
-# Measurements-2 (harmonics)
-# rollback NOT IMPLEMENTED
-# About (including software version, kernel version, sha256 of Pi and Pico)
-
 # The instance of this class will hold all the user interface states or 'groups'
 # that can be displayed together with the currently active selection
 class UI_groups:
@@ -47,10 +40,12 @@ class UI_groups:
     # the flag helps to reduce workload of screen refresh when there are overlay menus.
     overlay_dialog_active = False
 
-    def __init__(self, st, buffer, waveform, multimeter, v_harmonics, i_harmonics, app_actions):
+    def __init__(self, st, buffer, datetime, wfs, waveform, multimeter, v_harmonics, \
+                     i_harmonics, app_actions):
         # make a local reference to app_actions and st
         self.app_actions = app_actions
         self.st = st
+        self.buffer = buffer
 
         # re-point the updater function in the app_actions object to target the function in this object
         # NB dynamically altering a function definition in another object is a relatively unusual
@@ -59,7 +54,10 @@ class UI_groups:
         app_actions.set_updater = self.set_updater
 
         # datetime group
-        self.elements['datetime'] = create_datetime()
+        self.elements['datetime'] = datetime
+
+        # waveforms-per-second group
+        self.elements['wfs'] = wfs
 
         # waveform group
         self.instruments['waveform'] = waveform
@@ -89,24 +87,31 @@ class UI_groups:
         for k in ['mode', 'current_sensitivity', 'vertical', 'horizontal', 'trigger', 'options', 'clear']:
             self.elements[k].set_topright(*SETTINGS_BOX_POSITION)
 
-    def refresh(self, buffer, screen):
-        """dispatch to the refresh method of the element group currently selected."""
-        if self.mode == 'waveform':
-            # waveform mode
-            if self.app_actions.capturing:
-                # if capturing, we might display multiple frames in one display
-                traces = self.app_actions.multi_trace
-            else:
-                # but just one frame if in stopped mode
-                traces = 1
-            self.instruments[self.mode].refresh(buffer, traces, screen, self.elements['datetime'])
-        else:
-            # non-waveform mode
-            self.instruments[self.mode].refresh(self.app_actions.capturing, buffer, \
-                screen, self.elements['datetime'])
 
-    def draw_texts(self, capturing):
-        self.instruments[self.mode].draw_texts(capturing)
+    def catch_latest_analysis(self):
+        """At the point of stopping, capture the latest analysis results into the UI objects."""
+        self.instruments['multimeter'].update_multimeter_display(self.buffer.cs)
+        self.instruments['voltage_harmonic'].update_harmonic_display(self.buffer.cs)
+        self.instruments['current_harmonic'].update_harmonic_display(self.buffer.cs)
+
+
+    def refresh(self, screen):
+        """dispatch to the refresh method of the element group currently selected."""
+        if self.mode == 'waveform' and self.st.run_mode == 'running':
+            # plot multiple traces if we're running in waveform mode
+            traces = self.app_actions.multi_trace
+            self.instruments[self.mode].refresh(self.buffer, screen, \
+                multi_trace=self.app_actions.multi_trace)
+            self.elements['datetime'].draw()
+            self.elements['wfs'].draw()
+        else:
+            self.instruments[self.mode].refresh(self.buffer, screen)
+            self.elements['datetime'].draw()
+
+
+    def update_annunciators(self):
+        self.instruments[self.mode].update_annunciators()
+
 
     def set_multi_trace(self):
         # need to run this at least when the timebase changes or when there is an overlay dialog
@@ -126,6 +131,12 @@ class UI_groups:
         if elements_group in ['waveform', 'multimeter', 'voltage_harmonic', 'current_harmonic']:
             # if we picked a different display mode, store it in 'self.mode'.
             self.mode = elements_group
+            # **EDGE CASE**
+            # if we've selected a non-waveform mode while in inrush trigger mode, turn off
+            # inrush trigger to maintain predictable start/stop behaviour
+            if self.mode != 'waveform' and self.st.trigger_mode == 'inrush':
+                self.st.trigger_mode = 'sync'
+                self.st.send_to_all()
             selected_elements = [ *self.elements[self.mode] ]
             self.app_actions.post_clear_screen_event()
             self.overlay_dialog_active = False
@@ -152,34 +163,6 @@ class UI_groups:
         return self.elements[element]
 
 
-class WFS_Counter:
-
-    def __init__(self):
-        self.wfs          = 0    # last computed wfs
-        self.counter      = 0    # number of waveforms since last posting
-        self.update_time  = 0    # time when the wfs/s was lasted posted to screen
-
-    # called whenever we update the waveform on screen 
-    def increment(self):
-        self.counter = self.counter + 1
-
-    def time_to_update(self):
-        # time now 
-        tn = time.time()
-        # if the time has increased by at least 1.0 second, update the wfm/s text
-        elapsed = tn - self.update_time
-        if elapsed >= 1.0:
-            self.wfs = int(self.counter/elapsed)
-            self.update_time = tn
-            self.counter = 0
-            return True
-        else:
-            return False
- 
-    def get(self):
-        return self.wfs
-        
-
 def get_screen_hardware_size():
     i = pygame.display.Info()
     return i.current_w, i.current_h
@@ -196,21 +179,9 @@ class Sample_Buffer:
         self.ps = [ [],[],[],[] ]           # points
         self.cs = {}                        # calculations
         # sample buffer history
-        # future extension is to use this buffer for electrical event history
-        # (eg triggered by power fluctuation etc)
-        self.sample_waveform_history = [ [] for i in range(SAMPLE_BUFFER_SIZE) ]
-        # tracks previous 'x coordinate'
-        self.xp = -1
-
-    def end_frame(self, capturing, wfs):
-        if capturing:
-            # shift the history buffer along and append the new capture
-            self.sample_waveform_history = self.sample_waveform_history[1:]
-            self.sample_waveform_history.append(self.ps)
-            #self.sample_waveform_history[SAMPLE_BUFFER_SIZE] = self.ps
-            wfs.increment()
-        # reset the working buffer
-        self.ps = [ [],[],[],[] ]
+        # allows 'multitrace' to work
+        self.waveforms = [ [] for i in range(SAMPLE_BUFFER_SIZE) ]
+        self.frame_completed = False        # flag to track completed frames
 
     def add_sample(self, sample):
         self.ps[0].append((sample[0], sample[1]))
@@ -224,15 +195,13 @@ class Sample_Buffer:
         self.st.analysis_max_min_reset += 1
         self.st.send_to_all() 
 
-
     def clear_accumulators(self):
         """Incrementing the analysis_accumulators_reset setting triggers a function in analyser.py
         to reset all the accumulators."""
         self.st.analysis_accumulators_reset += 1
         self.st.send_to_all()
 
-
-    def load_analysis(self, capturing):
+    def load_analysis(self):
         # incoming analysis data is optional: returns false if no data source
         if l:=self.data_comms.get_analysis_line(0.0):
             try:
@@ -245,37 +214,30 @@ class Sample_Buffer:
         else:
             return False
 
-
-    def load_waveform(self, capturing, wfs):
+    def load_waveform(self):
         # the loop will exit if:
         # (a) there is no data currently waiting to be read, 
-        # (b) *END* marker at the end of the current line,
-        # (c) the x coordinate 'goes backwards' indicating a new frame has started,
-        # (d) the line is empty, can't be split() or any other kind of read error,
-        # (e) more than 1000 samples have been read (this keeps the UI responsive)
+        # (b) '.' end-of-frame marker in current line
+        # (c) the line is empty, can't be split() or any other kind of read error,
+        # (d) more than 1000 samples have been read (this keeps the UI responsive)
         sample_counter = 0
+        self.frame_completed = False
         while sample_counter < 1000 and (l := self.data_comms.get_waveform_line(0.02)):
             try:
-                ws = l.split()
-                sample = [ int(w) for w in ws[:5] ]
-                if ws[-1] == '*END*':
-                    # add current sample then end the frame
-                    self.add_sample(sample)
-                    self.end_frame(capturing, wfs)
-                    self.xp = -1
-                    break
-                elif sample[0] < self.xp:
-                    # x coordinate has reset to indicate start of new frame...
-                    # end the frame before adding current sample to a new one
-                    self.end_frame(capturing, wfs)    
-                    self.add_sample(sample)
-                    self.xp = -1
+                # lines beginning with '.' end the frame
+                # in stopped mode, framer will send a larger block of '.' characters in one line
+                # to flush the pipe buffer in the kernel.
+                if l[0] == '.':
+                    self.frame_completed = True
+                    # shift the history buffer along and add the new capture
+                    self.waveforms = [ self.ps, *self.waveforms[1:] ]
+                    # reset the working buffer
+                    self.ps = [ [],[],[],[] ]
                     break
                 else:
-                    # an ordinary, non-special, sample
-                    self.add_sample(sample)
-                self.xp = sample[0]
-                sample_counter = sample_counter + 1
+                    # add a sample
+                    self.add_sample([ int(w) for w in l.split() ])
+                    sample_counter += 1
             except (IndexError, ValueError):
                 print('hellebores.py: Sample_Buffer.load_analysis()'
                       ' file reading error.', file=sys.stderr) 
@@ -283,8 +245,8 @@ class Sample_Buffer:
 
 
     def get_waveform(self, index=0):
-        # reverse into history by 'index' frames
-        return self.sample_waveform_history[SAMPLE_BUFFER_SIZE-1-index]
+        # advance into history by 'index' frames
+        return self.waveforms[min(index,SAMPLE_BUFFER_SIZE)]
 
 
 
@@ -383,18 +345,38 @@ class Data_comms:
 
 class App_Actions:
 
-    def __init__(self, data_comms):
-        self.data_comms = data_comms
-        # allow/stop update of the lines on the screen
-        self.capturing = True
+    def __init__(self):
+        self.st = None             # links to other objects
+        self.ui = None             # need to be immediately
+        self.buffer = None         # set up after they are
+        self.data_comms = None     # created, by calling set_other_objects()
         # multi_trace mode overlays traces on one background and is used to optimise
         # for high frame rates or dialog overlay
         self.multi_trace = 1
+        # keep track of time to update the status texts on screen periodically
+        self.update_time = time.time()
         # create custom pygame events, which we use for clearing the screen
         # and triggering a redraw of the controls
         self.clear_screen_event = pygame.event.custom_type()
         self.draw_controls_event = pygame.event.custom_type()
+        self.former_run_mode = ''  # we keep track of when run mode changes
 
+    def set_other_objects(self, st, ui, buffer, data_comms):
+        self.st = st
+        self.ui = ui
+        self.buffer = buffer
+        self.data_comms = data_comms
+
+    def time_to_update_status(self):
+        # time now
+        tn = time.time()
+        # if the time has increased by at least 0.5 second, update the wfm/s text
+        elapsed = tn - self.update_time
+        if elapsed >= 0.2:
+            self.update_time = tn
+            return True
+        else:
+            return False
 
     def post_clear_screen_event(self):
         pygame.event.post(pygame.event.Event(self.clear_screen_event, {}))
@@ -402,8 +384,22 @@ class App_Actions:
     def post_draw_controls_event(self):
         pygame.event.post(pygame.event.Event(self.draw_controls_event, {}))
 
-    def start_stop(self):
-        self.capturing = not self.capturing
+    def settings_changed(self):
+        """make sure we catch latest analysis results if we are entering stopped
+        state from running state, even if those results are not currently
+        being displayed."""
+        if self.former_run_mode!='stopped' and self.st.run_mode=='stopped':
+            self.ui.catch_latest_analysis()
+        self.former_run_mode = self.st.run_mode
+
+    def start_stop(self, action='flip'):
+        former_run_mode = self.st.run_mode
+        if (action=='flip' and former_run_mode=='stopped') or action=='run':
+            self.st.run_mode = 'running'
+        elif (action=='flip' and former_run_mode=='running') or action == 'stop':
+            self.st.run_mode = 'stopped'
+        self.st.send_to_all()
+        self.settings_changed()
 
     def set_updater(self, mode):
         # this placeholder function is replaced dynamically by the implementation
@@ -412,11 +408,11 @@ class App_Actions:
               'should be substituted prior to calling it.', file=sys.stderr)
 
     def exit_application(self, option='quit'):
-        exit_codes = { 'quit': 0,
-                       'error': 1,
-                       'restart': 2,
+        exit_codes = { 'quit'           : 0,
+                       'error'          : 1,
+                       'restart'        : 2,
                        'software_update': 3,
-                       'shutdown': 4 }
+                       'shutdown'       : 4 }
         try:
             code = exit_codes[option]
         except KeyError:
@@ -432,9 +428,12 @@ class App_Actions:
 
 def get_command_args():
     # NB argparse library adds extra backslash escape characters to strings, which we don't want
-    cmd_parser = argparse.ArgumentParser(description='Read waveform and analysis (optional) data streams and provide a GUI to display them and configure the post-processing.')
-    cmd_parser.add_argument('--waveform_file', default='stdin', help='Path of waveform file stream or pipe.')
-    cmd_parser.add_argument('--analysis_file', default=None, help='Path of analysis file stream or pipe.')
+    cmd_parser = argparse.ArgumentParser(description='Read waveform and analysis (optional) '
+        'data streams and provide a GUI to display them and configure the post-processing.')
+    cmd_parser.add_argument('--waveform_file', default='stdin', \
+        help='Path of waveform file stream or pipe.')
+    cmd_parser.add_argument('--analysis_file', default=None, \
+        help='Path of analysis file stream or pipe.')
     program_name = cmd_parser.prog
     args = cmd_parser.parse_args()
     return (program_name, args)
@@ -462,23 +461,31 @@ def main():
     thorpy.set_default_font(FONT, FONT_SIZE)
     thorpy.init(screen, thorpy.theme_simple)
 
+    # object holding the state of the application and the incoming communication streams
+    app_actions  = App_Actions()
+    data_comms   = Data_comms(args.waveform_file, args.analysis_file)
+
     # load configuration settings from settings.json into a settings object 'st'.
     # the list of 'other programs' is used to send signals when we change
     # settings in this program. We call st.send_to_all() and then
     # these programs are each told to re-read the settings file.
-    st = Settings(other_programs = [ 'scaler.py', 'trigger.py', 'mapper.py',\
-            'analyser.py' ], reload_on_signal=False)
+    st = Settings(callback_fn = app_actions.settings_changed, \
+                  other_programs = [ 'scaler.py', 'framer.py', 'analyser.py' ], \
+                  reload_on_signal=True)
 
-    # create objects that hold the state of the application, data buffers and UI
-    data_comms   = Data_comms(args.waveform_file, args.analysis_file)
-    app_actions  = App_Actions(data_comms)
+    # objects that hold the data buffers and UI
     buffer       = Sample_Buffer(st, data_comms)
-    wfs          = WFS_Counter()
-    waveform     = Waveform(st, wfs, app_actions)
+    datetime     = Datetime()
+    wfs          = WFS()
+    waveform     = Waveform(st, app_actions)
     multimeter   = Multimeter(st, app_actions)
     v_harmonics  = Harmonic(st, app_actions, harmonic_of_what='voltage')
     i_harmonics  = Harmonic(st, app_actions, harmonic_of_what='current')
-    ui           = UI_groups(st, buffer, waveform, multimeter, v_harmonics, i_harmonics, app_actions)
+    ui           = UI_groups(st, buffer, datetime, wfs, waveform, multimeter, \
+                                 v_harmonics, i_harmonics, app_actions)
+
+    # tell app_actions how to access the other objects it needs to manipulate
+    app_actions.set_other_objects(st, ui, buffer, data_comms)
 
     # start up in the waveform mode
     ui.app_actions.set_updater('waveform')
@@ -500,10 +507,12 @@ def main():
     
             # if multi_trace is active, read multiple frames into the buffer, otherwise just one
             for i in range(app_actions.multi_trace):
-                buffer.load_waveform(app_actions.capturing, wfs)
+                buffer.load_waveform()
+                if buffer.frame_completed:
+                    wfs.increment()
     
             # read new analysis results, if available 
-            analysis_updated = buffer.load_analysis(app_actions.capturing)
+            analysis_updated = buffer.load_analysis()
     
             if not data_comms.pipes_ok:
                 # one or both incoming data pipes were closed, quit the application
@@ -516,12 +525,13 @@ def main():
                 pygame.mouse.set_cursor(
                     (8,8), (0,0), (0,0,0,0,0,0,0,0), (0,0,0,0,0,0,0,0))
     
-            # we update status texts and datetime every second
-            if wfs.time_to_update():
-                if app_actions.capturing == True:
-                    ui.get_element('datetime').set_text(time.ctime())
-                ui.draw_texts(app_actions.capturing)
+            if app_actions.time_to_update_status():
+                if st.run_mode=='running':
+                    datetime.update()
+                    wfs.update()
+                # update the annunciators in both running and stopped mode
                 # force controls - including new text - to be re-drawn
+                ui.update_annunciators()
                 app_actions.post_draw_controls_event()
     
             # here we process mouse/touch/keyboard events.
@@ -534,9 +544,9 @@ def main():
                 elif e.type == pygame.KEYDOWN and e.key == pygame.K_l:     # lines
                     waveform.plot_mode('lines')
                 elif e.type == pygame.KEYDOWN and e.key == pygame.K_r:     # run
-                    app_actions.capturing = True
+                    app_actions.start_stop('run')
                 elif e.type == pygame.KEYDOWN and e.key == pygame.K_s:     # stop
-                    app_actions.capturing = False
+                    app_actions.start_stop('stop')
                 elif e.type == app_actions.clear_screen_event:
                     # this event is posted when the 'mode' of the software is changed and we
                     # want to clear the screen completely
@@ -555,8 +565,8 @@ def main():
             # time round the loop. Depending on the current mode, waveforms, meter readings etc
             # will be drawn as necessary.
             if ui.mode == 'waveform' or events or analysis_updated:
-                ui.refresh(buffer, screen)
-    
+                ui.refresh(screen)
+
             # ui.get_updater().update() is an expensive function, so we use the simplest possible
             # thorpy theme to achieve the quickest redraw time. Then, we only update/redraw when
             # buttons are pressed or the text needs updating. When there is an overlay menu displayed

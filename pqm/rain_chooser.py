@@ -29,7 +29,7 @@ FONT_SIZE = 12
 SLIDER_SIZE = 60
 BACKGROUND_COLOUR = (250, 150, 150)
 ROOT2 = math.sqrt(2)
-
+DEFAULT_PRESET = 'Two'
 
 def sample(i, fs):
     """i is integer sample number, fs is a list of tuples (frequency, magnitude, phase).
@@ -110,7 +110,7 @@ class Parameters:
                     0, 2, 0.5, 0.3, 30, -60, 180,
                     0.0003, 90 ],
         'Two':    [ 0, 50.05, 0, 230, 0, 0, 0, 0,
-                    0, 1, 0.5, 0.3, -30, -60, 180,
+                    0, 0.1, 0.02, 0.03, -30, -60, 180,
                     0.0002, 90 ],
         'Three':  [ 0, 49.98, 0, 230, 0, 0, 0, 0,
                     0, 0.5, 0.2, 0.1, 30, -60, 180,
@@ -266,7 +266,7 @@ def setup_ui(screen, parameters):
     all_ui = thorpy.Group([buttons_ui, sliders_ui, text], mode='v')
 
     # load default parameters
-    load_presets('One', parameters) 
+    load_presets(DEFAULT_PRESET, parameters)
 
     return all_ui
 

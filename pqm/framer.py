@@ -101,10 +101,9 @@ class Buffer:
         # set the start and end markers
         self.frame_startp = self.tp - self.st.pre_trigger_samples
         self.frame_endp = self.frame_startp + self.st.frame_samples - 1
-        # REINSTATE THIS ONCE INRUSH TRIGGERING IS IMPLEMENTED FULLY
         # in running mode, make sure the start marker doesn't precede the previous end marker
-        #if self.st.run_mode == 'running':
-        #    self.frame_startp = max(self.outp, self.frame_startp)
+        if self.st.run_mode == 'running' and self.st.trigger_mode == 'sync':
+            self.frame_startp = max(self.outp, self.frame_startp)
         # signal that we have set up a new frame
         self.reframed = True
 
@@ -252,13 +251,12 @@ class Buffer:
 
     def configure_for_new_settings(self):
         self.update_trigger_settings()
-        # if we are in running mode, then re-prime the trigger
-        # regardless of the trigger mode
-        if self.st.run_mode == 'running':
-            self.inrush_holdoff_counter = self.st.pre_trigger_samples
-            self.reprime()
         # frame boundary can change, even in stopped mode
         self.update_frame_markers()
+        # if we are in running mode, then advance buffer pointers
+        if self.st.run_mode == 'running':
+            self.tp = self.sp   # advance buffer pointers, in case we exited stopped mode
+            self.inrush_holdoff_counter = self.st.pre_trigger_samples
 
     def update_trigger_settings(self):
         """We don't want to process 'mode' logic every time we read a sample. Therefore we create

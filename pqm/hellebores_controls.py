@@ -46,24 +46,25 @@ class Range_controller:
 
 class Annunciators:
     # Individual annunciator state enumerations
-    A_SYNC       = 0
-    A_FREERUN    = 1
-    A_INRUSH     = 2
-    A_STOP       = 3
-    A_FULL       = 4
-    A_LOWRANGE   = 5
-    A_TBASE      = 6
-    A_VON        = 7
-    A_VOFF       = 8
-    A_ION        = 9
-    A_IOFF       = 10
-    A_PON        = 11
-    A_POFF       = 12
-    A_ELON       = 13
-    A_ELOFF      = 14
+    A_RUN        = 0
+    A_SYNC       = 1
+    A_FREERUN    = 2
+    A_INRUSH     = 3
+    A_STOP       = 4
+    A_FULL       = 5
+    A_LOWRANGE   = 6
+    A_TBASE      = 7
+    A_VON        = 8
+    A_VOFF       = 9
+    A_ION        = 10
+    A_IOFF       = 11
+    A_PON        = 12
+    A_POFF       = 13
+    A_ELON       = 14
+    A_ELOFF      = 15
 
     def __init__(self, st, app_actions):
-        self.states = [None] * 15  # list of states that select
+        self.states = [None] * 16  # list of states that select
                                    # text object and format for each
                                    # required state
         self.st = st
@@ -108,7 +109,8 @@ class Annunciators:
 
     def configure_annunciators(self):
         """Configure annunciators with available modes and template text."""
-        self.add([ (self.A_SYNC,BLACK,GREEN,'Sync'),
+        self.add([ (self.A_RUN,BLACK,GREEN,'Run'),
+                   (self.A_SYNC,BLACK,GREEN,'Sync'),
                    (self.A_FREERUN,BLACK,GREEN,'Freerun'),
                    (self.A_INRUSH,BLACK,ORANGE,'Inrush'),
                    (self.A_STOP,BLACK,RED,'Stopped') ])
@@ -129,12 +131,15 @@ class Annunciators:
         """Update the text and colours of the annunciators in line with the latest
         status information."""
         if self.st.run_mode == 'running':
-            if self.st.trigger_mode == 'sync':
-                self.set(self.A_SYNC)
-            elif self.st.trigger_mode == 'freerun':
-                self.set(self.A_FREERUN)
-            elif self.st.trigger_mode == 'inrush':
-                self.set(self.A_INRUSH)
+            if self.app_actions.ui.mode == 'waveform':
+                if self.st.trigger_mode == 'sync':
+                    self.set(self.A_SYNC)
+                elif self.st.trigger_mode == 'freerun':
+                    self.set(self.A_FREERUN)
+                elif self.st.trigger_mode == 'inrush':
+                    self.set(self.A_INRUSH)
+            else:
+                self.set(self.A_RUN)
         else:
             self.set(self.A_STOP)
         self.set(self.A_FULL if self.st.current_sensor=='full' else self.A_LOWRANGE)
@@ -493,7 +498,7 @@ def create_trigger(st, waveform, app_actions):
     def update_trigger_status(status):
         if st.trigger_mode == 'freerun':
             status.set_text(
-                f'Free-run: the trigger is disabled.',
+                f'Freerun: the trigger is disabled.',
                 adapt_parent=False)
         elif st.trigger_mode == 'sync':
             status.set_text(
@@ -521,7 +526,7 @@ def create_trigger(st, waveform, app_actions):
     button_done = configure_button(
         BUTTON_SIZE, 'Done', lambda: app_actions.set_updater('back'))
     button_freerun = configure_button(
-        BUTTON_SIZE, 'Free-run',
+        BUTTON_SIZE, 'Freerun',
         lambda: update_trigger_mode('freerun', text_trigger_status))
     button_sync = configure_button(
         BUTTON_SIZE, 'Sync',

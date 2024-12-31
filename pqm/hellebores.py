@@ -131,6 +131,12 @@ class UI_groups:
         if elements_group in ['waveform', 'multimeter', 'voltage_harmonic', 'current_harmonic']:
             # if we picked a different display mode, store it in 'self.mode'.
             self.mode = elements_group
+            # **EDGE CASE**
+            # if we've selected a non-waveform mode while in inrush trigger mode, turn off
+            # inrush trigger to maintain predictable start/stop behaviour
+            if self.mode != 'waveform' and self.st.trigger_mode == 'inrush':
+                self.st.trigger_mode = 'sync'
+                self.st.send_to_all()
             selected_elements = [ *self.elements[self.mode] ]
             self.app_actions.post_clear_screen_event()
             self.overlay_dialog_active = False

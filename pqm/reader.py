@@ -39,13 +39,17 @@ def read_and_print(ser):
     Sometimes (rarely) there is a serial read error. This can be caused by the getty
     terminal process trying to read/write the serial port. We allow up to 5 successive
     re-tries before quitting.'''
+    # shift buffer provides a time delay on channel 0 readings, to compensate for leading time shift
+    # on channel 0 (earth leakage current) measurements.
+    shift_buffer = [ '0000', '0000', '0000', '0000', '0000', '0000' ]
     retries = 5
     while retries > 0:    
         try:
-            bs = (ser.read(BLOCK_SIZE).hex())
+            bs = ser.read(BLOCK_SIZE).hex()
             # process data as lines of 8 bytes, or 16 hex characters
             for i in range(0, BLOCK_SIZE*2, 16):
-                print(f'{i//16 :04x} {bs[i:i+4]} {bs[i+4:i+8]} {bs[i+8:i+12]} {bs[i+12:i+16]}')
+                shift_buffer = shift_buffer[1:].append(bs[i:i+4])
+                print(f'{i//16 :04x} {shift_buffer[0]} {bs[i+4:i+8]} {bs[i+8:i+12]} {bs[i+12:i+16]}')
             sys.stdout.flush()
             retries = 5
 

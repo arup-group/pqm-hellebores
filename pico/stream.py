@@ -46,6 +46,11 @@ BUFFER_SIZE = const(128)
 BUFFER_MEMORY_SIZE = const(1024)
 HALF_BUFFER_MEMORY_SIZE = const(512)
 
+# Earth leakage channel has a hardware-induced phase advance relative to the
+# other directly measured channels. We compensate by applying a time offset
+# in the ADC, to this channel.
+CH0_DELAY      = const(700)          # this is microseconds, for 4MHz crystal
+
 # flags: operation flags used to control program flow on both CPU cores.
 STOP           = const(0b0001)       # tells both cores to exit
 RESET          = const(0b0010)       # initiate a machine reset
@@ -151,7 +156,10 @@ def clear_adc_overload():
     '''ADC codes at out-of-range values latch in the ADC output. Assigning to
     the PHASE register resets the ADCs to allow them to resume operation
     (datasheet section 5.5).'''
-    bs = bytes([0x00, 0x00, 0x00])
+    # We set a phase shift for CH0 to compensate for observed time shift
+    # behaviour of earth leakage measurement circuit, relative to the directly
+    # measured current/voltage channels.
+    bs = bytes([0x00, CH0_DELAY >> 8, CH0_DELAY & 0b11111111])
     if DEBUG:
         print('PHASE register.')
     set_adc_register(0x0a, bs) 

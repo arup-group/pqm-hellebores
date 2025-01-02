@@ -48,7 +48,8 @@ def read_and_print(ser):
             bs = ser.read(BLOCK_SIZE).hex()
             # process data as lines of 8 bytes, or 16 hex characters
             for i in range(0, BLOCK_SIZE*2, 16):
-                shift_buffer = shift_buffer[1:].append(bs[i:i+4])
+                shift_buffer = shift_buffer[1:]
+                shift_buffer.append(bs[i:i+4])
                 print(f'{i//16 :04x} {shift_buffer[0]} {bs[i+4:i+8]} {bs[i+8:i+12]} {bs[i+12:i+16]}')
             sys.stdout.flush()
             retries = 5

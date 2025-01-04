@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-
 #   __
 #  / _|_ __ __ _ _ __ ___   ___ _ __ _ __  _   _
 # | |_| '__/ _` | '_ ` _ \ / _ \ '__| '_ \| | | |
@@ -119,16 +118,7 @@ class Buffer:
         """Set the earliest position for the next trigger and clear the trigger flag if not
         in freerun mode"""
         if self.st.trigger_mode == 'freerun':
-            # in freerun mode, we advance by exactly one frame and immediately trigger
-            self.sync_triggered = True
-            self.tp = self.tp + self.st.frame_samples
-            # the interpolation_fraction corrects for creeping time error -- the frame_samples do not
-            # necessarily correspond to exactly one frame of time
-            self.interpolation_fraction += (self.st.time_axis_divisions * self.st.time_axis_per_division \
-                / 1000 * self.st.sample_rate) % 1
-            if self.interpolation_fraction > 1.0:
-                self.tp += int(self.interpolation_fraction)
-                self.interpolation_fraction = self.interpolation_fraction % 1
+            self.freerun_trigger_test()
         else:
             # in sync or inrush mode, clear the sync trigger flag
             self.sync_triggered = False
@@ -246,7 +236,8 @@ class Buffer:
     def freerun_trigger_test(self):
         # in freerun mode, we advance by exactly one frame and immediately trigger
         self.sync_triggered = True
-        self.tp = self.tp + self.st.frame_samples
+        self.tp = self.sp + self.st.pre_trigger_samples
+        #self.tp = self.tp + self.st.frame_samples
         # the interpolation_fraction corrects for creeping time error -- the frame_samples do not
         # necessarily correspond to exactly one frame of time
         self.interpolation_fraction += (self.st.time_axis_divisions * self.st.time_axis_per_division \
@@ -257,15 +248,6 @@ class Buffer:
         return self.sync_triggered
 
     def configure_for_new_settings(self):
-        self.update_trigger_settings()
-        # if we are in running mode, then advance buffer pointers
-        if self.st.run_mode == 'running':
-            self.tp = self.sp   # advance buffer pointers, in case we exited stopped mode
-            self.inrush_holdoff_counter = self.st.pre_trigger_samples
-        # frame boundary can change, even in stopped mode
-        self.update_frame_markers()
-
-    def update_trigger_settings(self):
         """We don't want to process 'mode' logic every time we read a sample. Therefore we create
         a trigger test function dynamically, only when settings are changed."""
         # setup a composite trigger function and store it in self.trigger_test_fn
@@ -295,6 +277,11 @@ class Buffer:
             self.trigger_test_fn = (lambda s1, s2:
                     self.sync_triggered
                     or self.freerun_trigger_test())
+        self.inrush_holdoff_counter = self.st.pre_trigger_samples
+        self.sync_holdoff_counter = self.st.sync_holdoff_samples
+        # frame boundary can change, even in stopped mode
+        self.update_frame_markers()
+
 
 
 def get_command_args():

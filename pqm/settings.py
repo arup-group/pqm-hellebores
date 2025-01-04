@@ -40,9 +40,11 @@ class Settings():
                 cal = js[identity]
         except (FileNotFoundError, IOError):
             print('settings.py: using default calibration', file=sys.stderr)
-            cal = { 'offsets': [0.0, 0.0, 0.0, 0.0], \
-                      'gains': [1.0, 1.0, 1.0, 1.0] }          
-        return (cal['offsets'], cal['gains'])
+            cal = { 'offsets': [0.0, 0.0, 0.0, 0.0],
+                      'gains': [1.0, 1.0, 1.0, 1.0],
+                 'skew_times': [0.0, 0.0, 0.0, 0.0]
+            }
+        return (cal['offsets'], cal['gains'], cal['skew_times'])
  
 
     def set_derived_settings(self):
@@ -235,7 +237,8 @@ class Settings():
 
         # establish identity and retrieve calibration constants
         self.identity = self.get_identity()
-        (self.cal_offsets, self.cal_gains) = self.get_calibration(self.identity)
+        (self.cal_offsets, self.cal_gains, self.cal_skew_times) = \
+            self.get_calibration(self.identity)
 
         # load initial settings
         self.sfile = self.resolve_path(CONFIGURATION_DIRECTORY, SETTINGS_FILE)

@@ -17,12 +17,14 @@ import signal
 from settings import Settings
 
 
+DELAY_LINE_LENGTH = 64
+
 def from_twos_complement_hex(w):
     v = int(w, base=16)
     return -(v & 0x8000) | (v & 0x7fff)
 
 def get_factors(run_calibrated=True):
-    global st, offsets, gains, current_channel
+    global st, offsets, gains, delays, current_channel
     if st.current_sensor == 'low':
         current_channel = 1
     else:
@@ -30,11 +32,12 @@ def get_factors(run_calibrated=True):
     if run_calibrated == True:
         offsets = st.cal_offsets
         gains   = [ s*g for s,g in zip(st.scale_factors, st.cal_gains) ]
+        delays  = [ int(-1 - skew_time // st.interval) for skew_time in st.cal_skew_times ]
     # we support running in 'uncalibrated' mode when we want to calibrate the device
     else:
         offsets = [0, 0, 0, 0]
         gains   = st.scale_factors
-   
+        delays  = [-1, -1, -1, -1]
 
 def scale_readings(cs):
     """cs contains channel readings in integers"""
@@ -57,6 +60,9 @@ def main():
     i = 0   # sample index
     get_factors(run_calibrated)
 
+    # the delay line allows timing skew between channels to be corrected
+    delay_line = [ [0, 0, 0, 0] for i in range(DELAY_LINE_LENGTH) ]
+
     # now loop over all the lines of data from stdin
     for line in sys.stdin:
         line = line.rstrip()
@@ -65,8 +71,10 @@ def main():
             t = st.interval*i
             # split channel values into an integer array, removing the index field
             cs = [ from_twos_complement_hex(w) for w in line.split()[1:] ]
-            # scale the readings
-            scaled = scale_readings(cs)
+            # correct for channel timing skew and scale the readings
+            delay_line = delay_line[1:]
+            delay_line.append(cs)
+            scaled = scale_readings([ delay_line[delays[ch]][ch] for ch in range(4) ])
             # calculate floating point values, with appropriate calibration factors
             voltage = scaled[3]
             # if st.current_axis_per_division is less than or equal to 0.1 A/div,

@@ -28,7 +28,8 @@ class Version:
         identity = f'Identity             : {self.st.identity}'
         offsets =  f'Calibration offsets  : {self.st.cal_offsets}'
         gains =    f'Calibration gains    : {self.st.cal_gains}'
-        about = '\n'.join( [ver, md5, git_h, tf, identity, offsets, gains] )
+        skews =    f'Calibration skews    : {self.st.cal_skew_times}'
+        about = '\n'.join( [ver, md5, git_h, tf, identity, offsets, gains, skews] )
         return about
 
     def resolve_path(self, path, file):

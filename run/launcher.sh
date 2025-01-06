@@ -13,9 +13,12 @@ IP_ADDRESS=$(hostname -I | cut -d ' ' -f 1)
 MAC_ADDRESS=$(ip -oneline link | sed -rn 's/.+?wlp.+?ether ([a-f0-9:]+).*/\1/p')
 USER=$(whoami)
 
+# Check for failure to retrieve a config value, and substitute 'Unknown' instead
+# of empty string
 for CF in VERSION GIT_HEAD IP_ADDRESS MAC_ADDRESS; do
-    if [[ "${!CF}" == "" ]]; then
-        declare -g "$CF=Unknown"
+    declare -n config_param=$CF
+    if [[ "$config_param" == "" ]]; then
+        config_param=Unknown
     fi
 done
 

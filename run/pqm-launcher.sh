@@ -7,8 +7,8 @@ SOFTWARE_PATH=$(realpath $(dirname $0)/..)
 # Change to home directory for project, we'll change back on exit
 cd $SOFTWARE_PATH
 
-# Wait for network connection to be established
-if [[ "$(uptime -p)" == "Up 0 minutes" ]]; then
+# If we've just booted, wait for network connection to be established
+if [[ $(cat /proc/uptime | cut -d '.' -f 1) -lt 60 ]]; then
     sleep 10
 fi
 

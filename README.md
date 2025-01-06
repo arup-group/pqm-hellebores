@@ -47,32 +47,29 @@ source .venv/bin/activate
 
 4. Install the dependencies:
 ```
+sudo apt install libatlas-base-dev libopenblas-dev
 python -m pip install -r requirements.txt
 ```
 
-5. Set the device identity and hostname. In place of PQM-n, use the identity of your specific power quality monitor, eg PQM-1:
+5. Set the device identity. In place of PQM-n, use the identity of your specific power quality monitor, eg PQM-1:
 ```
 echo PQM-n > configuration/identity
-sudo hostnamectl set-hostname PQM-n
-sudo cp /etc/hosts /etc/hosts.old
-sed -E 's/^(127.0.1.1\s+).+/\1PQM-n/' /etc/hosts
 ```
-(The last line edits the active `/etc/hosts` file to tell the system that the PQM-n hostname refers to the loopback IP address 127.0.1.1. Be sure to change the 'n' to the correct id number that matches the other identification commands.)
 
-6. Install a bluetooth file transfer client
+6. Install a bluetooth file transfer client (optional)
 ```
 sudo apt install blueman
 ```
 
 7. Add shortcuts to the 'Other' desktop menu:
 ```
-ln -s /home/pi/pqm-hellebores/run/hellebores.desktop /home/pi/.local/share/applications/hellebores.desktop
-ln -s /home/pi/pqm-hellebores/run/pqm-launcher.desktop /home/pi/.local/share/applications/pqm-launcher.desktop
+ln -s /home/pi/pqm-hellebores/run/hellebores.desktop /home/pi/.local/share/applications
+ln -s /home/pi/pqm-hellebores/run/pqm-launcher.desktop /home/pi/.local/share/applications
 ```
 
 8. Also add the launcher script to the desktop autostart directory.
 ```
-ln -s /home/pi/pqm-hellebores/run/pqm-launcher.desktop /home/pi/.config/autostart/pqm-launcher.desktop
+ln -s /home/pi/pqm-hellebores/run/pqm-launcher.desktop /home/pi/.config/autostart
 ```
 
 See notes file for additional system dependencies.
@@ -85,7 +82,7 @@ Open `./pico/main.py` and save it to the root folder of the microcontroller.
 Open `./pico/stream.py` and save it to the root folder of the microcontroller.
 
 ## Running
-To use the interactive user interface, run "hellebores" from the Raspberry Pi desktop menu.
+To use the interactive user interface, select "START" from the launcher dialog. Alternatively, run "hellebores" from the Raspberry Pi desktop menu.
 
 It's possible to access the running environment on a Pi using SSH. For working on the Pico microcontroller, use ssh -X to connect to the Pi and then start `thonny` within your SSH session. This will redirect thonny's program window to your local X-server (needs a Linux or WSL2 system, or install an X-server separately).
 

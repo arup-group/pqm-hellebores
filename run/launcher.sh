@@ -46,22 +46,23 @@ _EOF_
 # Run zenity app to display dialog box with buttons
 result=$(zenity --info \
                 --width=680 \
-                --title 'Launcher: Power Quality Meter' \
+                --title "Launcher: Power Quality Meter" \
                 --text "$information" \
-                --ok-label 'START' \
-                --extra-button 'Software update' \
-                --extra-button 'Pico update' \
-                --extra-button 'Shutdown')
+                --ok-label "START" \
+                --extra-button "Software update" \
+                --extra-button "Pico update" \
+                --extra-button "Shutdown")
 
-# Catch cancel button
-if [[ $? -ne 0 ]]; then
-    exit 1
-fi
-
-# The primary/ok button does not return a value,\
+# The primary/ok button does not return a value,
 # so for clarity in the switch logic, we set one here
+# and also catch the window cancel button
+error_status=$?
 if [[ "$result" == "" ]]; then
-    result="START"
+    if [[ $error_status -ne 0 ]]; then
+        result="EXIT"
+    else
+        result="START"
+    fi
 fi
 
 # Process selected command, exec $0 relaunches the script
@@ -70,7 +71,10 @@ case "$result" in
         echo "Starting PQM software."
         $SOFTWARE_PATH/run/go.sh
         exec $0;;
+    "EXIT")
+        exit 0;;
     "Software update")
+        echo "Updating software."
         cd $SOFTWARE_PATH
         git fetch origin
         git reset --hard origin/main
@@ -80,6 +84,7 @@ case "$result" in
         echo "Pico update not implemented."
         exec $0;;
     "Shutdown")
+        echo "Shutting down system."
         sudo shutdown -h now;;
     *)
         echo "Not implemented: $result"

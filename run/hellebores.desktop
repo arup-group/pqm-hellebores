@@ -3,5 +3,5 @@ Name=Hellebores
 Exec=/home/pi/pqm-hellebores/run/go.sh
 Comment=Go script
 Terminal=true
-Icon=/home/pi/pqm-hellebores/run/pqm.png
+Icon=/home/pi/pqm-hellebores/run/pqm256.png
 Type=Application

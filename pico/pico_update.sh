@@ -59,5 +59,3 @@ done
 # Hard reset Pico again, so that we run the new code
 echo "Resetting Pico."
 $PROGRAM_DIR/pico_control.py --hard_reset
-
-

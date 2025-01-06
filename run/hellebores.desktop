@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Hellebores
+Exec=/home/pi/pqm-hellebores/run/go.sh
+Comment=Go script
+Terminal=true
+Icon=/home/pi/pqm-hellebores/run/pqm.png
+Type=Application

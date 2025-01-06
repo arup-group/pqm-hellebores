@@ -4,13 +4,21 @@
 CWD=$(pwd)
 SOFTWARE_PATH=$(realpath $(dirname $0)/..)
 
-# Get other configuration information from local system
+# Change to home directory for project, we'll change back on exit
+cd $SOFTWARE_PATH
+
+# Wait for network connection to be established
+if [[ "$(uptime -p)" == "Up 0 minutes" ]]; then
+    sleep 10
+fi
+
+# Now get other configuration information from local system
 IDENTITY=$(cat $SOFTWARE_PATH/configuration/identity 2>/dev/null)
 if [[ "$IDENTITY" == "" ]]; then IDENTITY="PQM-0"; fi
 VERSION=$(cat $SOFTWARE_PATH/VERSION)
 GIT_HEAD=$(git rev-parse HEAD)
 IP_ADDRESS=$(hostname -I | cut -d ' ' -f 1)
-MAC_ADDRESS=$(ip -oneline link | sed -rn 's/.+?wlp.+?ether ([a-f0-9:]+).*/\1/p')
+MAC_ADDRESS=$(ip -oneline link | sed -rn 's/.+?wlan0.+?ether ([a-f0-9:]+).*/\1/p')
 USER=$(whoami)
 
 # Check for failure to retrieve a config value, and substitute 'Unknown' instead
@@ -75,13 +83,11 @@ case "$result" in
         $SOFTWARE_PATH/run/go.sh
         exec $0;;
     "EXIT")
-        exit 0;;
+        echo "Exiting launcher.";;
     "Software update")
         echo "Updating software."
-        cd $SOFTWARE_PATH
         git fetch origin
         git reset --hard origin/main
-        cd $CWD
         exec $0;;
     "Pico update")
         echo "Pico update not implemented."
@@ -93,3 +99,6 @@ case "$result" in
         echo "Not implemented: $result"
         exec $0;;
 esac
+
+cd $CWD
+exit 0

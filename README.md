@@ -66,13 +66,13 @@ sudo apt install blueman
 
 7. Add shortcuts to the 'Other' desktop menu:
 ```
-cp ./pi-setup/find-me.desktop /home/pi/.local/share/applications
-cp ./pi-setup/hellebores.desktop /home/pi/.local/share/applications
+ln -s /home/pi/pqm-hellebores/run/hellebores.desktop /home/pi/.local/share/applications/hellebores.desktop
+ln -s /home/pi/pqm-hellebores/run/pqm-launcher.desktop /home/pi/.local/share/applications/pqm-launcher.desktop
 ```
 
-8. Add the Power Quality Monitor launcher to the desktop autostart directory.
+8. Also add the launcher script to the desktop autostart directory.
 ```
-cp ./pi-setup/pqm.desktop /home/pi/.config/autostart
+ln -s /home/pi/pqm-hellebores/run/pqm-launcher.desktop /home/pi/.config/autostart/pqm-launcher.desktop
 ```
 
 See notes file for additional system dependencies.

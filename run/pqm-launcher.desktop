@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Launcher: Power Quality Meter
+Icon=/home/pi/pqm-hellebores/run/pqm.png
+Terminal=false
+Exec=/home/pi/pqm-hellebores/run/pqm-launcher.sh

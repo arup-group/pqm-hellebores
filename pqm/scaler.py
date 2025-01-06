@@ -24,6 +24,9 @@ def from_twos_complement_hex(w):
     return -(v & 0x8000) | (v & 0x7fff)
 
 def set_current_channel():
+    """If st.current_axis_per_division is less than or equal to 0.1 A/div,
+    we use channel 1 for current measurements. If it is more than 0.1 A/div,
+    we use channel 2."""
     global current_channel
     if st.current_sensor == 'low':
         current_channel = 1
@@ -97,14 +100,11 @@ def main():
             scaled = scale_readings([ delay_line[delay][ch] for (ch, delay) in delay_lookup ])
             # now pick out the individual readings ready for output
             voltage = scaled[3]
-            # if st.current_axis_per_division is less than or equal to 0.1 A/div,
-            # we use channel 1 for current measurements. If it is more than 0.1 A/div,
-            # we use channel 2.
             current = scaled[current_channel]
             power = voltage * current
             leakage_current = scaled[0]
             print(f'{t:12.4f} {voltage:10.3f} {current:10.5f} {power:10.3f} {leakage_current:12.7f}')
-            i = i + 1
+            i += 1
 
         except ValueError:
             print(f'scaler.py, main(): Failed to read "{line}".', file=sys.stderr)

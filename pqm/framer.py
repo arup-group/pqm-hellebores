@@ -236,8 +236,12 @@ class Buffer:
     def freerun_trigger_test(self):
         # in freerun mode, we advance by exactly one frame and immediately trigger
         self.sync_triggered = True
-        self.tp = self.sp + self.st.pre_trigger_samples
-        #self.tp = self.tp + self.st.frame_samples
+        # the next trigger point is calculated relative to the current storage pointer
+        # rather than the current trigger pointer so that we easily recover from a stopped
+        # state when returning to a running state. ie instead of:
+        # self.tp = self.tp + self.st.frame_samples
+        # we do:
+        self.tp = self.sp + self.st.pre_trigger_samples + 1
         # the interpolation_fraction corrects for creeping time error -- the frame_samples do not
         # necessarily correspond to exactly one frame of time
         self.interpolation_fraction += (self.st.time_axis_divisions * self.st.time_axis_per_division \

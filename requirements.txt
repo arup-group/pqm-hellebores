@@ -1,10 +1,12 @@
+python>=3.9
 pyserial
 pygame
-thorpy=='2.0.4'
+thorpy==2.0.4; python_version=="3.9"
+thorpy==2; python_version>="3.10"
 pillow
 numpy
 psutil
-pywin32; sys_platform == 'win32'
-RPi.GPIO; platform_machine == 'armv7l'
+pywin32; sys_platform=="win32"
+RPi.GPIO; platform_machine=="armv7l"
 
 

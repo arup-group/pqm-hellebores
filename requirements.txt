@@ -1,6 +1,6 @@
 pyserial
 pygame
-thorpy
+thorpy=='2.0.4'
 pillow
 numpy
 psutil

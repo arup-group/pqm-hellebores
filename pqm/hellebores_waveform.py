@@ -51,19 +51,19 @@ class Waveform:
 
     # The plot function that will be used is configurable
     # plot_fn is set to point to either _plot_dots() or _plot_lines()
-    def _plot_dots(self, screen, buffer, display_status):
+    def _plot_dots(self, screen, linedata, display_status):
         pa = pygame.PixelArray(screen)
-        for i in range(len(buffer)):
+        for i in range(len(linedata)):
             if display_status[i] == True:
-                for pixel in buffer[i]:
+                for pixel in linedata[i]:
                     pa[pixel[0], pixel[1]] = SIGNAL_COLOURS[i]
         pa.close()
 
 
-    def _plot_lines(self, screen, buffer, display_status):
-        for i in range(len(buffer)):
+    def _plot_lines(self, screen, linedata, display_status):
+        for i in range(len(linedata)):
             if display_status[i] == True:
-                pygame.draw.lines(screen, SIGNAL_COLOURS[i], False, buffer[i], 2)
+                pygame.draw.lines(screen, SIGNAL_COLOURS[i], False, linedata[i], 2)
 
     
     def plot(self, buffer, multi_trace, screen):

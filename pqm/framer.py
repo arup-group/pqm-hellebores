@@ -87,12 +87,10 @@ class Buffer:
             self.output_function = self.values_out
         self.clear_buffer()
 
-
     def clear_buffer(self):
         """buffer memory initialised with empty data"""
         # *** performance optimisation: could consider memoryview object here ***
         self.buf = [ [0.0, 0.0, 0.0, 0.0, 0.0] for i in range(BUFFER_SIZE) ]
-
 
     def store_line(self, line):
         """store a line of new data into the next buffer location"""
@@ -106,7 +104,6 @@ class Buffer:
             print(f"trigger.py, store_line(): Couldn't interpret '{line}'.",
                 file=sys.stderr)
 
-
     def update_frame_markers(self):
         """Call this after frame is re-primed or a new trigger is detected, to set the frame
         markers for the next output."""
@@ -119,18 +116,16 @@ class Buffer:
         # signal that we have set up a new frame
         self.reframed = True
 
-
     def reprime(self):
         """Set the earliest position for the next trigger and clear the trigger flag if not
         in freerun mode"""
         if self.st.trigger_mode == 'freerun':
-            self.freerun_trigger_test()
+            self.freerun_trigger()
         else:
             # in sync or inrush mode, clear the sync trigger flag
             self.sync_triggered = False
         # always clear the inrush trigger flag
         self.inrush_triggered = False
-
 
     def trigger_test(self):
         """call this to check if current sample causes a trigger"""
@@ -162,7 +157,7 @@ class Buffer:
         # Clamping function to avoid exception errors in plotting.
         y_clamp = lambda v: min(max(0, v), self.st.y_pixels-1)
 
-        x  = int(timestamp * self.st.horizontal_pixels_per_division \
+        x  = int(timestamp * self.st.horizontal_pixels_per_division
                   / self.st.time_axis_per_division) + self.st.x_offset
         y0 = y_clamp(int(- float(c0) * self.st.vertical_pixels_per_division
                   / self.st.voltage_axis_per_division) + self.st.y_offset)
@@ -193,7 +188,6 @@ class Buffer:
         self.outp = self.frame_endp
         sys.stdout.flush()
         self.reframed = False
-
 
     def build_frame(self, line):
         """Store samples, except in stopped mode beyond MAX_FORWARD_READ"""
@@ -234,7 +228,7 @@ class Buffer:
             self.stop_flag = True
         return self.inrush_triggered
 
-    def freerun_trigger_test(self):
+    def freerun_trigger(self):
         # in freerun mode, we advance by exactly one frame and immediately trigger
         self.sync_triggered = True
         # the next trigger point is calculated relative to the current storage pointer
@@ -245,7 +239,7 @@ class Buffer:
         self.tp = self.sp + self.st.pre_trigger_samples
         # the interpolation_fraction corrects for creeping time error -- the frame_samples do not
         # necessarily correspond to exactly one frame of time
-        self.interpolation_fraction += (self.st.time_axis_divisions * self.st.time_axis_per_division \
+        self.interpolation_fraction += (self.st.time_axis_divisions * self.st.time_axis_per_division
             / 1000 * self.st.sample_rate) % 1
         if self.interpolation_fraction > 1.0:
             self.tp += int(self.interpolation_fraction)
@@ -281,7 +275,7 @@ class Buffer:
         elif self.st.trigger_mode == 'freerun':
             self.trigger_test_fn = (lambda s1, s2:
                     self.sync_triggered
-                    or self.freerun_trigger_test())
+                    or self.freerun_trigger())
         self.inrush_holdoff_counter = self.st.pre_trigger_samples
         self.sync_holdoff_counter = self.st.sync_holdoff_samples
         # frame boundary can change, even in stopped mode
@@ -292,7 +286,7 @@ class Buffer:
 def get_command_args():
     cmd_parser = argparse.ArgumentParser(description='Frames waveform data with or '
         'without synchronisation trigger, and buffers waveform for re-transmission in stopped mode.')
-    cmd_parser.add_argument('--unmapped', default=False, action=argparse.BooleanOptionalAction, \
+    cmd_parser.add_argument('--unmapped', default=False, action=argparse.BooleanOptionalAction,
         help='Inhibit mapping of sample values to pixels.')
     program_name = cmd_parser.prog
     args = cmd_parser.parse_args()

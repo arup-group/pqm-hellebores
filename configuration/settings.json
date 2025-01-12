@@ -68,12 +68,6 @@
     ],
     "earth_leakage_current_display_index": 4,
     "earth_leakage_current_display_status": false,
-    "scale_factors": [
-        4.07e-07,
-        2.44e-05,
-        0.00122,
-        0.0489
-    ],
     "trigger_slope": "rising",
     "inrush_trigger_level": 0.2,
     "trigger_position": 5,

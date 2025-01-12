@@ -17,7 +17,9 @@ import signal
 from settings import Settings
 
 
+HARDWARE_SCALE_FACTORS = [ 4.07e-07, 2.44e-05, 0.00122, 0.0489 ]
 DELAY_LINE_LENGTH = 64
+
 
 def from_twos_complement_hex(w):
     v = int(w, base=16)
@@ -43,7 +45,7 @@ def set_calibrated_constants():
     global offsets, gains, delays
     try:
         offsets = st.cal_offsets
-        gains   = [ s*g for s,g in zip(st.scale_factors, st.cal_gains) ]
+        gains   = [ h*g for h,g in zip(HARDWARE_SCALE_FACTORS, st.cal_gains) ]
         delays  = []
         for skew_time in st.cal_skew_times:
             delay_shift = int(-1 - skew_time // st.interval)

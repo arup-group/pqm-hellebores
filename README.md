@@ -63,13 +63,13 @@ sudo apt install blueman
 
 7. Add shortcuts to the 'Other' desktop menu:
 ```
-ln -s /home/pi/pqm-hellebores/run/hellebores.desktop /home/pi/.local/share/applications
-ln -s /home/pi/pqm-hellebores/run/pqm-launcher.desktop /home/pi/.local/share/applications
+ln -s /home/pi/pqm-hellebores/run/hellebores.desktop /home/pi/.local/share/applications/hellebores.desktop
+ln -s /home/pi/pqm-hellebores/run/pqm-launcher.desktop /home/pi/.local/share/applications/pqm-launcher.desktop
 ```
 
 8. Also add the launcher script to the desktop autostart directory.
 ```
-ln -s /home/pi/pqm-hellebores/run/pqm-launcher.desktop /home/pi/.config/autostart
+ln -s /home/pi/pqm-hellebores/run/pqm-launcher.desktop /home/pi/.config/autostart/pqm-launcher.desktop
 ```
 
 Dependencies sometimes change with OS updates. See notes file for potential additional system dependencies and troubleshooting.

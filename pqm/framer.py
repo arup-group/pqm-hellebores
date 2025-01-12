@@ -74,11 +74,17 @@ class Buffer:
     # inside the function) is met. This function is dynamically redefined for mode-specific
     # logic when settings are changed
     trigger_test_fn = lambda self, s1, s2: False
+    # output function is set during __init__
+    output_function = None
 
-    def __init__(self, output_mode='pixels'):
+    def __init__(self, output_format):
         """caller needs to set self.st after init."""
         self.buf = []
-        self.output_mode = output_mode    # 'pixels' or 'values'
+        # select an appropriate output transformation function
+        if output_format == 'pixels':
+            self.output_function = self.pixels_out
+        else:
+            self.output_function = self.values_out
         self.clear_buffer()
 
 
@@ -140,48 +146,43 @@ class Buffer:
 
     def ready_for_output(self):
         """Check if we have a new frame and we have stored enough samples to commence output"""
-        if self.reframed and self.sp >= self.frame_endp:
+        if self.reframed and self.sp > self.frame_endp:
             return True
         else:
             return False
 
+    def values_out(self, timestamp, sample):
+        """prepare a line of stored buffer for output with raw values."""
+        c0, c1, c2, c3 = sample
+        return f'{timestamp:12.4f} {c0:10.3f} {c1:10.5f} {c2:10.3f} {c3:12.7f}'
 
-    def mapper(self, timestamp, sample, pixels_out=True):
-        """prepare a line of stored buffer for output, defaults to pixel scaling, otherwise raw values"""
+    def pixels_out(self, timestamp, sample):
+        """prepare a line of stored buffer for output with pixel scaling."""
         c0, c1, c2, c3 = sample
         # Clamping function to avoid exception errors in plotting.
         y_clamp = lambda v: min(max(0, v), self.st.y_pixels-1)
 
-        if pixels_out:
-            # output pixels
-            x  = int(timestamp * self.st.horizontal_pixels_per_division \
-                      / self.st.time_axis_per_division) + self.st.x_offset
-            y0 = y_clamp(int(- float(c0) * self.st.vertical_pixels_per_division
-                      / self.st.voltage_axis_per_division) + self.st.y_offset)
-            y1 = y_clamp(int(- float(c1) * self.st.vertical_pixels_per_division
-                      / self.st.current_axis_per_division) + self.st.y_offset)
-            y2 = y_clamp(int(- float(c2) * self.st.vertical_pixels_per_division
-                      / self.st.power_axis_per_division) + self.st.y_offset)
-            y3 = y_clamp(int(- float(c3) * self.st.vertical_pixels_per_division
-                      / self.st.earth_leakage_current_axis_per_division) + self.st.y_offset)
-            out = f'{x :4d} {y0 :4d} {y1 :4d} {y2 :4d} {y3 :4d}'
-        else:
-            # output values
-            out = f'{timestamp:12.4f} {c0:10.3f} {c1:10.5f} {c2:10.3f} {c3:12.7f}'
-        return out
-
+        x  = int(timestamp * self.st.horizontal_pixels_per_division \
+                  / self.st.time_axis_per_division) + self.st.x_offset
+        y0 = y_clamp(int(- float(c0) * self.st.vertical_pixels_per_division
+                  / self.st.voltage_axis_per_division) + self.st.y_offset)
+        y1 = y_clamp(int(- float(c1) * self.st.vertical_pixels_per_division
+                  / self.st.current_axis_per_division) + self.st.y_offset)
+        y2 = y_clamp(int(- float(c2) * self.st.vertical_pixels_per_division
+                  / self.st.power_axis_per_division) + self.st.y_offset)
+        y3 = y_clamp(int(- float(c3) * self.st.vertical_pixels_per_division
+                  / self.st.earth_leakage_current_axis_per_division) + self.st.y_offset)
+        return f'{x :4d} {y0 :4d} {y1 :4d} {y2 :4d} {y3 :4d}'
 
     def output_frame(self):
         """Output the array slice with xy shifts to show up in the correct position on screen."""
         # exact trigger position occurred between the sample self.tp - 1 and self.tp
         precise_trigger_position = self.tp - 1 + self.interpolation_fraction
-        pixels_out = True if self.output_mode == 'pixels' else False
         for s in range(self.frame_startp, self.frame_endp):
             # timestamp = 0.0ms at the trigger position
             timestamp = self.st.interval * (s - precise_trigger_position)
             sample = self.buf[s % BUFFER_SIZE][VOLTAGE_INDEX:]
-            out = self.mapper(timestamp, sample, pixels_out)
-            print(out)
+            print(self.output_function(timestamp, sample))
         # some frame data will be held in the kernel pipe buffer
         # if we're in stopped mode or inrush trigger occurred (which will be followed by
         # stopped mode), flush it through with a longer line of dots
@@ -305,7 +306,7 @@ def main():
     # we make a buffer to temporarily hold a history of samples -- this allows us to output
     # a frame of waveform that includes samples 'before and after the trigger'
     # in 'stopped' mode, it allows us to change the framing (extent of time axis) around the trigger
-    buf = Buffer(output_mode='values' if args.unmapped else 'pixels')
+    buf = Buffer(output_format='values' if args.unmapped else 'pixels')
 
     # when we receive a SIGUSR1 signal, the st object will update buffer object settings
     st = Settings(buf.configure_for_new_settings,

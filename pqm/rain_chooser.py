@@ -89,7 +89,7 @@ def generate_samples(parameters):
             # update the running total
             sample_index = sample_index + 1
             # output samples in order of leakage current, low range current, full range current, voltage
-            print(f"{sample_index & 0xffff:04x} {c0:04x} {c1:04x} {c2:04x} {c3:04x}")
+            print(f"{c0:04x} {c1:04x} {c2:04x} {c3:04x}")
 
     # return the number of samples processed or incremented
     return n

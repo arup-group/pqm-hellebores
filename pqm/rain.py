@@ -16,7 +16,7 @@ def get_sample(i, t, f):
     c2 = int(200.0*math.sin(2.0*math.pi*f*t) + 5.0*(random.random()-0.5))
     c3 = int(5000.0*math.sin(2.0*math.pi*f*t) + 1.0*(random.random()-0.5))
     # the '& 0xffff' truncates negative numbers to fit in 16 bits
-    return (i & 0xffff, c0 & 0xffff, c1 & 0xffff, c2 & 0xffff, c3 & 0xffff)
+    return (c0 & 0xffff, c1 & 0xffff, c2 & 0xffff, c3 & 0xffff)
 
 
 def main():
@@ -31,8 +31,8 @@ def main():
         tn = int(time.time()*1000.0/st.interval)
         if tn != tp:
             tp = tn
-            t, c0, c1, c2, c3 = get_sample(i, i*st.interval, FREQUENCY)
-            print(f'{t :04x} {c0 :04x} {c1 :04x} {c2 :04x} {c3 :04x}')
+            c0, c1, c2, c3 = get_sample(i, i*st.interval, FREQUENCY)
+            print(f'{c0 :04x} {c1 :04x} {c2 :04x} {c3 :04x}')
             i = i + 1
 
 if __name__ == '__main__':

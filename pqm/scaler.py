@@ -92,7 +92,7 @@ def main():
             # calculate time axis position
             t = st.interval*i
             # split channel values into an integer array, removing the index field
-            new_sample = [ from_twos_complement_hex(w) for w in line.split()[1:] ]
+            new_sample = [ from_twos_complement_hex(w) for w in line.split() ]
             delay_line = delay_line[1:]
             delay_line.append(new_sample)
             # use the delay line to correct for channel timing skew

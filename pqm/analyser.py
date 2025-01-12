@@ -187,9 +187,18 @@ class Analyser:
         except ValueError:
             mean_var                                 = 0.0
         self.results['mean_volt_ampere_reactive']    = self.round_to(mean_var, 3)
-        self.results['crest_factor_voltage']         = self.round_to(maxabs_v / rms_v, 3)
-        self.results['crest_factor_current']         = self.round_to(maxabs_i / rms_i, 3)
-        self.results['power_factor']                 = self.round_to(mean_p / mean_va, 3)
+        try:
+            self.results['crest_factor_voltage']     = self.round_to(maxabs_v / rms_v, 3)
+        except ZeroDivisionError:
+            self.results['crest_factor_voltage']     = 1.0
+        try:
+            self.results['crest_factor_current']     = self.round_to(maxabs_i / rms_i, 3)
+        except:
+            self.results['crest_factor_current']     = 1.0
+        try:
+            self.results['power_factor']             = self.round_to(mean_p / mean_va, 3)
+        except:
+            self.results['power_factor']             = 1.0
 
     def power_quality(self):
         """Power quality calcuation relies on other results: call after averages and frequency."""

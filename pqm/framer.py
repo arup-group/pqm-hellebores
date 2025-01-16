@@ -82,9 +82,9 @@ class Buffer:
         self.buf = []
         # select an appropriate output transformation function
         if output_format == 'pixels':
-            self.output_function = self.pixels_out
+            self.output_function = self._pixels_out
         else:
-            self.output_function = self.values_out
+            self.output_function = self._values_out
         self.clear_buffer()
 
     def clear_buffer(self):
@@ -146,12 +146,12 @@ class Buffer:
         else:
             return False
 
-    def values_out(self, timestamp, sample):
+    def _values_out(self, timestamp, sample):
         """prepare a line of stored buffer for output with raw values."""
         c0, c1, c2, c3 = sample
         return f'{timestamp:12.4f} {c0:10.3f} {c1:10.5f} {c2:10.3f} {c3:12.7f}'
 
-    def pixels_out(self, timestamp, sample):
+    def _pixels_out(self, timestamp, sample):
         """prepare a line of stored buffer for output with pixel scaling."""
         c0, c1, c2, c3 = sample
         # Clamping function to avoid exception errors in plotting.
@@ -187,7 +187,6 @@ class Buffer:
             print(SHORT_DOTS)
         self.outp = self.frame_endp
         sys.stdout.flush()
-        self.reframed = False
 
     def build_frame(self, line):
         """Store samples, except in stopped mode beyond MAX_FORWARD_READ"""
@@ -251,7 +250,7 @@ class Buffer:
         a trigger test function dynamically, only when settings are changed."""
         # setup a composite trigger function and store it in self.trigger_test_fn
         # the logical expressions here help a previous trigger frame to 'latch' correctly
-        # (the trigger test function is called for every sample)
+        # (NB the trigger test function is called for every sample)
         if self.st.trigger_mode == 'sync' and self.st.trigger_slope == 'rising':
             self.trigger_test_fn = (lambda s1, s2:
                     self.sync_triggered
@@ -316,7 +315,9 @@ def main():
         for line in sys.stdin:
             # process the incoming line with the current trigger settings
             buf.build_frame(line.rstrip())
-            if not buf.inrush_triggered:
+            if st.run_mode == 'running' and not buf.inrush_triggered:
+                # if buf.sync_triggered, we still check because there might
+                # be a subsequent inrush trigger.
                 buf.trigger_test()
             # decrement the holdoff counters
             buf.sync_holdoff_counter -= 1
@@ -324,6 +325,7 @@ def main():
             # print out the frame if we're ready
             if buf.ready_for_output():
                 buf.output_frame()
+                buf.reframed = False
                 # if running, reset ready for the next frame
                 if st.run_mode == 'running':
                     buf.reprime()

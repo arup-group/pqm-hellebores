@@ -5,11 +5,6 @@ from hellebores_constants import *
 from hellebores_controls import *
 
 
-# text message cell enumerations
-T_RUNSTOP       = 0
-T_RANGE_WARNING = 1
-
-
 class Harmonic:
 
     def __init__(self, st, app_actions, harmonic_of_what):

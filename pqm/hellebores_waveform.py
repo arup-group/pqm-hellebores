@@ -80,7 +80,7 @@ class Waveform:
                 linedata = buffer.get_waveform(i)
                 self.plot_fn(screen, linedata, display_status)
         except (IndexError, ValueError):
-            # the pygame.draw.lines will throw an exception if there are not at
+            # pygame.draw.lines does throw an exception if there are not at
             # least two points in each line - (sounds reasonable)
             print(
                 f'exception in hellebores.py: plot_fn(). linedata is: {linedata}.\n',

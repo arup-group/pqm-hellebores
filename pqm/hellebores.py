@@ -35,9 +35,10 @@ if os.name == 'nt':
 # that can be displayed together with the currently active selection
 class UI_groups:
     elements = {}
+    # we start by default in waveform mode
     mode = 'waveform'
     instruments = {}
-    # the flag helps to reduce workload of screen refresh when there are overlay menus.
+    # this flag helps to reduce workload of screen refresh when there are overlay menus.
     overlay_dialog_active = False
 
     def __init__(self, st, buffer, datetime, wfs, waveform, multimeter, v_harmonics, \
@@ -51,6 +52,8 @@ class UI_groups:
         # NB dynamically altering a function definition in another object is a relatively unusual
         # programming move, but I can't think of another convenient way to do it, because 'self' is
         # instantiated for this object only after the app_actions object was created.
+        # NB #2, there is another way of doing it, by setting a reference to this object in app_actions
+        # just haven't implemented it yet.
         app_actions.set_updater = self.set_updater
 
         # datetime group
@@ -99,7 +102,6 @@ class UI_groups:
         """dispatch to the refresh method of the element group currently selected."""
         if self.mode == 'waveform' and self.st.run_mode == 'running':
             # plot multiple traces if we're running in waveform mode
-            traces = self.app_actions.multi_trace
             self.instruments[self.mode].refresh(self.buffer, screen, \
                 multi_trace=self.app_actions.multi_trace)
             self.elements['datetime'].draw()
@@ -510,7 +512,7 @@ def main():
                 buffer.load_waveform()
                 if buffer.frame_completed:
                     wfs.increment()
-    
+
             # read new analysis results, if available 
             analysis_updated = buffer.load_analysis()
     

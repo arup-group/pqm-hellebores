@@ -108,23 +108,20 @@ class Buffer:
         """Call this after frame is re-primed or a new trigger is detected, to set the frame
         markers for the next output."""
         # set the start and end markers
+        # NB the start marker can slightly overlap the previous end marker in running mode
+        # to allow frame rate to be maintained at integer ratios of 50 wf/s for signals in
+        # the range 48-52 Hz.
         self.frame_startp = self.tp - self.st.pre_trigger_samples
         self.frame_endp = self.frame_startp + self.st.frame_samples - 1
-        # in running mode, make sure the start marker doesn't precede the previous end marker
-        if self.st.run_mode == 'running' and self.st.trigger_mode == 'sync':
-            self.frame_startp = max(self.outp, self.frame_startp)
-        # signal that we have set up a new frame
         self.reframed = True
 
     def reprime(self):
         """Set the earliest position for the next trigger and clear the trigger flag if not
-        in freerun mode"""
+        in freerun mode. Always clear the inrush trigger flag."""
         if self.st.trigger_mode == 'freerun':
             self.freerun_trigger()
         else:
-            # in sync or inrush mode, clear the sync trigger flag
             self.sync_triggered = False
-        # always clear the inrush trigger flag
         self.inrush_triggered = False
 
     def trigger_test(self):
@@ -141,18 +138,15 @@ class Buffer:
 
     def ready_for_output(self):
         """Check if we have a new frame and we have stored enough samples to commence output"""
-        if self.reframed and self.sp > self.frame_endp:
-            return True
-        else:
-            return False
+        return True if self.reframed and self.sp > self.frame_endp else False
 
     def _values_out(self, timestamp, sample):
-        """prepare a line of stored buffer for output with raw values."""
+        """Prepare a line of stored buffer for output with raw values."""
         c0, c1, c2, c3 = sample
         return f'{timestamp:12.4f} {c0:10.3f} {c1:10.5f} {c2:10.3f} {c3:12.7f}'
 
     def _pixels_out(self, timestamp, sample):
-        """prepare a line of stored buffer for output with pixel scaling."""
+        """Prepare a line of stored buffer for output with pixel scaling."""
         c0, c1, c2, c3 = sample
         # Clamping function to avoid exception errors in plotting.
         y_clamp = lambda v: min(max(0, v), self.st.y_pixels-1)
@@ -247,7 +241,7 @@ class Buffer:
 
     def configure_for_new_settings(self):
         """We don't want to process 'mode' logic every time we read a sample. Therefore we create
-        a trigger test function dynamically, only when settings are changed."""
+        a trigger test function dynamically, but do it only when settings are changed."""
         # setup a composite trigger function and store it in self.trigger_test_fn
         # the logical expressions here help a previous trigger frame to 'latch' correctly
         # (NB the trigger test function is called for every sample)

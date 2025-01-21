@@ -56,18 +56,22 @@ python -m pip install -r requirements.txt
 echo PQM-n > configuration/identity
 ```
 
-6. Install a bluetooth file transfer client (optional):
+6. Install bluetooth file transfer client (optional):
 ```
 sudo apt install blueman
 ```
 
-7. Add shortcuts to the 'Other' desktop menu:
+7. Enable Raspberry Pi OS features:
+
+In the Preferences | Raspberry Pi Configuration menu, enable the VNC server and the on-screen keyboard: the keyboard is found in the 'Display' tab -- select 'Enable always', and the VNC server is found in the 'Interfaces' tab -- verify that both SSH and VNC are enabled.
+
+8. Add shortcuts to the 'Other' desktop menu:
 ```
 ln -s /home/pi/pqm-hellebores/run/hellebores.desktop /home/pi/.local/share/applications/hellebores.desktop
 ln -s /home/pi/pqm-hellebores/run/pqm-launcher.desktop /home/pi/.local/share/applications/pqm-launcher.desktop
 ```
 
-8. Also add the launcher script to the desktop autostart directory.
+9. Also add the launcher script to the desktop autostart directory.
 ```
 ln -s /home/pi/pqm-hellebores/run/pqm-launcher.desktop /home/pi/.config/autostart/pqm-launcher.desktop
 ```

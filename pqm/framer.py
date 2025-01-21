@@ -26,7 +26,7 @@ from settings import Settings
 
 
 BUFFER_SIZE = 65536                  # size of circular sample buffer
-MAX_FORWARD_READ = BUFFER_SIZE // 4  # maximum reads, post frame end pointer
+MAX_FORWARD_READ = 8192              # maximum reads, post trigger after stopping
 SHORT_DOTS = '.' * 32                # used in running mode to mark end of frame
 LONG_DOTS = '.' * 8192               # a longer line of dots is used in stopped mode
                                      # to make sure all data is flushed through
@@ -184,7 +184,7 @@ class Buffer:
 
     def build_frame(self, line):
         """Store samples, except in stopped mode beyond MAX_FORWARD_READ"""
-        if self.st.run_mode == 'stopped' and self.sp - self.frame_endp > MAX_FORWARD_READ:
+        if self.st.run_mode == 'stopped' and self.sp - self.tp > MAX_FORWARD_READ:
             return False
         else:
             self.store_line(line)

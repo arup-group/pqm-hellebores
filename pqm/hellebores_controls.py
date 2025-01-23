@@ -174,7 +174,7 @@ class WFS:
         # if the time has increased by at least 1.0 second, update the wfm/s text
         elapsed = tn - self.update_time
         if elapsed >= 1.0:
-            self.wfs = int(self.counter/elapsed)
+            self.wfs = round(self.counter/elapsed)
             self.tt.set_text(f'{self.wfs :3d} wf/s')
             self.update_time = tn
             self.counter = 0

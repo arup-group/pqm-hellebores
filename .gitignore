@@ -1,5 +1,5 @@
-/pqm/__pycache__
+__pycache__
+.venv
+.venv-windows
 /local
-/.venv
-/.venv-windows
 /configuration/identity

@@ -1,3 +1,4 @@
+import sys
 import thorpy
 import pygame
 import time

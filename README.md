@@ -122,11 +122,13 @@ NB Some code paths are different on Windows to allow the project to run, and the
 
 ## Development
 
-The software is designed with 'Unix Philosophy' in mind, for performance and simplicity benefits. Independent programs are connected in a pipeline with data sent from one program to the next as a text stream. Control settings are stored in a `settings.json` file: the GUI program modifies this file and sends other programs a Posix signal whenever the settings file is updated, and they then re-load the `settings.json`. The project is intended to yield to experimentation: the behaviour of the programs at each step of the pipeline can be studied, verified and changed on the command line.
+The software is designed with 'Unix Philosophy' in mind, which helps to simplify and modularise the design while also achieving high performance. Independent programs are connected in a pipeline with data sent from one program to the next as a text stream. Control settings are stored in a `settings.json` file: the GUI program modifies this file and sends other programs a Posix signal whenever the settings file is updated, and they then re-load the `settings.json`. The project is intended to yield to experimentation: the behaviour of the programs at each step of the pipeline can be studied, verified and changed on the command line.
 
 The Pi code will run in WSL, Ubuntu, Mac or similar environments that have a modern python and can support the python dependencies, pipelines and signals. `hellebores.py` and the `rain_chooser.py` simulator require SDL for displaying the GUI and to accept touchscreen or mouse input. The GUI can run under X-Windows or in native Mac and MS-Windows if the SDL libraries are installed and are reachable from the python runtime environment. The run script will test whether a serial interface to Pico is available and if not will use the `rain_chooser.py` simulator as a data source.
 
-When working with `git`, it's possible to automate minor version increments when making a commit, by editing lines at the end of `.git/hooks/pre-commit.sample` and then rename the hook file to `.git/hooks/pre-commit`.
+You'll find that automatic checking tools, such as within `VS Code` will spuriously identify problems with resolving some python libraries. This is because files within the project target different runtime environments: Linux, Pico (micropython) and Windows.
+
+When working with `git`, it's possible to automate minor version number increments when making a commit, by editing the following lines at the end of `.git/hooks/pre-commit.sample` and then rename the hook file to `.git/hooks/pre-commit`.
 
 ```
 # If there are whitespace errors, print the offending file names and fail.

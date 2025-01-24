@@ -241,13 +241,13 @@ def configure_button(size, text, callback_function):
 def create_mode(app_actions):
     """Mode controls dialog"""
     button_waveform = configure_button(BUTTON_WIDE_SIZE, 'Waveform',\
-        lambda: app_actions.set_updater('waveform'))
+        lambda: app_actions.ui.set_updater('waveform'))
     button_multimeter = configure_button(BUTTON_WIDE_SIZE, 'Multimeter',\
-        lambda: app_actions.set_updater('multimeter'))
+        lambda: app_actions.ui.set_updater('multimeter'))
     button_voltage_harmonics = configure_button(BUTTON_WIDE_SIZE, 'Voltage harmonics',\
-        lambda: app_actions.set_updater('voltage_harmonic'))
+        lambda: app_actions.ui.set_updater('voltage_harmonic'))
     button_current_harmonics = configure_button(BUTTON_WIDE_SIZE, 'Current harmonics', \
-        lambda: app_actions.set_updater('current_harmonic'))
+        lambda: app_actions.ui.set_updater('current_harmonic'))
 
     mode = thorpy.TitleBox(
         text='Mode', children=[
@@ -270,7 +270,7 @@ def create_current_sensitivity(st, app_actions):
         st.current_sensor = required_sensitivity
         st.send_to_all()
  
-    button_done = configure_button(BUTTON_SIZE, 'Done', lambda: app_actions.set_updater('back'))
+    button_done = configure_button(BUTTON_SIZE, 'Done', lambda: app_actions.ui.set_updater('back'))
     button_full = configure_button(BUTTON_WIDE_SIZE, 'Full', lambda: set_current_sensitivity('full'))
     button_low = configure_button(BUTTON_WIDE_SIZE, 'Low', lambda: set_current_sensitivity('low'))
 
@@ -296,7 +296,7 @@ def create_horizontal(st, app_actions):
         st.time_display_index = times.get_index()
         st.send_to_all()
 
-    button_done = configure_button(BUTTON_SIZE, 'Done', lambda: app_actions.set_updater('back'))
+    button_done = configure_button(BUTTON_SIZE, 'Done', lambda: app_actions.ui.set_updater('back'))
 
     times = Range_controller(st.time_display_ranges, st.time_display_index)
     time_display = thorpy.Text(f'{times.get_value()} ms/div') 
@@ -374,7 +374,7 @@ def create_vertical(st, app_actions):
                 file=sys.stderr)
         st.send_to_all()
 
-    button_done = configure_button(BUTTON_SIZE, 'Done', lambda: app_actions.set_updater('back'))
+    button_done = configure_button(BUTTON_SIZE, 'Done', lambda: app_actions.ui.set_updater('back'))
 
     voltages = Range_controller(
         st.voltage_display_ranges, st.voltage_display_index)
@@ -525,7 +525,7 @@ def create_trigger(st, waveform, app_actions):
         'sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.')
     text_trigger_status.set_max_text_width(280)
     button_done = configure_button(
-        BUTTON_SIZE, 'Done', lambda: app_actions.set_updater('back'))
+        BUTTON_SIZE, 'Done', lambda: app_actions.ui.set_updater('back'))
     button_freerun = configure_button(
         BUTTON_SIZE, 'Freerun',
         lambda: update_trigger_mode('freerun', text_trigger_status))
@@ -582,7 +582,7 @@ def create_trigger(st, waveform, app_actions):
 
 def create_clear(buffer, app_actions):
     button_done = configure_button(
-        BUTTON_SIZE, 'Done', lambda: app_actions.set_updater('back'))
+        BUTTON_SIZE, 'Done', lambda: app_actions.ui.set_updater('back'))
     button_clear_maxmin = configure_button(
         BUTTON_WIDE_SIZE, 'Clear Max/Min', lambda: buffer.clear_analysis_bounds())
     button_clear_accumulators = configure_button(
@@ -625,7 +625,7 @@ def create_options(waveform, app_actions):
         alert.launch_nonblocking()
 
     button_done = configure_button(
-        BUTTON_SIZE, 'Done', lambda: app_actions.set_updater('back'))
+        BUTTON_SIZE, 'Done', lambda: app_actions.ui.set_updater('back'))
     button_dots = configure_button(
         BUTTON_SIZE, 'Dots', lambda: waveform.plot_mode('dots'))
     button_lines = configure_button(

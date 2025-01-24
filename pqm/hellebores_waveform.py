@@ -104,11 +104,11 @@ class Waveform:
         # Create buttons
         button_setup = [
             ('Run/Stop', self.app_actions.start_stop),
-            ('Mode', lambda: self.app_actions.set_updater('mode')), 
-            ('Horizontal', lambda: self.app_actions.set_updater('horizontal')), 
-            ('Vertical', lambda: self.app_actions.set_updater('vertical')), 
-            ('Trigger', lambda: self.app_actions.set_updater('trigger')), 
-            ('Options', lambda: self.app_actions.set_updater('options'))
+            ('Mode', lambda: self.app_actions.ui.set_updater('mode')),
+            ('Horizontal', lambda: self.app_actions.ui.set_updater('horizontal')),
+            ('Vertical', lambda: self.app_actions.ui.set_updater('vertical')),
+            ('Trigger', lambda: self.app_actions.ui.set_updater('trigger')),
+            ('Options', lambda: self.app_actions.ui.set_updater('options'))
             ]
         buttons = [ configure_button(BUTTON_SIZE, bt, bf) for bt, bf in button_setup ]
         ts = self.ann.get_text_objects()

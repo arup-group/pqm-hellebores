@@ -45,10 +45,10 @@ class Harmonic:
         """Harmonic controls, on right of screen"""
         button_setup = [
             ('Run/Stop', self.app_actions.start_stop),
-            ('Mode', lambda: self.app_actions.set_updater('mode')),
-            ('Range', lambda: self.app_actions.set_updater('current_sensitivity')),
-            ('Clear', lambda: self.app_actions.set_updater('clear')),
-            ('Options', lambda: self.app_actions.set_updater('options'))
+            ('Mode', lambda: self.app_actions.ui.set_updater('mode')),
+            ('Range', lambda: self.app_actions.ui.set_updater('current_sensitivity')),
+            ('Clear', lambda: self.app_actions.ui.set_updater('clear')),
+            ('Options', lambda: self.app_actions.ui.set_updater('options'))
             ]
         buttons = [ configure_button(BUTTON_SIZE, bt, bf) for bt, bf in button_setup ]
         ts = self.ann.get_text_objects()[:2]  # first two annunciators only

@@ -48,14 +48,6 @@ class UI_groups:
         self.st = st
         self.buffer = buffer
 
-        # re-point the updater function in the app_actions object to target the function in this object
-        # NB dynamically altering a function definition in another object is a relatively unusual
-        # programming move, but I can't think of another convenient way to do it, because 'self' is
-        # instantiated for this object only after the app_actions object was created.
-        # NB #2, there is another way of doing it, by setting a reference to this object in app_actions
-        # just haven't implemented it yet.
-        app_actions.set_updater = self.set_updater
-
         # datetime group
         self.elements['datetime'] = datetime
 
@@ -348,9 +340,8 @@ class Data_comms:
 class App_Actions:
 
     def __init__(self):
-        self.st = None             # links to other objects
-        self.ui = None             # need to be immediately
-        self.buffer = None         # set up after they are
+        self.st = None             # IMPORTANT: links to these other objects
+        self.ui = None             # need to be immediately set up after they are
         self.data_comms = None     # created, by calling set_other_objects()
         # multi_trace mode overlays traces on one background and is used to optimise
         # for high frame rates or dialog overlay
@@ -363,16 +354,16 @@ class App_Actions:
         self.draw_controls_event = pygame.event.custom_type()
         self.former_run_mode = ''  # we keep track of when run mode changes
 
-    def set_other_objects(self, st, ui, buffer, data_comms):
+    def set_other_objects(self, st, ui, data_comms):
         self.st = st
         self.ui = ui
-        self.buffer = buffer
         self.data_comms = data_comms
 
     def time_to_update_status(self):
         # time now
         tn = time.time()
-        # if the time has increased by at least 0.5 second, update the wfm/s text
+        # if the time has increased by at least 0.2 second, update the wf/s text
+        # and other status information
         elapsed = tn - self.update_time
         if elapsed >= 0.2:
             self.update_time = tn
@@ -402,12 +393,6 @@ class App_Actions:
             self.st.run_mode = 'stopped'
         self.st.send_to_all()
         self.settings_changed()
-
-    def set_updater(self, mode):
-        # this placeholder function is replaced dynamically by the implementation
-        # inside the ui object
-        print('hellebores.py: App_Actions.set_updater() virtual function '
-              'should be substituted prior to calling it.', file=sys.stderr)
 
     def exit_application(self, option='quit'):
         exit_codes = { 'quit'           : 0,
@@ -487,10 +472,10 @@ def main():
                                  v_harmonics, i_harmonics, app_actions)
 
     # tell app_actions how to access the other objects it needs to manipulate
-    app_actions.set_other_objects(st, ui, buffer, data_comms)
+    app_actions.set_other_objects(st, ui, data_comms)
 
     # start up in the waveform mode
-    ui.app_actions.set_updater('waveform')
+    ui.set_updater('waveform')
 
     # clear the analysis accumulators:
     # this causes the st.analysis_start_time parameter to be initialised in the working
@@ -504,7 +489,7 @@ def main():
             # pipeline flowing. If the read rate doesn't keep up with the pipe, then we will see 
             # artifacts on screen. Check if the BUFFER led on PCB is stalling if performance
             # problems are suspected here.
-            # The load_waveform() function also implicitly manages display refresh speed
+            # The load_waveform() function also indirectly manages display refresh speed
             # by waiting for a definite time for new data.
     
             # if multi_trace is active, read multiple frames into the buffer, otherwise just one
@@ -512,7 +497,6 @@ def main():
                 buffer.load_waveform()
                 if buffer.frame_completed:
                     wfs.increment()
-
             # read new analysis results, if available 
             analysis_updated = buffer.load_analysis()
     

@@ -120,7 +120,7 @@ class Multimeter:
         self.add_ui_text(text_length=7, font_size=LARGE_FONT_SIZE, font_colour=GREEN, \
             value_key='rms_voltage', p_offset=(0,6), p_move=(0,86))
 
-        self.add_ui_text(text='Current rms /V', text_length=32)
+        self.add_ui_text(text='Current rms /A', text_length=32)
         self.add_ui_text(text_length=7, font_size=LARGE_FONT_SIZE, font_colour=YELLOW, \
             dp_fix=3, value_key='rms_current', p_offset=(0,6), p_move=(0,86))
 

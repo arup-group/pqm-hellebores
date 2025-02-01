@@ -133,13 +133,11 @@ if [[ $exit_code -eq 2 ]]; then
 # 3: Software update
 elif [[ $exit_code -eq 3 ]]; then
     clear
-    if [[ -f "../branch" ]]; then
-        read branch < "../branch"
-    else
+    branch=$(git rev-parse --abbrev-ref HEAD)
+    if [[ $? -ne 0 ]]; then
         branch="main"
     fi
     echo "Updating software to Github $branch branch HEAD..."
-    git switch $branch
     git fetch origin
     git reset --hard origin/$branch
     # Trampoline: reload the launch script and run again

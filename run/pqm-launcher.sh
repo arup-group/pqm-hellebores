@@ -87,17 +87,9 @@ case "$result" in
     "EXIT")
         echo "Exiting launcher.";;
     "Software update")
-        # if a 'branch' file exists, we use the contents to
-        # determine the git branch, otherwise use main
-        if [[ -f "$SOFTWARE_PATH/branch" ]]; then
-            read branch < "$SOFTWARE_PATH/branch"
-        else
-            branch="main"
-        fi
-        echo "Updating software to Github $branch branch HEAD..."
-        git switch $branch
+        echo "Updating software to Github $GIT_BRANCH branch HEAD..."
         git fetch origin
-        git reset --hard origin/$branch
+        git reset --hard origin/$GIT_BRANCH
         exec $0;;
     "Pico update")
         echo "Pico update not implemented."

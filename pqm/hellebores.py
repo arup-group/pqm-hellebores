@@ -447,6 +447,10 @@ def main():
     # initialise thorpy
     thorpy.set_default_font(FONT, FONT_SIZE)
     thorpy.init(screen, thorpy.theme_simple)
+    if hide_mouse_pointer:
+        # hack to make the cursor invisible while still responding to touch signals
+        pygame.mouse.set_cursor(
+            (8,8), (0,0), (0,0,0,0,0,0,0,0), (0,0,0,0,0,0,0,0))
 
     # object holding the state of the application and the incoming communication streams
     app_actions  = App_Actions()
@@ -504,13 +508,7 @@ def main():
                 # one or both incoming data pipes were closed, quit the application
                 app_actions.exit_application('quit')
     
-            # hack to make the cursor invisible while still responding to touch signals
-            # would like to do this only once, rather than every trip round the loop
-            # **** OPTIMISE this to test whether we need to do it only once on startup ****
-            if hide_mouse_pointer:
-                pygame.mouse.set_cursor(
-                    (8,8), (0,0), (0,0,0,0,0,0,0,0), (0,0,0,0,0,0,0,0))
-    
+            # update annunciators only periodically, not every time
             if app_actions.time_to_update_status():
                 if st.run_mode=='running':
                     datetime.update()

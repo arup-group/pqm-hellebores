@@ -133,9 +133,15 @@ if [[ $exit_code -eq 2 ]]; then
 # 3: Software update
 elif [[ $exit_code -eq 3 ]]; then
     clear
-    echo "Updating software to Github main branch HEAD..."
+    if [[ -f "../development" ]]; then
+        branch="development"
+    else
+        branch="main"
+    fi
+    echo "Updating software to Github $branch branch HEAD..."
+    git switch $branch
     git fetch origin
-    git reset --hard origin/main
+    git reset --hard origin/$branch
     # Trampoline: reload the launch script and run again
     echo "Restarting $0 in 5s..."
     sleep 5

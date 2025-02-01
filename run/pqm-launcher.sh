@@ -85,9 +85,15 @@ case "$result" in
     "EXIT")
         echo "Exiting launcher.";;
     "Software update")
-        echo "Updating software."
+        if [[ -f "../development" ]]; then
+            branch="development"
+        else
+            branch="main"
+        fi
+        echo "Updating software to Github $branch branch HEAD..."
+        git switch $branch
         git fetch origin
-        git reset --hard origin/main
+        git reset --hard origin/$branch
         exec $0;;
     "Pico update")
         echo "Pico update not implemented."

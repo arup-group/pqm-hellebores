@@ -133,8 +133,8 @@ if [[ $exit_code -eq 2 ]]; then
 # 3: Software update
 elif [[ $exit_code -eq 3 ]]; then
     clear
-    if [[ -f "../development" ]]; then
-        branch="development"
+    if [[ -f "../branch" ]]; then
+        read branch < "../branch"
     else
         branch="main"
     fi

@@ -65,9 +65,9 @@ class Settings():
         self.sync_holdoff_samples       = self.frame_samples - int(0.002 * self.sample_rate)
         self.x_pixels                   = self.time_axis_divisions * self.horizontal_pixels_per_division
         self.y_pixels                   = self.vertical_axis_divisions * self.vertical_pixels_per_division
-        self.x_offset                   = (self.time_axis_pre_trigger_divisions *
+        self.x_centre                   = (self.time_axis_pre_trigger_divisions *
                                               self.horizontal_pixels_per_division)
-        self.y_offset                   = self.y_pixels // 2
+        self.y_centre                   = self.y_pixels // 2
 
     def set_settings(self, js):
         self.analysis_max_min_reset                    = js['analysis_max_min_reset']
@@ -138,7 +138,7 @@ class Settings():
  
     def load_settings(self, retries=5):
         try:
-            with open(self.sfile, 'r') as f:
+            with open(self.settings_file, 'r') as f:
                 js = json.loads(f.read())
         except (json.decoder.JSONDecodeError, FileNotFoundError, IOError):
             # there may be contention on the file, retry a few times before loading defaults
@@ -154,7 +154,7 @@ class Settings():
 
     def save_settings(self):
         try:
-            with open(self.sfile, 'w') as f:
+            with open(self.settings_file, 'w') as f:
                 f.write(json.dumps(self.make_json(), indent=4))
                 #f.flush()
                 #os.fsync(f.fileno())
@@ -239,7 +239,7 @@ class Settings():
             self.get_calibration(self.identity)
 
         # load initial settings
-        self.sfile = self.resolve_path(CONFIGURATION_DIRECTORY, SETTINGS_FILE)
+        self.settings_file = self.resolve_path(CONFIGURATION_DIRECTORY, SETTINGS_FILE)
         self.set_settings(self.load_settings())
 
         # set a callback function. This will be called every time a signal is received,
@@ -250,7 +250,7 @@ class Settings():
         # we change our working path so that we save updates to the settings.json file there.
         temp_dir = os.getenv('TEMP')
         if temp_dir != None:
-            self.sfile = self.resolve_path(temp_dir, SETTINGS_FILE)
+            self.settings_file = self.resolve_path(temp_dir, SETTINGS_FILE)
  
         # set things up so that our signal handler is called when the relevant signal is received
         if os.name == 'posix':

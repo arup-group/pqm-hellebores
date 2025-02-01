@@ -85,8 +85,10 @@ case "$result" in
     "EXIT")
         echo "Exiting launcher.";;
     "Software update")
-        if [[ -f "$SOFTWARE_PATH/development" ]]; then
-            branch="development"
+        # if a 'branch' file exists, we use the contents to
+        # determine the git branch, otherwise use main
+        if [[ -f "$SOFTWARE_PATH/branch" ]]; then
+            read branch < "$SOFTWARE_PATH/branch"
         else
             branch="main"
         fi

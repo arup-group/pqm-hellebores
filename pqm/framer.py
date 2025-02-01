@@ -152,15 +152,15 @@ class Buffer:
         y_clamp = lambda v: min(max(0, v), self.st.y_pixels-1)
 
         x  = int(timestamp * self.st.horizontal_pixels_per_division
-                  / self.st.time_axis_per_division) + self.st.x_offset
+                  / self.st.time_axis_per_division) + self.st.x_centre
         y0 = y_clamp(int(- float(c0) * self.st.vertical_pixels_per_division
-                  / self.st.voltage_axis_per_division) + self.st.y_offset)
+                  / self.st.voltage_axis_per_division) + self.st.y_centre)
         y1 = y_clamp(int(- float(c1) * self.st.vertical_pixels_per_division
-                  / self.st.current_axis_per_division) + self.st.y_offset)
+                  / self.st.current_axis_per_division) + self.st.y_centre)
         y2 = y_clamp(int(- float(c2) * self.st.vertical_pixels_per_division
-                  / self.st.power_axis_per_division) + self.st.y_offset)
+                  / self.st.power_axis_per_division) + self.st.y_centre)
         y3 = y_clamp(int(- float(c3) * self.st.vertical_pixels_per_division
-                  / self.st.earth_leakage_current_axis_per_division) + self.st.y_offset)
+                  / self.st.earth_leakage_current_axis_per_division) + self.st.y_centre)
         return f'{x :4d} {y0 :4d} {y1 :4d} {y2 :4d} {y3 :4d}'
 
     def output_frame(self):

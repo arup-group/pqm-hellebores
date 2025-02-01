@@ -85,7 +85,7 @@ case "$result" in
     "EXIT")
         echo "Exiting launcher.";;
     "Software update")
-        if [[ -f "../development" ]]; then
+        if [[ -f "$SOFTWARE_PATH/development" ]]; then
             branch="development"
         else
             branch="main"

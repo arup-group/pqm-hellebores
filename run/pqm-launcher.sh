@@ -16,6 +16,7 @@ fi
 IDENTITY=$(cat $SOFTWARE_PATH/configuration/identity 2>/dev/null)
 if [[ "$IDENTITY" == "" ]]; then IDENTITY="PQM-0"; fi
 VERSION=$(cat $SOFTWARE_PATH/VERSION)
+GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 GIT_HEAD=$(git rev-parse HEAD)
 IP_ADDRESS=$(hostname -I | cut -d ' ' -f 1)
 MAC_ADDRESS=$(ip -oneline link | sed -rn 's/.+?wlan0.+?ether ([a-f0-9:]+).*/\1/p')
@@ -44,6 +45,7 @@ read -r -d '' information << _EOF_
 <tt><small>
 Identity:             <b>$IDENTITY</b>
 Software version:     <b>$VERSION</b>
+Git branch:           <b>$GIT_BRANCH</b>
 Git HEAD:             <b>$GIT_HEAD</b>
 IP address:           <b>$IP_ADDRESS</b>
 MAC address wlan:     <b>$MAC_ADDRESS</b>

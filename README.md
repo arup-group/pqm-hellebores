@@ -71,7 +71,7 @@ sudo apt install blueman
 
 7. Enable Raspberry Pi support features:
 
-In the Preferences | Raspberry Pi Configuration menu, enable the VNC server and the on-screen keyboard: the keyboard is found in the 'Display' tab -- select 'Enable always', and the VNC server is found in the 'Interfaces' tab -- verify that SSH and (optionally) VNC are enabled.
+In the Preferences | Raspberry Pi Configuration menu, enable the on-screen keyboard and (optionally) the VNC server: the keyboard is found in the 'Display' tab -- select 'Enable always', and the VNC server is found in the 'Interfaces' tab -- verify that SSH and VNC are enabled.
 
 8. Add shortcuts to the 'Other' desktop menu:
 ```

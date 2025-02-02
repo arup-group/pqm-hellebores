@@ -161,7 +161,7 @@ git add ./VERSION
 
 ## Calibration
 
-The four channels of the ADC each have associated calibration factors: DC offset, analogue gain and timing skew. The calibration factors for each device are stored in the `calibrations.json` file. The identity of the specific device at hand is stored in the `configuration/identity` file. Hardware scaling and calibration factors are applied to the data stream by the `scaler.py` program.
+The four channels of the ADC each have associated calibration constants: DC offset, analogue gain and timing skew. The calibration constants for each device are stored in the `calibrations.json` file. The identity of the specific device at hand is stored in the `configuration/identity` file. Hardware scaling with calibration trimming is applied to the data stream by the `scaler.py` program.
 
-The `calibrator.py` program is used in conjunction with a calibrated true RMS multimeter. The calibration procedure is used to determine device-specific calibration factors to be entered into the `calibrations.json` file.
+The `calibrator.py` program is used in conjunction with a calibrated true RMS multimeter. The calibration procedure is used to determine device-specific calibration constants to be entered into the `calibrations.json` file.
 

@@ -610,8 +610,10 @@ def create_options(waveform, app_actions):
             title="hellebores.py",
             text=Version().about(),
             ok_text="Ok, I've read")
-        alert.set_draggable()
-        alert.cannot_drag_outside = True
+        # Regression in library means we can't drag
+        # the Alert box on bookworm
+        #alert.set_draggable()
+        #alert.cannot_drag_outside = True
         for e in alert.get_all_descendants():
             if isinstance(e, thorpy.elements.Button):
                 e.set_bck_color(VERY_LIGHT_GREY, 'normal')

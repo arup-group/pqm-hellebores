@@ -21,16 +21,20 @@ Requires Thonny on your laptop computer to install MicroPython on the Pico and v
 ## Installation
 **Raspberry PI SD card**
 
-For this step, remove the Raspberry Pi and lid from the power quality meter. Disconnect the Pico USB connector and the ribbon cable. Apply power from an auxiliary power supply: do not power up the power quality meter PCB. You may also need a USB or bluetooth keyboard to complete the process.
+For this step, remove the Raspberry Pi and lid and disconnect the Pico USB connector and the ribbon cable. Apply power from an auxiliary power supply: do not power up the meter PCB. You may also need a USB or bluetooth keyboard to complete the process.
+
 Prepare the SD card using Raspberry Pi Imager. As a convenience, a USB stick with Raspberry Pi OS can be prepared first, plugged in the Pi and then that image booted to write to an in-situ SD card -- avoids the need to remove DSI ribbon cable. If using this method, note that a non-initialised Pico must be unplugged from the Pi USB port for this to work.
+
 Choose Raspberry Pi 3 hardware, and 32 bit 'Bookworm' operating system.
 Set a project specific password.
 Enable the option for remote SSH access.
 Set the wifi country, SSID and password to be used for initial access.
 
-**Power quality meter software setup**
+Proceed to install and verify the SD card.
 
-The following steps can be completed with the Raspberry Pi assembled in the power quality meter.
+Shutdown the system, remove the USB stick and re-assemble the Raspberry Pi in the power quality meter, remembering to connect both the USB cable to Pico and the ribbon cable.
+
+**Power quality meter software setup**
 
 1. Start a terminal session via SSH. (As alternative, you could use a bluetooth keyboard and work locally.)
 ```

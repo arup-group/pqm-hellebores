@@ -21,12 +21,16 @@ Requires Thonny on your laptop computer to install MicroPython on the Pico and v
 ## Installation
 **Raspberry PI SD card**
 
-Prepare the SD card using Raspberry Pi Imager. As a convenience, a USB stick with Raspberry Pi OS can be prepared first, plugged in the Pi and then that image booted to write to an in-situ SD card -- avoids the need to remove ribbon cable. If using this method, note that a non-initialised Pico must be unplugged from the Pi USB port for this to work.
+For this step, remove the Raspberry Pi and lid from the power quality meter. Disconnect the Pico USB connector and the ribbon cable. Apply power from an auxiliary power supply: do not power up the power quality meter PCB. You may also need a USB or bluetooth keyboard to complete the process.
+Prepare the SD card using Raspberry Pi Imager. As a convenience, a USB stick with Raspberry Pi OS can be prepared first, plugged in the Pi and then that image booted to write to an in-situ SD card -- avoids the need to remove DSI ribbon cable. If using this method, note that a non-initialised Pico must be unplugged from the Pi USB port for this to work.
+Choose Raspberry Pi 3 hardware, and 32 bit 'Bookworm' operating system.
 Set a project specific password.
 Enable the option for remote SSH access.
 Set the wifi country, SSID and password to be used for initial access.
 
-**Pi setup**  
+**Power quality meter software setup**
+
+The following steps can be completed with the Raspberry Pi assembled in the power quality meter.
 
 1. Start a terminal session via SSH. (As alternative, you could use a bluetooth keyboard and work locally.)
 ```
@@ -61,7 +65,7 @@ echo PQM-n > configuration/identity
 sudo apt install blueman
 ```
 
-7. Enable Raspberry Pi OS features:
+7. Enable Raspberry Pi support features:
 
 In the Preferences | Raspberry Pi Configuration menu, enable the VNC server and the on-screen keyboard: the keyboard is found in the 'Display' tab -- select 'Enable always', and the VNC server is found in the 'Interfaces' tab -- verify that both SSH and VNC are enabled.
 
@@ -73,12 +77,21 @@ ln -s /home/pi/pqm-hellebores/run/pqm-launcher.desktop /home/pi/.local/share/app
 
 9. Also add the launcher script to the desktop autostart directory.
 ```
+mkdir /home/pi/.config/autostart
 ln -s /home/pi/pqm-hellebores/run/pqm-launcher.desktop /home/pi/.config/autostart/pqm-launcher.desktop
+```
+
+10. Update the Raspberry Pi OS.
+
+The OS can be updated from the menu at the top. Alternatively, from a terminal:
+```
+sudo apt update
+sudo apt upgrade
 ```
 
 Dependencies sometimes change with OS updates. See notes file for potential additional system dependencies and troubleshooting.
   
-**Pico setup**  
+**Pico setup**
 
 Using Thonny:
 

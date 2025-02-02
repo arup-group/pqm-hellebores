@@ -21,15 +21,14 @@ class Version:
 
     def about(self):
         list_of_files = self.list_files([PROGRAM_DIR, PICO_DIR, RUN_DIR])
-        ver =      f'Version              : {self.get_version()}'
-        md5 =      f'SHA256 checksum      : {self.sha256(list_of_files)}'
-        git_h =    f'Git commit id        : {self.git_head()}'
-        tf =       f'Temporary files      : {self.get_temp_dir()}'
         identity = f'Identity             : {self.st.identity}'
+        ver =      f'Version              : {self.get_version()}'
+        git_b =    f'Git branch           : {self.git_branch()}'
+        git_h =    f'Git commit id        : {self.git_head()}'
         offsets =  f'Calibration offsets  : {self.st.cal_offsets}'
         gains =    f'Calibration gains    : {self.st.cal_gains}'
         skews =    f'Calibration skews    : {self.st.cal_skew_times}'
-        about = '\n'.join( [ver, md5, git_h, tf, identity, offsets, gains, skews] )
+        about = '\n'.join( [identity, ver, git_b, git_h, offsets, gains, skews] )
         return about
 
     def resolve_path(self, path, file):
@@ -101,12 +100,23 @@ class Version:
             print(f"version.py: Version.increment_sub_version() couldn't change version {current_version}",
                     file=sys.stderr)
  
+    def git_branch(self):
+        git_branch = ''
+        try:
+            result = subprocess.run(['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+                    capture_output=True, check=True)
+            git_branch = result.stdout.decode('utf-8').strip()
+        except subprocess.CalledProcessError:
+            print(f"version.py: Version.git_branch() failed to run git command",
+                    file=sys.stderr)
+        return git_branch
+
     def git_head(self):
         git_head = ''
         try:
             result = subprocess.run(['git', 'rev-parse', 'HEAD'], capture_output=True, check=True)
             git_head = result.stdout.decode('utf-8').strip()
-        except FileNotFoundError:
+        except subprocess.CalledProcessError:
             print(f"version.py: Version.git_head() failed to run git command",
                     file=sys.stderr)
         return git_head

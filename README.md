@@ -139,8 +139,17 @@ NB Some code paths are different on Windows to allow the project to run, and the
 
 ## Development
 
-The software is designed with 'Unix Philosophy' in mind, which helps to simplify and modularise the design while also achieving high performance. Independent programs are connected in a pipeline with data sent from one program to the next as a text stream. Control settings are stored in a `settings.json` file: the GUI program modifies this file and sends other programs a Posix signal whenever the settings file is updated, and they then re-load the `settings.json`. The project is intended to yield to experimentation: the behaviour of the programs at each step of the pipeline can be studied, verified and changed on the command line.
+### Jupyter notebook
+The Jupyter notebook in the `nb` directory contains examples and tests for the functions implemented in `analyser.py`. To configure and run:
 
+```
+python -m pip install jupyter matplotlib
+jupyter notebook
+```
+
+Open the notebook file and choose Cell | Run all.
+
+### Software for Raspberry Pi
 The Pi code will run in WSL, Ubuntu, Mac or similar environments that have a modern python and can support the python dependencies, pipelines and signals. `hellebores.py` and the `rain_chooser.py` simulator require SDL for displaying the GUI and to accept touchscreen or mouse input. The GUI can run under X-Windows or in native Mac and MS-Windows if the SDL libraries are installed and are reachable from the python runtime environment. The run script will test whether a serial interface to Pico is available and if not will use the `rain_chooser.py` simulator as a data source.
 
 You'll find that automatic checking tools, such as within `VS Code` will spuriously identify problems with resolving some python libraries. This is because files within the project target different runtime environments: Linux, Pico (micropython) and Windows.

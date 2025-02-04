@@ -101,6 +101,6 @@ To open the notebook, navigate to this folder on your computer and type `jupyter
 | Filename                      | Description                   |
 | :---------------------------- | :---------------------------- |
 | `line_speed.py` | Attached to the end of a pipeline, reports on the number of lines per second received. Used to help verify performance of processing. |
-| `raw_reader.py` | Reads from serial bus in raw binary format, and passes through to `stdout`. |
+| `raw_reader.py` | Reads from serial port in raw binary format, and passes through to `stdout`. |
 | `push_settings.sh` | Sends the `SIGUSR1` signal. Used for testing the `settings.py` update functions. |
 | `pico_update.sh` | Script to verify files stored on the Pico flash storage and update to current version if necessary. |

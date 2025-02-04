@@ -3,6 +3,18 @@
 
 ## root /
 
+| +---------------------------- | +---------------------------- |
+| Filename                      | Description                   |
+| +---------------------------- | +---------------------------- |
+| `README.md`                   | Overall description of project, with installation and setup instructions. |
+| `notes`                       | Additional notes made during development, that may not be relevant. |
+| `README.md`                   | Overall description of project, with installation and setup instructions. |
+| `CONTENTS.md`                 | Outline description of files (this file). |
+| `LICENSE`                     | The MIT license that makes this software open source. |
+| `VERSION`                     | Version string used to help identify which version is running. Minor version numbers are incremented using a git hook when a commit is made. |
+| `requirements.txt`            | Used with python pip to install libraries that the software needs to run. |
+| +---------------------------- | +---------------------------- |
+
 `README.md`
 
 Overall description of project, with installation and setup instructions.

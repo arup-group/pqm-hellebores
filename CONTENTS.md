@@ -53,7 +53,7 @@ To open the notebook, navigate to this folder on your computer and type `jupyter
 | Filename                      | Description                   |
 | :---------------------------- | :---------------------------- |
 | `main.py` | Interactive process on Pico that can communicate with Pi for launching `stream.py` and update files on the built-in flash storage. |
-| `stream.py` | Communicates with the MCP3912 ADC to continuously acquire measurements into buffer memory and send it in blocks to the Pi via USB. |
+| `stream.py` | Communicates with the MCP3912 ADC to continuously acquire measurements into buffer memory and send it in blocks to the Pi via USB. This is the source of data for the entire system. |
 
 ## pqm/
 
@@ -62,7 +62,7 @@ To open the notebook, navigate to this folder on your computer and type `jupyter
 | `reader.py` | Receives binary data from the USB serial port and outputs as hex text, four channels per line. |
 | `scaler.py` | Converts data received from `reader.py` to floating point decimal, applying scaling and calibration constants. Adds 'time axis' and instantaneous power to the stream. |
 | `scaler_np.py` | Alternative implementation of `scaler.py` that uses numpy to do the transformation in an array. Turned out slower than naive solution. |
-| `framer.py` | Receives data from `scaler.py` and processes into waveform 'frames'. Implements a trigger to align successive frames on screen. |
+| `framer.py` | Receives data from `scaler.py` and processes into waveform 'frames'. Implements a trigger to align successive frames on screen. Outputs pixel coordinates suitable for plotting waveforms. |
 | `analyser.py` | Receives data from `scaler.py` and processes to calculate electrical measurements. |
 | `analysis_to_csv.py` | Receives data from `analyser.py` and formats for `.csv` file. |
 | `calibrator.py` | Receives data from `scaler.py` and helps to determine calibration constants during setup. |

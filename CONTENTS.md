@@ -6,8 +6,7 @@
 | :---------------------------- | :---------------------------- |
 | `README.md` | Overall description of project, with installation and setup instructions. |
 | `notes` | Additional notes made during development, that may not be relevant. |
-| `README.md` | Overall description of project, with installation and setup instructions. |
-| `CONTENTS.md` | Outline description of files (this file). |
+| `CONTENTS.md` | Description of files (this file). |
 | `LICENSE` | The MIT license that makes this software open source. |
 | `VERSION` | Version string used to help identify which version is running. Minor version numbers are incremented using a git hook when a commit is made. |
 | `requirements.txt` | Used with python pip to install libraries that the software needs to run. |
@@ -30,7 +29,7 @@ Contains the configuration, staging and commit history for version control
 
 | Filename                      | Description                   |
 | :---------------------------- | :---------------------------- |
-| `main.py` | Basic server on Pico that can communicate with Pi for launching `stream.py` and maintaining software on the built-in flash storage. |
+| `main.py` | Interactive process on Pico that can communicate with Pi for launching `stream.py` and update files on the built-in flash storage. |
 | `stream.py` | Communicates with the MCP3912 ADC to continuously acquire measurements into buffer memory and send it in blocks to the Pi via USB. |
 
 ## pqm/
@@ -78,7 +77,7 @@ Contains the configuration, staging and commit history for version control
 
 | Filename                      | Description                   |
 | :---------------------------- | :---------------------------- |
-| `line_speed.py.` | Attached to the end of a pipeline, reports on the number of lines per second received. Used to help verify performance of processing. |
+| `line_speed.py` | Attached to the end of a pipeline, reports on the number of lines per second received. Used to help verify performance of processing. |
 | `raw_reader.py` | Reads from serial bus in raw binary format, and passes through to `stdout`. |
 | `push_settings.sh` | Sends the `SIGUSR1` signal. Used for testing the `settings.py` update functions. |
 | `pico_update.sh` | Script to verify files stored on the Pico flash storage and update to current version if necessary. |

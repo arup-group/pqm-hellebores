@@ -25,6 +25,29 @@ Contains the configuration, staging and commit history for version control
 | `identity` | Contains the name for a specific meter. This allows the software to apply the correct calibration constants. This is the only file that is different on different meters, and is therefore not included in the repository. |
 | `settings.json` | Contains settings and some fixed constants for the meter. A copy of this file is saved in RAMdisk when the meter is running, and is updated dynamically by `settings.py`. |
 
+## nb/
+
+Contains Jupyter notebook and sample data for testing and proving the electrical calculations that are implemented in `analyser.py`.
+
+To open the notebook, navigate to this folder on your computer and type `jupyter notebook` in the terminal. This will start a local web server. Open the localhost URL that is offered in your web browser, then open the notebook file.
+
+| Filename                      | Description                   |
+| :---------------------------- | :---------------------------- |
+| `energy_and_power_quality_calculations_2.ipynb` | The notebook file. |
+| `data_sample_10_seconds.out` | Sample data used by the notebook. Equivalent to the output from `scaler.py`. |
+
+## output_files/
+
+`output_files/` is a symbolic link to a directory in the RAMdisk filesystem in Raspberry Pi (and other Linux systems).
+
+| Filename                      | Description                   |
+| :---------------------------- | :---------------------------- |
+| `analysis_pipe` | Named pipe that transmits measurements from `analyser.py` to `hellebores.py`. |
+| `waveform_pipe` | Named pipe that transmits waveforms from `framer.py` to `hellebores.py`. |
+| `error.log` | Output to `stderr` is redirected to this file by the `go.sh` script. The file can help with tracing bugs. |
+| `pqm.nnnn.csv` | CSV file with a log of measurement results from `analyser.py`. nnnn corresponds to the PID of analysis_to_csv.py. |
+| `settings.json` | Copy of `configuration/settings.json` but updated dynamically according to user input. This is the means of communicating changes of settings to programs in the pipeline. |
+
 ## pico/
 
 | Filename                      | Description                   |

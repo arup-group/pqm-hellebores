@@ -89,7 +89,7 @@ To open the notebook, navigate to this folder on your computer and type `jupyter
 | `go.bat` | Run script for Windows, sorts out working directory and environment, then hands off to `go.py`. |
 | `go.py` | Run script for Windows. |
 | `pqm-launcher.sh` | Launcher script that presents version information and startup buttons. |
-| `pqm-launcher.desktop` | Desktop file for `pqm-launcher.sh` that is added to the menu and autostarrt feature of Pi. |
+| `pqm-launcher.desktop` | Desktop file for `pqm-launcher.sh` that is added to the menu and autostart feature of Pi. |
 | `hellebores.desktop` | Desktop file for `go.sh` that is added to the menu of Pi. |
 | `pqm.ico` | Project icon. |
 | `pqm64.png` | Icon in 64x64 png format. |

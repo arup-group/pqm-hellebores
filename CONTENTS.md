@@ -15,7 +15,7 @@
 
 ## .git/
 
-Contains the configuration, staging and commit history for version control
+Contains the configuration, staging and commit history for version control.
 
 ## configuration/
 
@@ -38,7 +38,7 @@ To open the notebook, navigate to this folder on your computer and type `jupyter
 
 ## output_files/
 
-`output_files/` is a symbolic link to a directory in the RAMdisk filesystem in Raspberry Pi (and other Linux systems).
+`output_files/` is a symbolic link to a directory in the RAMdisk filesystem in Raspberry Pi (and other Linux systems). The following files are created at run-time.
 
 | Filename                      | Description                   |
 | :---------------------------- | :---------------------------- |

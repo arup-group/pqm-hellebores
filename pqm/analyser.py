@@ -364,7 +364,7 @@ def read_analyse_output(cache, analyser, output_interval):
         analyser.power_quality()
         analyser.update_analysis_bounds()
         # Generate the output
-        print(analyser.get_results())
+        print(json.dumps(analyser.get_results()))
         sys.stdout.flush()
 
 

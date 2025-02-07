@@ -38,14 +38,13 @@ def set_current_channel():
     else:
         current_channel = 2
 
-def set_uncalibrated_constants():
-    global offsets, gains, delays
+def uncalibrated_constants():
     offsets = [0, 0, 0, 0]
-    gains   = st.scale_factors
+    gains   = HARDWARE_SCALE_FACTORS
     delays  = [-1, -1, -1, -1]
+    return (offsets, gains, delays)
 
-def set_calibrated_constants():
-    global offsets, gains, delays
+def calibrated_constants():
     try:
         offsets = st.cal_offsets
         gains   = [ h*g for h,g in zip(HARDWARE_SCALE_FACTORS, st.cal_gains) ]
@@ -56,14 +55,14 @@ def set_calibrated_constants():
             if delay_shift < -(DELAY_LINE_LENGTH-1) or delay_shift > -1:
                 raise ValueError
             delays.append(delay_shift)
+        return (offsets, gains, delays)
     except (NameError, ZeroDivisionError, TypeError, ValueError):
         print('scaler.py, get_factors(): Error in setting calibration constants, '
               'switching to uncalibrated.', file=sys.stderr)
-        set_uncalibrated_constants()
+        return uncalibrated_constants()
 
-def scale_readings(cs):
+def scale_readings(cs, offsets, gains):
     """cs contains channel readings in integers"""
-    global offsets, gains
     #return [ (cs + o) * g for cs, o, g in zip(cs, offsets, gains) ]
     return [ (cs[i] + offsets[i]) * gains[i] for i in [0,1,2,3] ]
 
@@ -86,8 +85,7 @@ def main():
 
     i = 0   # sample index
     set_current_channel()
-    set_calibrated_constants() if run_calibrated else set_uncalibrated_constants()
-    # delay_lookup contains the appropriate array offsets for delay in each channel
+    offsets, gains, delays = calibrated_constants() if run_calibrated else uncalibrated_constants()
     delay_lookup = list(zip([0,1,2,3], delays))
 
     # now loop over all the lines of data from stdin
@@ -102,7 +100,8 @@ def main():
             delay_line.append(new_sample)
             # use the delay line to correct for channel timing skew
             # and apply calibration and scale factors to readings
-            scaled = scale_readings([ delay_line[delay][ch] for (ch, delay) in delay_lookup ])
+            scaled = scale_readings([ delay_line[delay][ch] for ch, delay in delay_lookup ],
+                                    offsets, gains)
             # now pick out the individual readings ready for output
             voltage = scaled[3]
             current = scaled[current_channel]

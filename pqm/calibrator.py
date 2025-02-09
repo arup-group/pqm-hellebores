@@ -76,7 +76,7 @@ def lines_to_samples(lines):
 
     def line_to_sample(line):
         ws = line.decode('utf-8').strip().split()
-        sample = [ from_twos_complement(int(w, base=16)) for w in ws[1:] ]  
+        sample = [ from_twos_complement(int(w, base=16)) for w in ws ]
         return sample
 
     # samples is a list containing lists of 4 numbers (sample per channel in numeric form)

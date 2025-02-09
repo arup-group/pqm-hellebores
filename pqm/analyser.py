@@ -343,21 +343,21 @@ def read_lines(n, cache):
 
 def read_analyse_output(cache, analyser, output_interval):
     """Loop through analysis and output processes until read_lines fails."""
-    # While doing calculations, We read new data in two gulps to keep the
+    # While doing calculations, we read new data in two gulps to keep the
     # sample pipeline moving
     gulp1 = output_interval // 2
     gulp2 = output_interval - gulp1
     while True:
-        # Retrieve the cache and load it into the analyser
+        # Transfer the cache into the analyser
         analyser.load_data_frame(cache.get_output_array()) 
-        # first data gulp
+        # first new data gulp into cache
         if not read_lines(gulp1, cache):
             break
         # Do some calculations
         analyser.averages()
         analyser.frequency()
         analyser.update_accumulators()
-        # second data gulp
+        # second new data gulp into cache
         if not read_lines(gulp2, cache):
             break
         # Do some more calculations

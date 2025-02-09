@@ -39,22 +39,23 @@ def set_current_channel():
         current_channel = 2
 
 def uncalibrated_constants():
+    """Standard scaling constants without calibration adjustment."""
     offsets = [0, 0, 0, 0]
     gains   = HARDWARE_SCALE_FACTORS
+    # delays are measured in sample periods (integer)
+    # where -1 is latest sample in the delay line
     delays  = [-1, -1, -1, -1]
     return (offsets, gains, delays)
 
 def calibrated_constants():
+    """Calculate scaling constants including calibration constants."""
     try:
         offsets = st.cal_offsets
         gains   = [ h*g for h,g in zip(HARDWARE_SCALE_FACTORS, st.cal_gains) ]
-        delays  = []
-        for skew_time in st.cal_skew_times:
-            delay_shift = int(-1 - skew_time // st.interval)
-            # catch conditions where the requested delay is outside of the range of the delay line
-            if delay_shift < -(DELAY_LINE_LENGTH-1) or delay_shift > -1:
+        delays = [ int(-1 - t // st.interval) for t in st.cal_skew_times ]
+        for d in delays:
+            if d < -(DELAY_LINE_LENGTH-1) or d > -1:
                 raise ValueError
-            delays.append(delay_shift)
         return (offsets, gains, delays)
     except (NameError, ZeroDivisionError, TypeError, ValueError):
         print('scaler.py, get_factors(): Error in setting calibration constants, '
@@ -63,7 +64,6 @@ def calibrated_constants():
 
 def scale_readings(cs, offsets, gains):
     """cs contains channel readings in integers"""
-    #return [ (cs + o) * g for cs, o, g in zip(cs, offsets, gains) ]
     return [ (cs[i] + offsets[i]) * gains[i] for i in [0,1,2,3] ]
 
 

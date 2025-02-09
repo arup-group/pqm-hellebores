@@ -13,6 +13,7 @@ from settings import Settings
 ADC_SAMPLES = 78125
 READER      = 'reader.py'
 READER_TEST = 'rain_chooser.py'    # use this for testing
+HARDWARE_SCALE_FACTORS = [ 4.07e-07, 2.44e-05, 0.00122, 0.0489 ]
 
 
 def is_raspberry_pi():
@@ -192,7 +193,7 @@ def calibrate(samples):
     c_config = {
         'offsets': st.cal_offsets,
         'gains': st.cal_gains,
-        'scaling': st.scale_factors
+        'scaling': HARDWARE_SCALE_FACTORS
     }
     u_config = {
         'offsets': samples_to_offsets(samples),

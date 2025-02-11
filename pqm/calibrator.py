@@ -10,11 +10,15 @@ import math
 from settings import Settings
 
 
-ADC_SAMPLES = 78125
-READER      = 'reader.py'
-READER_TEST = 'rain_chooser.py'    # use this for testing
-HARDWARE_SCALE_FACTORS = [ 4.07e-07, 2.44e-05, 0.00122, 0.0489 ]
-
+ONE_MINUTE_OF_SAMPLES     = 468750
+READER                    = 'reader.py'
+READER_TEST               = 'rain_chooser.py'    # use this for testing
+HARDWARE_SCALE_FACTORS    = [ 4.07e-07, 2.44e-05, 0.00122, 0.0489 ]
+OFFSET_CAL                = 1
+VOLTAGE_CAL               = 2
+CURRENT_FULL_CAL          = 3
+CURRENT_LOW_CAL           = 4
+CURRENT_EARTHLEAKAGE_CAL  = 5
 
 def is_raspberry_pi():
     is_pi = False
@@ -51,7 +55,7 @@ def get_lines_from_reader(number_of_lines):
         # read the correct number of lines
         lines = []
         for i in range(number_of_lines):
-            if i % 1000 == 0:
+            if i % 2000 == 0:
                 sys.stdout.write('.')
                 sys.stdout.flush()
             line = process.stdout.readline()
@@ -59,7 +63,8 @@ def get_lines_from_reader(number_of_lines):
             if line == b'':
                 print('')   
                 raise EOFError
-            lines.append(line)
+            else:
+                lines.append(line)
         print(f' {len(lines)} samples, done.\n')
     except EOFError:
         print(f'{os.path.basename(__file__)}, get_lines_from_reader(): Reader program terminated.', file=sys.stderr)
@@ -111,49 +116,50 @@ def samples_to_offsets(samples):
     return offsets
 
 
-def ready_to_proceed():
+def get_choice():
     print('''
 
 ******   CALIBRATOR UTILITY   *******
-The power quality monitor takes raw readings from the ADC channels and then passes them
-through a scaling process. The scaling transformations between ADC channels and output
-measurements are as follows:
-    r0 = (adc0 + o0) * h0 * g0
-    r1 = (adc1 + o1) * h1 * g1
-    r2 = (adc2 + o2) * h2 * g2
-    r3 = (adc3 + o3) * h3 * g3
+The scaling transformations between ADC channels and output measurements are as
+follows:
+    m0 = (adc0 + O0) * H0 * G0
+    m1 = (adc1 + O1) * H1 * G1
+    m2 = (adc2 + O2) * H2 * G2
+    m3 = (adc3 + O3) * H3 * G3
 
-If 'c' is the channel number, then:
-    rc    is the scaled analogue channel reading (eg Amps or Volts)
-    adcc  is the raw ADC channel reading (expressed as a signed integer)
-    oc    is a device-specific dc calibration offset
-    hc    is a hardware scaling factor, fixed in the design
-    gc    is a device-specific gain calibration factor.
+If 'n' is the channel number, then:
+    mn    is the scaled measurement reading (eg Amps or Volts)
+    adcn  is the raw ADC channel reading (expressed as a signed integer)
+    On    is a device-specific dc calibration offset
+    Hn    is a hardware scaling factor, fixed in the design
+    Gn    is a device-specific gain calibration factor.
 
-This calibration program helps to determine the oc and gc calibration constants that are
-specific to each individual device.
+This program helps to determine the device specific calibration constants On and Gn.
 
-Connect no load or a fixed load with external multimeter to correspond with the channel
-that you want to calibrate.
+Proceed to calibrate with each of the following procedures, in turn. It is essential
+that offset calibration is completed first.
 
-Offset calibration values are automatically calculated, and assume that your test supply
-and load have no DC currents (use an isolation transformer).
+Select option, or 'q' to quit:
+1. O0, O1, O2, O3 offset calibration
+2. G3 voltage calibration
+3. G2 current (full range) calibration
+4. G1 current (low range) calibration
+5. G0 current (earth leakage) calibration
 
-Gain calibration factors are calculated by hand using the multimeter and program output.
+''', end='')
 
-ADC integer readings will now be received from all channels and collected over a period
-of 10 seconds.
-
-NB CHANNEL 1 CALIBRATION RESULTS ARE ONLY VALID FOR CURRENTS UP TO APPROX 0.5A.
-Enter to start, (q) to quit: ''', end='')
-    choice = input() 
-    if choice == 'q':
-        return False
-    else:
-        return True
+    try:
+        choice = int(input())
+        if choice < 1 or choice > 5:
+            raise ValueError
+    except ValueError:
+        print('Quitting.')
+        sys.exit(0)
+    return choice
 
 
-def print_results(c_config, u_config, c_measurements, u_measurements):
+def offset_calibration():
+    samples = lines_to_samples(get_lines_from_reader(ONE_MINUTE_OF_SAMPLES))
     # offset report
     labels = ['o0: Earth leakage current', 'o1: Current (low)', 'o2: Current (full)', 'o3: Voltage']
     print('OFFSET VALUES:')
@@ -167,6 +173,9 @@ def print_results(c_config, u_config, c_measurements, u_measurements):
     print('\n'.join(results))
     print('-'*80)
     print()
+
+
+def print_results(c_config, u_config, c_measurements, u_measurements):
     # measurement report
     labels = ['r0: Earth leakage current', 'r1: Current (low)', 'r2: Current (full)', 'r3: Voltage']
     units = ['mA', 'A', 'A', 'V']
@@ -207,9 +216,11 @@ def calibrate(samples):
 
 
 def main():
-    if ready_to_proceed():
-        samples = lines_to_samples(get_lines_from_reader(ADC_SAMPLES))
-        print_results(*calibrate(samples))
+    index = get_choice() - 1
+    calibration_functions = [ offset_calibration, voltage_calibration, \
+                              current_full_calibration, current_low_calibration, \
+                              current_earthleakage_calibration ]
+    calibration_functions[index]()
 
 
 if __name__ == '__main__':

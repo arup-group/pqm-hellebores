@@ -208,7 +208,7 @@ class Multimeter:
             dp_fix=2, value_key='crest_factor_current', p_offset=(0,18), p_move=(0,38))
 
         self.add_ui_text(text='Frequency /Hz', text_length=24)
-        self.add_ui_text(text_length=24, font_colour=ORANGE, \
+        self.add_ui_text(text_length=24, font_colour=GREEN, \
             dp_fix=2, value_key='frequency', p_offset=(0,18), p_move=(0,38))
 
         self.add_ui_text(text='THD(v) /%', text_length=24)

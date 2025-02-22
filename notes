@@ -51,6 +51,8 @@ xrandr --output DSI-1 --same-as --output HDMI-1 --scale-from 800x600
 #######
 ### DATADASH DEMONSTRATION EXAMPLE
 #######
-
+git clone https://github.com/keithknott26/datadash
+cd datadash
+go build cmd/datadash.go
 pqm/rain_chooser.py | pqm/scaler.py | cat <(echo 'Time Voltage Current Power Earth-leak') - | sed -nE 's/^\s+//;s/\s+/ /g;1~10p' | datadash -y --delimiter=' ' --seek-interval=0.1ms --scroll
 

@@ -8,7 +8,8 @@
 # |___/\___\__,_|_|\___|_|(_) .__/ \__, |
 #                           |_|    |___/ 
 # 
-# Convert incoming integer samples to floating point and apply scaling factors 
+# Convert incoming integer samples to floating point and apply scaling
+# and calibration factors
 
 import sys
 import signal

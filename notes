@@ -56,3 +56,8 @@ cd datadash
 go build cmd/datadash.go
 pqm/rain_chooser.py | pqm/scaler.py | cat <(echo 'Time Voltage Current Power Earth-leak') - | sed -nE 's/^\s+//;s/\s+/ /g;1~10p' | datadash -y --delimiter=' ' --seek-interval=0.1ms --scroll
 
+
+#######
+### PERFORMANCE TEST EXAMPLE
+#######
+./rain.py | ./scaler.py | tee >(../tools/line_speed.py > /dev/tty) | tee >(./analyser.py > /dev/tty) | ./framer.py | ./hellebores.py

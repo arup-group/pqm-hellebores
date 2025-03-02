@@ -21,13 +21,11 @@ CURRENT_LOW_CAL           = 4
 CURRENT_EARTHLEAKAGE_CAL  = 5
 
 def is_raspberry_pi():
-    is_pi = False
     try:
         with open('/sys/firmware/devicetree/base/model', 'r') as model:
-            if 'raspberry' in model.read().lower():
-                is_pi = True
+            is_pi = True if 'raspberry' in model.read().lower() else False
     except (FileNotFoundError, IOError):
-        pass
+        is_pi = False
     return is_pi
 
 
@@ -127,16 +125,17 @@ follows:
     m2 = (adc2 + O2) * H2 * G2
     m3 = (adc3 + O3) * H3 * G3
 
-If 'n' is the channel number, then:
-    mn    is the scaled measurement reading (eg Amps or Volts)
-    adcn  is the raw ADC channel reading (expressed as a signed integer)
-    On    is a device-specific dc calibration offset
-    Hn    is a hardware scaling factor, fixed in the design
-    Gn    is a device-specific gain calibration factor.
+If 'N' is the channel number, then:
+    mN    is the scaled measurement reading (eg Amps or Volts)
+    adcN  is the raw ADC channel reading (expressed as a signed integer)
+    ON    is a device-specific dc calibration offset
+    HN    is a hardware scaling factor, fixed in the design
+    GN    is a device-specific gain calibration factor.
 
-This program helps to determine the device specific calibration constants On and Gn.
+This program helps to determine the device specific calibration constants
+O[0-3] and G[0-3].
 
-Proceed to calibrate with each of the following procedures, in turn. It is essential
+Proceed with the calibration in the following sequence: it is essential
 that offset calibration is completed first.
 
 Select option, or 'q' to quit:
@@ -173,6 +172,19 @@ def offset_calibration():
     print('\n'.join(results))
     print('-'*80)
     print()
+
+
+def voltage_calibration():
+    pass
+
+def current_full_calibration():
+    pass
+
+def current_low_calibration():
+    pass
+
+def current_earthleakage_calibration():
+    pass
 
 
 def print_results(c_config, u_config, c_measurements, u_measurements):

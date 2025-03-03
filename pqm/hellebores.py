@@ -216,7 +216,9 @@ class Sample_Buffer:
         # (d) more than 1000 samples have been read (this keeps the UI responsive)
         sample_counter = 0
         self.frame_completed = False
-        while sample_counter < 1000 and (l := self.data_comms.get_waveform_line(0.02)):
+        while not self.frame_completed \
+              and sample_counter < 1000 \
+              and (l := self.data_comms.get_waveform_line(0.02)):
             try:
                 # lines beginning with '.' end the frame
                 # in stopped mode, framer will send a larger block of '.' characters in one line
@@ -227,15 +229,15 @@ class Sample_Buffer:
                     self.waveforms = [ self.ps, *self.waveforms[1:] ]
                     # reset the working buffer
                     self.ps = [ [],[],[],[] ]
-                    break
                 else:
                     # add a sample
+                    # self.add_sample( [ (x,y0), (x,y1), (x,y2), (x,y3) ] for x,y0,y1,y2.y3 in [int(w) for w in l.split()] ] )
                     self.add_sample([ int(w) for w in l.split() ])
                     sample_counter += 1
             except (IndexError, ValueError):
                 print('hellebores.py: Sample_Buffer.load_analysis()'
                       ' file reading error.', file=sys.stderr) 
-                break
+                self.frame_completed = True
 
 
     def get_waveform(self, index=0):

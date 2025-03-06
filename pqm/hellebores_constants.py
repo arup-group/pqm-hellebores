@@ -15,17 +15,19 @@ LIGHTEST_GREY = (220, 220, 220)
 # set colours for voltage, current, power and earth leakage current
 SIGNAL_COLOURS = [ GREEN, YELLOW, MAGENTA, CYAN ]
 PI_SCREEN_SIZE = (800,480)
-SCOPE_BOX_SIZE = (700,480)
-CONTROLS_BOX_SIZE = (100,480)        # main buttons and status texts
-CONTROLS_BOX_POSITION = (800,0)      # top right corner
+# scope box is increased by one pixel because line width of plots is
+# two pixels wide: leaves artifact dots otherwise
+SCOPE_BOX_SIZE = (701,480)           # waveform and multimeter display area
+CONTROLS_BOX_SIZE = (99,480)         # main buttons and status texts
+CONTROLS_BOX_POSITION = (799,0)      # top right corner
 SETTINGS_BOX_SIZE = (500,400)        # 'dialog' boxes
 SETTINGS_BOX_POSITION = (690,100)    # top right corner
 DATETIME_POSITION = (0,0)
 WFS_POSITION = (640,0)
 METER_POSITION = (0,32)
-BUTTON_SIZE = (88,50) 
+BUTTON_SIZE = (86,50)
 BUTTON_WIDE_SIZE = (180,50) 
-TEXT_SIZE = (90,16)
+TEXT_SIZE = (86,16)
 TEXT_WIDE_SIZE = (120,16)
 TEXT_METER_LABEL_SIZE = (30,64)
 TEXT_METER_SIZE = (184,64)

@@ -451,8 +451,7 @@ def main():
     thorpy.init(screen, thorpy.theme_simple)
     if hide_mouse_pointer:
         # hack to make the cursor invisible while still responding to touch signals
-        pygame.mouse.set_cursor(
-            (8,8), (0,0), (0,0,0,0,0,0,0,0), (0,0,0,0,0,0,0,0))
+        pygame.mouse.set_cursor((8,8), (0,0), (0,0,0,0,0,0,0,0), (0,0,0,0,0,0,0,0))
 
     # object holding the state of the application and the incoming communication streams
     app_actions  = App_Actions()

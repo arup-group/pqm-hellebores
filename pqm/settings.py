@@ -7,6 +7,7 @@ import json
 import psutil
 import time
 import glob
+import math
 
 # Configuration files are stored in the configuration folder
 # NB a working copy of the settings file is later cached in ramdisk
@@ -55,9 +56,11 @@ class Settings():
         self.power_axis_per_division    = self.power_display_ranges[self.power_display_index]
         self.earth_leakage_current_axis_per_division  = \
             self.earth_leakage_current_display_ranges[self.earth_leakage_current_display_index]
-        self.pre_trigger_samples        = int(self.time_axis_pre_trigger_divisions * self.time_axis_per_division
+        self.pre_trigger_samples        = math.floor(self.time_axis_pre_trigger_divisions
+                                              * self.time_axis_per_division
                                               / self.interval)
-        self.frame_samples              = int(self.time_axis_divisions * self.time_axis_per_division
+        self.frame_samples              = math.floor(self.time_axis_divisions
+                                              * self.time_axis_per_division
                                               / self.interval)
         self.post_trigger_samples       = self.frame_samples - self.pre_trigger_samples
         # we set a hold-off threshold (minimum number of samples between triggers) to be slightly less

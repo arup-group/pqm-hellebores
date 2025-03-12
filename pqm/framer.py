@@ -49,17 +49,19 @@ class Buffer:
     # after settings have changed.
     frame_startp = 0            # beginning of frame to be output
     frame_endp = 0              # end of frame to be output
-    outp = 0                    # end of previous output
     sp = 0                      # storage pointer (advances by 1 for every new sample)
     tp = 0                      # trigger pointer (in running mode, this is moved
                                 # forward when trigger condition is next satisfied)
     sync_holdoff_counter = 0    # inhibits the sync trigger for N samples
     inrush_holdoff_counter = 0  # inhibits the inrush trigger for N samples
+    # freerun_interpolation_increment corrects for creeping time error in freerun mode
+    # it's set up when new settings are applied
+    freerun_interpolation_increment = 0
     # reframed flag indicates that the data in the frame is fresh
     reframed = False
     # trigger flag(s) are raised when a new trigger is detected, and lowered after we
     # have output a frame
-    sync_triggered = False
+    frame_triggered = False
     inrush_triggered = False
     stop_flag = False
     # When there is a successful trigger, the trigger_test_fn will calculate an estimate
@@ -111,17 +113,19 @@ class Buffer:
         # NB the start marker can slightly overlap the previous end marker in running mode
         # to allow frame rate to be maintained at integer ratios of 50 wf/s for signals in
         # the range 48-52 Hz.
-        self.frame_startp = self.tp - self.st.pre_trigger_samples
+        # determine the start index depending on the trigger index and where the
+        # interpolation fraction landed
+        if self.interpolation_fraction < 0.5:
+            self.frame_startp = self.tp - self.st.pre_trigger_samples - 1
+        else:
+            self.frame_startp = self.tp - self.st.pre_trigger_samples
+        # end index is start index plus length of frame
         self.frame_endp = self.frame_startp + self.st.frame_samples
         self.reframed = True
 
     def reprime(self):
-        """Set the earliest position for the next trigger and clear the trigger flag if not
-        in freerun mode. Always clear the inrush trigger flag."""
-        if self.st.trigger_mode == 'freerun':
-            self.freerun_trigger()
-        else:
-            self.sync_triggered = False
+        """Clear the trigger flags."""
+        self.frame_triggered = False
         self.inrush_triggered = False
 
     def trigger_test(self):
@@ -132,7 +136,7 @@ class Buffer:
             self.buf[(self.sp - 1) % BUFFER_SIZE],
             self.buf[self.sp % BUFFER_SIZE])
         # we only update frame markers and set holdoff if this is a 'new' trigger
-        if (self.sync_triggered and not self.reframed) or self.inrush_triggered:
+        if (self.frame_triggered and not self.reframed) or self.inrush_triggered:
             self.sync_holdoff_counter = self.st.sync_holdoff_samples
             self.update_frame_markers()
 
@@ -179,7 +183,6 @@ class Buffer:
             print(LONG_DOTS)
         else:
             print(SHORT_DOTS)
-        self.outp = self.frame_endp
         sys.stdout.flush()
 
     def build_frame(self, line):
@@ -198,19 +201,19 @@ class Buffer:
         v1 = s1[channel_index]
         v2 = s2[channel_index]
         if self.sync_holdoff_counter <= 0 and v1 <= trigger_level and v2 >= trigger_level:
-            self.sync_triggered = True
+            self.frame_triggered = True
             self.tp = self.sp
             self.interpolation_fraction = self.i_frac(v1, v2, trigger_level)
-        return self.sync_triggered
+        return self.frame_triggered
 
     def falling_trigger_test(self, s1, s2, channel_index, trigger_level):
         v1 = s1[channel_index]
         v2 = s2[channel_index]
         if self.sync_holdoff_counter <= 0 and v1 >= trigger_level and v2 <= trigger_level:
-            self.sync_triggered = True
+            self.frame_triggered = True
             self.tp = self.sp
             self.interpolation_fraction = self.i_frac(v1, v2, trigger_level)
-        return self.sync_triggered
+        return self.frame_triggered
 
     def inrush_trigger_test(self, s1, channel_index, trigger_level):
         v1 = s1[channel_index]
@@ -223,21 +226,21 @@ class Buffer:
 
     def freerun_trigger(self):
         # in freerun mode, we advance by exactly one frame and immediately trigger
-        self.sync_triggered = True
+        self.frame_triggered = True
         # the next trigger point is calculated relative to the current storage pointer
         # rather than the current trigger pointer so that we easily recover from a stopped
         # state when returning to a running state. ie instead of:
-        # self.tp = self.tp + self.st.frame_samples
+        self.tp = self.tp + self.st.frame_samples
         # we do:
-        self.tp = self.sp + self.st.pre_trigger_samples - 1
+        #self.tp = self.sp + self.st.pre_trigger_samples + 1
         # the interpolation_fraction corrects for creeping time error -- the frame_samples do not
-        # necessarily correspond to exactly one frame of time
-        self.interpolation_fraction += (self.st.time_axis_divisions * self.st.time_axis_per_division
-            / 1000 * self.st.sample_rate) % 1
+        # necessarily correspond to exactly one frame of time -- we accumulate the fractional part
+        # and then advance by the extra sample when required.
+        self.interpolation_fraction += self.freerun_interpolation_increment
         if self.interpolation_fraction > 1.0:
-            self.tp += int(self.interpolation_fraction)
-            self.interpolation_fraction = self.interpolation_fraction % 1
-        return self.sync_triggered
+            self.interpolation_fraction -= 1
+            self.tp += 1
+        return self.frame_triggered
 
     def configure_for_new_settings(self):
         """We don't want to process 'mode' logic every time we read a sample. Therefore we create
@@ -247,28 +250,41 @@ class Buffer:
         # (NB the trigger test function is called for every sample)
         if self.st.trigger_mode == 'sync' and self.st.trigger_slope == 'rising':
             self.trigger_test_fn = (lambda s1, s2:
-                    self.sync_triggered
+                    self.frame_triggered
                     or self.rising_trigger_test(s1, s2, VOLTAGE_INDEX, 0.0))
         elif self.st.trigger_mode == 'sync' and self.st.trigger_slope == 'falling':
             self.trigger_test_fn = (lambda s1, s2:
-                    self.sync_triggered
+                    self.frame_triggered
                     or self.falling_trigger_test(s1, s2, VOLTAGE_INDEX, 0.0))
         elif self.st.trigger_mode == 'inrush' and self.st.trigger_slope == 'rising':
             self.trigger_test_fn = (lambda s1, s2:
                     self.inrush_triggered
                     or self.inrush_trigger_test(s1, CURRENT_INDEX, self.st.inrush_trigger_level)
-                    or self.sync_triggered
+                    or self.frame_triggered
                     or self.rising_trigger_test(s1, s2, VOLTAGE_INDEX, 0.0))
         elif self.st.trigger_mode == 'inrush' and self.st.trigger_slope == 'falling':
             self.trigger_test_fn = (lambda s1, s2:
                     self.inrush_triggered
                     or self.inrush_trigger_test(s1, CURRENT_INDEX, self.st.inrush_trigger_level)
-                    or self.sync_triggered
+                    or self.frame_triggered
                     or self.falling_trigger_test(s1, s2, VOLTAGE_INDEX, 0.0))
         elif self.st.trigger_mode == 'freerun':
             self.trigger_test_fn = (lambda s1, s2:
-                    self.sync_triggered
+                    self.frame_triggered
                     or self.freerun_trigger())
+            self.freerun_interpolation_increment = (self.st.time_axis_divisions
+                                                  * self.st.time_axis_per_division / 1000
+                                                  * self.st.sample_rate) % 1
+            # advance the freerun trigger pointer by catching up on any elapsed frames,
+            # eg returning from stopped mode
+            if self.sp - self.tp > self.st.frame_samples:
+                # self.tp = self.sp - (self.st.frame_samples // 2 )
+                # frame_increment inn't necessarily an integer
+                frame_increment = self.st.frame_samples + self.freerun_interpolation_increment
+                # but catch_up_increment is rounded to be an integer
+                catch_up_increment = round(((self.sp - self.tp) // frame_increment) * frame_increment)
+                self.tp += catch_up_increment
+
         self.inrush_holdoff_counter = self.st.pre_trigger_samples
         self.sync_holdoff_counter = self.st.sync_holdoff_samples
         # frame boundary can change, even in stopped mode
@@ -310,7 +326,7 @@ def main():
             # process the incoming line with the current trigger settings
             buf.build_frame(line.rstrip())
             if st.run_mode == 'running' and not buf.inrush_triggered:
-                # if buf.sync_triggered, we still check because there might
+                # if buf.frame_triggered, we still check because there might
                 # be a subsequent inrush trigger.
                 buf.trigger_test()
             # decrement the holdoff counters

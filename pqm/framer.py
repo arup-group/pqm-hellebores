@@ -20,6 +20,7 @@
 import sys
 import signal
 import argparse
+import math
 
 # local
 from settings import Settings
@@ -37,8 +38,62 @@ CURRENT_INDEX = 2
 POWER_INDEX = 3
 EARTH_LEAKAGE_INDEX = 4
 
+
+class Mapper:
+    st = None
+    # these parameters are set up on initialisation
+    output_function = lambda: None
+    x_min = 0
+    x_max = 0
+    x_zero = 0
+    y_min = 0
+    y_max = 0
+    y_zero = 0
+
+    def __init__(self, st, output_format):
+        self.st = st
+        self.set_dimensions()
+        # select an appropriate output transformation function
+        if output_format == 'pixels':
+            self.output_function = self._pixels_out
+        else:
+            self.output_function = self._values_out
+
+    def set_dimensions(self):
+        self.x_max     = self.st.time_axis_divisions * self.st.horizontal_pixels_per_division
+        self.y_max     = self.st.vertical_axis_divisions * self.st.vertical_pixels_per_division
+        self.x_zero    = (self.st.time_axis_pre_trigger_divisions *
+                          self.st.horizontal_pixels_per_division)
+        self.y_zero    = self.y_max // 2
+
+    def _pixels_out(self, timestamp, sample):
+        """Prepare a line of stored buffer for output with pixel scaling."""
+        # Clamping function to avoid exception errors in plotting.
+        y_clamp = lambda v: min(max(self.y_min, v), self.y_max)
+
+        c0, c1, c2, c3 = sample
+        x  = int(timestamp * self.st.horizontal_pixels_per_division
+                  / self.st.time_axis_per_division) + self.x_zero
+        y0 = y_clamp(int(- float(c0) * self.st.vertical_pixels_per_division
+                  / self.st.voltage_axis_per_division) + self.y_zero)
+        y1 = y_clamp(int(- float(c1) * self.st.vertical_pixels_per_division
+                  / self.st.current_axis_per_division) + self.y_zero)
+        y2 = y_clamp(int(- float(c2) * self.st.vertical_pixels_per_division
+                  / self.st.power_axis_per_division) + self.y_zero)
+        y3 = y_clamp(int(- float(c3) * self.st.vertical_pixels_per_division
+                  / self.st.earth_leakage_current_axis_per_division) + self.y_zero)
+        return f'{x :4d} {y0 :4d} {y1 :4d} {y2 :4d} {y3 :4d}'
+
+    def _values_out(self, timestamp, sample):
+        """Prepare a line of stored buffer for output with raw values."""
+        c0, c1, c2, c3 = sample
+        return f'{timestamp:12.4f} {c0:10.3f} {c1:10.5f} {c2:10.3f} {c3:12.7f}'
+
+
+
 class Buffer:
     st = None                   # will hold settings object
+    mapper = None               # will hold mapper object for transforming to pixels
     buf = None                  # array of 5*float vectors, ie BUFFER_SIZE * 5
     # Frame pointers are set after trigger pointer is set, in sync/inrush mode,
     # immediately after frame output in free-run mode, and when settings are changed,
@@ -54,6 +109,13 @@ class Buffer:
                                 # forward when trigger condition is next satisfied)
     sync_holdoff_counter = 0    # inhibits the sync trigger for N samples
     inrush_holdoff_counter = 0  # inhibits the inrush trigger for N samples
+    frame_samples = 0           # the total number of samples in a frame, derived from
+                                # the timebase setting
+    pre_trigger_samples = 0     # the number of samples that need to be displayed before
+                                # the trigger sample
+    post_trigger_samples = 0    # the number of samples displayed after the trigger
+    sync_holdoff_samples = 0    # the next sync trigger is inhibited for this number of
+                                # samples
     # freerun_interpolation_increment corrects for creeping time error in freerun mode
     # it's set up when new settings are applied
     freerun_interpolation_increment = 0
@@ -76,17 +138,11 @@ class Buffer:
     # inside the function) is met. This function is dynamically redefined for mode-specific
     # logic when settings are changed
     trigger_test_fn = lambda self, s1, s2: False
-    # output function is set during __init__
-    output_function = None
 
-    def __init__(self, output_format):
-        """caller needs to set self.st after init."""
+
+    def __init__(self):
+        """caller MUST set self.st and self.mapper after init."""
         self.buf = []
-        # select an appropriate output transformation function
-        if output_format == 'pixels':
-            self.output_function = self._pixels_out
-        else:
-            self.output_function = self._values_out
         self.clear_buffer()
 
     def clear_buffer(self):
@@ -116,11 +172,11 @@ class Buffer:
         # determine the start index depending on the trigger index and where the
         # interpolation fraction landed
         if self.interpolation_fraction < 0.5:
-            self.frame_startp = self.tp - self.st.pre_trigger_samples - 1
+            self.frame_startp = self.tp - self.pre_trigger_samples - 1
         else:
-            self.frame_startp = self.tp - self.st.pre_trigger_samples
+            self.frame_startp = self.tp - self.pre_trigger_samples
         # end index is start index plus length of frame
-        self.frame_endp = self.frame_startp + self.st.frame_samples
+        self.frame_endp = self.frame_startp + self.frame_samples
         self.reframed = True
 
     def reprime(self):
@@ -137,35 +193,12 @@ class Buffer:
             self.buf[self.sp % BUFFER_SIZE])
         # we only update frame markers and set holdoff if this is a 'new' trigger
         if (self.frame_triggered and not self.reframed) or self.inrush_triggered:
-            self.sync_holdoff_counter = self.st.sync_holdoff_samples
+            self.sync_holdoff_counter = self.sync_holdoff_samples
             self.update_frame_markers()
 
     def ready_for_output(self):
         """Check if we have a new frame and we have stored enough samples to commence output"""
         return True if self.reframed and self.sp > self.frame_endp else False
-
-    def _values_out(self, timestamp, sample):
-        """Prepare a line of stored buffer for output with raw values."""
-        c0, c1, c2, c3 = sample
-        return f'{timestamp:12.4f} {c0:10.3f} {c1:10.5f} {c2:10.3f} {c3:12.7f}'
-
-    def _pixels_out(self, timestamp, sample):
-        """Prepare a line of stored buffer for output with pixel scaling."""
-        c0, c1, c2, c3 = sample
-        # Clamping function to avoid exception errors in plotting.
-        y_clamp = lambda v: min(max(0, v), self.st.y_pixels-1)
-
-        x  = int(timestamp * self.st.horizontal_pixels_per_division
-                  / self.st.time_axis_per_division) + self.st.x_centre
-        y0 = y_clamp(int(- float(c0) * self.st.vertical_pixels_per_division
-                  / self.st.voltage_axis_per_division) + self.st.y_centre)
-        y1 = y_clamp(int(- float(c1) * self.st.vertical_pixels_per_division
-                  / self.st.current_axis_per_division) + self.st.y_centre)
-        y2 = y_clamp(int(- float(c2) * self.st.vertical_pixels_per_division
-                  / self.st.power_axis_per_division) + self.st.y_centre)
-        y3 = y_clamp(int(- float(c3) * self.st.vertical_pixels_per_division
-                  / self.st.earth_leakage_current_axis_per_division) + self.st.y_centre)
-        return f'{x :4d} {y0 :4d} {y1 :4d} {y2 :4d} {y3 :4d}'
 
     def output_frame(self):
         """Output the array slice with xy shifts to show up in the correct position on screen."""
@@ -175,7 +208,7 @@ class Buffer:
             # timestamp = 0.0ms at the trigger position
             timestamp = self.st.interval * (s - precise_trigger_position)
             sample = self.buf[s % BUFFER_SIZE][VOLTAGE_INDEX:]
-            print(self.output_function(timestamp, sample))
+            print(self.mapper.output_function(timestamp, sample))
         # some frame data will be held in the kernel pipe buffer
         # if we're in stopped mode or inrush trigger occurred (which will be followed by
         # stopped mode), flush it through with a longer line of dots
@@ -230,9 +263,9 @@ class Buffer:
         # the next trigger point is calculated relative to the current storage pointer
         # rather than the current trigger pointer so that we easily recover from a stopped
         # state when returning to a running state. ie instead of:
-        self.tp = self.tp + self.st.frame_samples
+        self.tp = self.tp + self.frame_samples
         # we do:
-        #self.tp = self.sp + self.st.pre_trigger_samples + 1
+        #self.tp = self.sp + self.pre_trigger_samples + 1
         # the interpolation_fraction corrects for creeping time error -- the frame_samples do not
         # necessarily correspond to exactly one frame of time -- we accumulate the fractional part
         # and then advance by the extra sample when required.
@@ -245,6 +278,18 @@ class Buffer:
     def configure_for_new_settings(self):
         """We don't want to process 'mode' logic every time we read a sample. Therefore we create
         a trigger test function dynamically, but do it only when settings are changed."""
+        # calculate dimensional parameters for the frame
+        self.frame_samples          = math.floor(self.st.time_axis_divisions
+                                          * self.st.time_axis_per_division
+                                          / self.st.interval)
+        self.pre_trigger_samples    = math.floor(self.st.time_axis_pre_trigger_divisions
+                                          * self.st.time_axis_per_division
+                                          / self.st.interval)
+        self.post_trigger_samples   = self.frame_samples - self.pre_trigger_samples
+        # we set a hold-off threshold (minimum number of samples between triggers) to be slightly less
+        # (2ms) than the frame samples.
+        self.sync_holdoff_samples   = self.frame_samples - int(0.002 * self.st.sample_rate)
+
         # setup a composite trigger function and store it in self.trigger_test_fn
         # the logical expressions here help a previous trigger frame to 'latch' correctly
         # (NB the trigger test function is called for every sample)
@@ -275,18 +320,14 @@ class Buffer:
             self.freerun_interpolation_increment = (self.st.time_axis_divisions
                                                   * self.st.time_axis_per_division / 1000
                                                   * self.st.sample_rate) % 1
-            # advance the freerun trigger pointer by catching up on any elapsed frames,
-            # eg returning from stopped mode
-            if self.sp - self.tp > self.st.frame_samples:
-                # self.tp = self.sp - (self.st.frame_samples // 2 )
-                # frame_increment inn't necessarily an integer
-                frame_increment = self.st.frame_samples + self.freerun_interpolation_increment
-                # but catch_up_increment is rounded to be an integer
-                catch_up_increment = round(((self.sp - self.tp) // frame_increment) * frame_increment)
-                self.tp += catch_up_increment
+            # we may need to jump the freerun trigger pointer by catching up on
+            # any elapsed frames, eg returning from stopped mode
+            # advance to storage pointer minus post trigger samples
+            if self.sp - self.tp > self.frame_samples:
+                self.tp = self.sp - self.post_trigger_samples
 
-        self.inrush_holdoff_counter = self.st.pre_trigger_samples
-        self.sync_holdoff_counter = self.st.sync_holdoff_samples
+        self.inrush_holdoff_counter = self.pre_trigger_samples
+        self.sync_holdoff_counter = self.sync_holdoff_samples
         # frame boundary can change, even in stopped mode
         self.update_frame_markers()
 
@@ -309,15 +350,19 @@ def main():
     # we make a buffer to temporarily hold a history of samples -- this allows us to output
     # a frame of waveform that includes samples 'before and after the trigger'
     # in 'stopped' mode, it allows us to change the framing (extent of time axis) around the trigger
-    buf = Buffer(output_format='values' if args.unmapped else 'pixels')
+    buf = Buffer()
 
     # when we receive a SIGUSR1 signal, the st object will update buffer object settings
     st = Settings(buf.configure_for_new_settings,
         other_programs = [ 'scaler.py', 'hellebores.py', 'analyser.py' ])
 
-    # now store a reference to the st object in the buffer object
+    # mapper object helps us to scale output to pixel values
+    mapper = Mapper(st, output_format='values' if args.unmapped else 'pixels')
+
+    # now store references to the st and mapper objects in the buffer object
     # and initialise settings
     buf.st = st
+    buf.mapper = mapper
     buf.configure_for_new_settings()
 
     # process data from standard input

@@ -17,6 +17,7 @@ IDENTITY_FILE = 'identity'
 CALIBRATIONS_FILE = 'calibrations.json'
 
 class Settings():
+    callback_fn = lambda: None
 
     def resolve_path(self, path, file):
         file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), path, file)
@@ -218,6 +219,12 @@ class Settings():
         return pids.keys()
 
 
+    def set_callback_fn(self, callback_fn):
+        """Set a callback function. This function will be called every time a signal is
+        received, just after settings have been updated."""
+        self.callback_fn = callback_fn
+
+
     def __init__(self, callback_fn = lambda: None, other_programs=[], reload_on_signal=True):
         self.other_programs = other_programs
         self.reload_on_signal = reload_on_signal
@@ -230,10 +237,6 @@ class Settings():
         # load initial settings
         self.settings_file = self.resolve_path(CONFIGURATION_DIRECTORY, SETTINGS_FILE)
         self.set_settings(self.load_settings())
-
-        # set a callback function. This will be called every time a signal is received,
-        # just after settings have been updated
-        self.callback_fn = callback_fn
 
         # For faster update performance, and to reduce SD card wear, if TEMP is set to RAM disk,
         # we change our working path so that we save updates to the settings.json file there.
@@ -248,6 +251,9 @@ class Settings():
             signal.signal(signal.SIGINT, self.signal_handler)
         else:
             print(f"Don't know how to set up signals on {os.name} platform.", file=sys.stderr)
+
+        # set the callback function
+        self.set_callback_fn(callback_fn)
 
 
     def show_settings(self):

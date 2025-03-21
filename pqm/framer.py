@@ -52,19 +52,22 @@ class Mapper:
 
     def __init__(self, st, output_format):
         self.st = st
-        self.set_dimensions()
+        self.configure_for_new_settings()
         # select an appropriate output transformation function
         if output_format == 'pixels':
             self.output_function = self._pixels_out
         else:
             self.output_function = self._values_out
 
-    def set_dimensions(self):
+    def configure_for_new_settings(self):
+        """Set upper bounds for x,y coordinates and zero point for trigger position."""
         self.x_max     = self.st.time_axis_divisions * self.st.horizontal_pixels_per_division
         self.y_max     = self.st.vertical_axis_divisions * self.st.vertical_pixels_per_division
-        self.x_zero    = (self.st.time_axis_pre_trigger_divisions *
-                          self.st.horizontal_pixels_per_division)
+        self.x_zero    = (self.st.time_axis_pre_trigger_divisions
+                          * self.st.horizontal_pixels_per_division)
         self.y_zero    = self.y_max // 2
+        # return boolean True to allow combination logic to work in the call to this function
+        return True
 
     def _pixels_out(self, timestamp, sample):
         """Prepare a line of stored buffer for output with pixel scaling."""
@@ -93,8 +96,7 @@ class Mapper:
 
 class Buffer:
     st = None                   # will hold settings object
-    mapper = None               # will hold mapper object for transforming to pixels
-    buf = None                  # array of 5*float vectors, ie BUFFER_SIZE * 5
+    buf = []                    # will be array of 5*float vectors, ie BUFFER_SIZE * 5
     # Frame pointers are set after trigger pointer is set, in sync/inrush mode,
     # immediately after frame output in free-run mode, and when settings are changed,
     # including in stopped mode.
@@ -140,10 +142,11 @@ class Buffer:
     trigger_test_fn = lambda self, s1, s2: False
 
 
-    def __init__(self):
-        """caller MUST set self.st and self.mapper after init."""
-        self.buf = []
+    def __init__(self, st):
+        """Set up the buffer with settings read from st object."""
         self.clear_buffer()
+        self.st = st
+        self.configure_for_new_settings()
 
     def clear_buffer(self):
         """buffer memory initialised with empty data"""
@@ -200,7 +203,7 @@ class Buffer:
         """Check if we have a new frame and we have stored enough samples to commence output"""
         return True if self.reframed and self.sp > self.frame_endp else False
 
-    def output_frame(self):
+    def output_frame(self, mapper):
         """Output the array slice with xy shifts to show up in the correct position on screen."""
         # exact trigger position occurred between the sample self.tp - 1 and self.tp
         precise_trigger_position = self.tp - 1 + self.interpolation_fraction
@@ -208,7 +211,7 @@ class Buffer:
             # timestamp = 0.0ms at the trigger position
             timestamp = self.st.interval * (s - precise_trigger_position)
             sample = self.buf[s % BUFFER_SIZE][VOLTAGE_INDEX:]
-            print(self.mapper.output_function(timestamp, sample))
+            print(mapper.output_function(timestamp, sample))
         # some frame data will be held in the kernel pipe buffer
         # if we're in stopped mode or inrush trigger occurred (which will be followed by
         # stopped mode), flush it through with a longer line of dots
@@ -286,8 +289,8 @@ class Buffer:
                                           * self.st.time_axis_per_division
                                           / self.st.interval)
         self.post_trigger_samples   = self.frame_samples - self.pre_trigger_samples
-        # we set a hold-off threshold (minimum number of samples between triggers) to be slightly less
-        # (2ms) than the frame samples.
+        # we set a hold-off threshold (minimum number of samples between triggers) to be
+        # slightly less (2ms) than the frame samples.
         self.sync_holdoff_samples   = self.frame_samples - int(0.002 * self.st.sample_rate)
 
         # setup a composite trigger function and store it in self.trigger_test_fn
@@ -330,7 +333,8 @@ class Buffer:
         self.sync_holdoff_counter = self.sync_holdoff_samples
         # frame boundary can change, even in stopped mode
         self.update_frame_markers()
-
+        # return boolean True to allow combination logic to work in the call to this function
+        return True
 
 
 def get_command_args():
@@ -346,24 +350,19 @@ def get_command_args():
 def main():
     # Launch program with --unmapped option to get output as values rather than pixels.
     program_name, args = get_command_args()
+    st = Settings(other_programs = [ 'scaler.py', 'hellebores.py', 'analyser.py' ])
 
     # we make a buffer to temporarily hold a history of samples -- this allows us to output
     # a frame of waveform that includes samples 'before and after the trigger'
     # in 'stopped' mode, it allows us to change the framing (extent of time axis) around the trigger
-    buf = Buffer()
-
-    # when we receive a SIGUSR1 signal, the st object will update buffer object settings
-    st = Settings(buf.configure_for_new_settings,
-        other_programs = [ 'scaler.py', 'hellebores.py', 'analyser.py' ])
+    buf = Buffer(st)
 
     # mapper object helps us to scale output to pixel values
     mapper = Mapper(st, output_format='values' if args.unmapped else 'pixels')
 
-    # now store references to the st and mapper objects in the buffer object
-    # and initialise settings
-    buf.st = st
-    buf.mapper = mapper
-    buf.configure_for_new_settings()
+    # when we receive a SIGUSR1 signal, the st object will reconfigure both objects
+    st.set_callback_fn(lambda: buf.configure_for_new_settings() \
+                          and mapper.configure_for_new_settings())
 
     # process data from standard input
     try:
@@ -379,7 +378,7 @@ def main():
             buf.inrush_holdoff_counter -= 1
             # print out the frame if we're ready
             if buf.ready_for_output():
-                buf.output_frame()
+                buf.output_frame(mapper)
                 buf.reframed = False
                 # if running, reset ready for the next frame
                 if st.run_mode == 'running':

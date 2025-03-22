@@ -31,16 +31,21 @@ fi
 
 # TEMP: settings.json, error.log and named pipes will be stored here
 # /run/shm is preferred, because it is mounted as RAM disk
-for TD in "/run/shm/pqm-hellebores" "/tmp/pqm-hellebores"; do
-    [[ -e $TD ]] || mkdir $TD
-    if [[ $? -eq 0 ]]; then
-        export TEMP=$TD
+for TD in "/run/shm" "/tmp"; do
+    # if the location is available
+    if [[ -d $TD ]]; then
+        # create a program temporary directory and export it
+        if [[ ! -d "$TD/pqm-hellebores" ]]; then
+            mkdir "$TD/pqm-hellebores"
+        fi
+        export TEMP="$TD/pqm-hellebores"
         break
     fi
 done
+
 # if both attempts failed, quit with an error
 if [[ -z $TEMP ]]; then
-    echo "Check filesystem or write permissions, quitting."
+    echo "$0: Couldn't create temporary directory, check filesystem or write permissions, quitting." 1>&2
     exit 1
 fi
 
@@ -51,26 +56,22 @@ ANALYSIS_PIPE=$TEMP/analysis_pipe
 ANALYSIS_LOG_FILE=$TEMP/pqm.$$.csv
 ERROR_LOG_FILE=$TEMP/error.log
 
+# Clear old log file
+[[ -e $ERROR_LOG_FILE ]] && rm $ERROR_LOG_FILE
+# stderr file descriptor is number 2. Duplicate this file descriptor 2 to 4
+# (ie save a copy of it) then redirect 2 to file, so that we catch error
+# messages in a log file
+exec 4>&2 2>$ERROR_LOG_FILE
 
 # If they don't already exist, create named pipes (fifos) to receive data from
 # the waveform and calculation processes
 for PIPE_FILE in $WAVEFORM_PIPE $ANALYSIS_PIPE; do
     [[ -e $PIPE_FILE ]] || mkfifo $PIPE_FILE
     if [[ $? -ne 0 ]]; then
-        echo "There was an error creating a pipe file."
-        echo "Check your filesystem supports this."
+        echo "$0: There was an error creating a pipe file. Check your filesystem supports this." 1>&2
         exit 1
     fi
 done
-
-
-# Start the data pipeline, output feeding the two named pipes
-# Clear old log file
-[[ -e $ERROR_LOG_FILE ]] && rm $ERROR_LOG_FILE
-# stderr file descriptor is number 2. Duplicate this file descriptor 2 to 4
-# (ie make a copy of it) then redirect 2 to file, so that we catch error
-# messages in a log file
-exec 4>&2 2>$ERROR_LOG_FILE
 
 # Display the version information and settings that will be used initially
 ./version.py && echo ""
@@ -116,8 +117,6 @@ $READER \
 # We'll check it's status shortly
 exit_code=$?
 
-echo "Finished processing."
-
 # Restore stderr file descriptor 2 from saved state on 4, then delete fd 4
 exec 2>&4 4>&-
 
@@ -133,6 +132,7 @@ if [[ $exit_code -eq 2 ]]; then
 # 3: Software update
 elif [[ $exit_code -eq 3 ]]; then
     clear
+    # If we're on a named branch use that, otherwise use main
     branch=$(git rev-parse --abbrev-ref HEAD)
     if [[ $? -ne 0 ]]; then
         branch="main"

@@ -32,11 +32,10 @@ SHORT_DOTS = '.' * 32                # used in running mode to mark end of frame
 LONG_DOTS = '.' * 8192               # a longer line of dots is used in stopped mode
                                      # to make sure all data is flushed through
 
-TIME_INDEX = 0                       # Indices for fields in the incoming data
-VOLTAGE_INDEX = 1                    # are defined here
-CURRENT_INDEX = 2
-POWER_INDEX = 3
-EARTH_LEAKAGE_INDEX = 4
+VOLTAGE_INDEX = 0                    # Indices for fields in the incoming data
+CURRENT_INDEX = 1                    # are defined here
+POWER_INDEX = 2
+EARTH_LEAKAGE_INDEX = 3
 
 
 class Mapper:
@@ -153,7 +152,7 @@ class Buffer:
         """Buffer memory initialised with empty data"""
         # *** Performance optimisation: could consider memoryview object and tuples here ***
         # Consider whether we need to store time data at all
-        self.buf = [ [0.0, 0.0, 0.0, 0.0, 0.0] for i in range(BUFFER_SIZE) ]
+        self.buf = [ [0.0, 0.0, 0.0, 0.0] for i in range(BUFFER_SIZE) ]
 
     def store_line(self, line):
         """Store a line of new data into the next buffer location"""
@@ -161,9 +160,9 @@ class Buffer:
         # to be manipulated other than here.
         self.sp += 1
         try:
-            self.buf[self.sp % BUFFER_SIZE] = [ float(w) for w in line.split() ]
+            self.buf[self.sp % BUFFER_SIZE] = [ float(w) for w in line.split()[1:] ]
         except ValueError:
-            self.buf[self.sp % BUFFER_SIZE] = [ 0.0, 0.0, 0.0, 0.0, 0.0 ]
+            self.buf[self.sp % BUFFER_SIZE] = [0.0, 0.0, 0.0, 0.0]
             print(f"trigger.py, store_line(): Couldn't interpret '{line}'.",
                 file=sys.stderr)
 
@@ -211,7 +210,7 @@ class Buffer:
         for s in range(self.frame_startp, self.frame_endp):
             # timestamp = 0.0ms at the trigger position
             timestamp = self.st.interval * (s - precise_trigger_position)
-            sample = self.buf[s % BUFFER_SIZE][VOLTAGE_INDEX:]
+            sample = self.buf[s % BUFFER_SIZE]
             print(mapper.output_function(timestamp, sample))
         # Some frame data will be held in the kernel pipe buffer
         # If we're in stopped mode or inrush trigger occurred (which will be followed by

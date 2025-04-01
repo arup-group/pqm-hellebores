@@ -212,7 +212,7 @@ class Settings():
                         if program in pcmd:
                             # print(f'Collected PID {p.pid} for {pcmd}', file=sys.stderr)
                             pids[p.pid] = pcmd
-                except:
+                except (psutil.AccessDenied, psutil.NoSuchProcess):
                     # p.cmdline() generates permission errors on some system processes, so
                     # we ignore them and continue
                     pass 

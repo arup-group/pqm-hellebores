@@ -4,16 +4,16 @@
 ulimit -n 2048
 
 # Find current working directory and absolute paths of script and program file directories
-CWD=$(pwd)
-SCRIPT_DIR=$(realpath $(dirname $0))
-PROGRAM_DIR=$(realpath $SCRIPT_DIR/../pqm)
+CWD="$(pwd)"
+SCRIPT_DIR="$(realpath $(dirname $0))"
+PROGRAM_DIR="$(realpath $SCRIPT_DIR/../pqm)"
 
 # Change to the program directory
-cd $PROGRAM_DIR
+cd "$PROGRAM_DIR"
 
 # Activate the virtual environment, if we have one
-if [[ -e $SCRIPT_DIR/../.venv ]]; then
-    source $SCRIPT_DIR/../.venv/bin/activate
+if [[ -e "$SCRIPT_DIR/../.venv" ]]; then
+    source "$SCRIPT_DIR/../.venv/bin/activate"
 fi
 
 # Suppress the pygame import support message
@@ -33,40 +33,45 @@ fi
 # /run/shm is preferred, because it is mounted as RAM disk
 for TD in "/run/shm" "/tmp"; do
     # if the location is available
-    if [[ -d $TD ]]; then
-        # create a program temporary directory and export it
+    if [[ -d "$TD" ]]; then
+        # create a program temporary directory in the temporary files area
         if [[ ! -d "$TD/pqm-hellebores" ]]; then
             mkdir "$TD/pqm-hellebores"
         fi
+        # create a local symbolic link if we don't already have one
+        if [[ ! -e "$PROGRAM_DIR/../output_files" ]]; then
+            ln -s "$TD/pqm-hellebores" "$PROGRAM_DIR/../output_files"
+        fi
         export TEMP="$TD/pqm-hellebores"
+        # exit loop at the first TD location that works
         break
     fi
 done
 
 # if both attempts failed, quit with an error
-if [[ -z $TEMP ]]; then
+if [[ -z "$TEMP" ]]; then
     echo "$0: Couldn't create temporary directory, check filesystem or write permissions, quitting." 1>&2
     exit 1
 fi
 
 # set up the working files
 # NB the special variable $$ contains the PID of the current process
-WAVEFORM_PIPE=$TEMP/waveform_pipe
-ANALYSIS_PIPE=$TEMP/analysis_pipe
-ANALYSIS_LOG_FILE=$TEMP/pqm.$$.csv
-ERROR_LOG_FILE=$TEMP/error.log
+WAVEFORM_PIPE="$TEMP/waveform_pipe"
+ANALYSIS_PIPE="$TEMP/analysis_pipe"
+ANALYSIS_LOG_FILE="$TEMP/pqm.$$.csv"
+ERROR_LOG_FILE="$TEMP/error.log"
 
 # Clear old log file
-[[ -e $ERROR_LOG_FILE ]] && rm $ERROR_LOG_FILE
+[[ -e "$ERROR_LOG_FILE" ]] && rm "$ERROR_LOG_FILE"
 # stderr file descriptor is number 2. Duplicate this file descriptor 2 to 4
 # (ie save a copy of it) then redirect 2 to file, so that we catch error
 # messages in a log file
-exec 4>&2 2>$ERROR_LOG_FILE
+exec 4>&2 2>"$ERROR_LOG_FILE"
 
 # If they don't already exist, create named pipes (fifos) to receive data from
 # the waveform and calculation processes
-for PIPE_FILE in $WAVEFORM_PIPE $ANALYSIS_PIPE; do
-    [[ -e $PIPE_FILE ]] || mkfifo $PIPE_FILE
+for PIPE_FILE in "$WAVEFORM_PIPE" "$ANALYSIS_PIPE"; do
+    [[ -e "$PIPE_FILE" ]] || mkfifo "$PIPE_FILE"
     if [[ $? -ne 0 ]]; then
         echo "$0: There was an error creating a pipe file. Check your filesystem supports this." 1>&2
         exit 1
@@ -102,9 +107,9 @@ if $real_hardware; then
 fi
 
 # Plumbing, pipe, pipe, pipe...
-$READER \
-    | ./scaler.py | tee >(./framer.py > $WAVEFORM_PIPE) \
-        | ./analyser.py | tee >(./analysis_to_csv.py > $ANALYSIS_LOG_FILE) > $ANALYSIS_PIPE &
+"$READER" \
+    | ./scaler.py | tee >(./framer.py > "$WAVEFORM_PIPE") \
+        | ./analyser.py | tee >(./analysis_to_csv.py > "$ANALYSIS_LOG_FILE") > "$ANALYSIS_PIPE" &
 
 # hellebores.py GUI reads from both the waveform and analysis pipes...
 ./hellebores.py --waveform_file="$WAVEFORM_PIPE" --analysis_file="$ANALYSIS_PIPE"
@@ -126,8 +131,8 @@ if [[ $exit_code -eq 2 ]]; then
     # Trampoline: reload the launch script (this file) and run again
     echo "Restarting $0 in 5s..."
     sleep 5
-    cd $CWD
-    exec $0
+    cd "$CWD"
+    exec "$0"
 
 # 3: Software update
 elif [[ $exit_code -eq 3 ]]; then
@@ -139,11 +144,11 @@ elif [[ $exit_code -eq 3 ]]; then
     fi
     echo "Updating software to Github $branch branch HEAD..."
     git fetch origin
-    git reset --hard origin/$branch
+    git reset --hard "origin/$branch"
     # Trampoline: reload the launch script and run again
     echo "Restarting $0 in 5s..."
     sleep 5
-    cd $CWD
+    cd "$CWD"
     exec $0
 
 # 4: Shutdown
@@ -155,14 +160,14 @@ elif [[ $exit_code -eq 4 ]]; then
 elif [[ $exit_code -ne 0 ]]; then
     echo "The program quit with an unexpected exit code $exit_code. Not good."
     echo "Here's the error log file $ERROR_LOG_FILE, hope it helps :-)"
-    cat $ERROR_LOG_FILE
+    cat "$ERROR_LOG_FILE"
     sleep 60
-    cd $CWD
+    cd "$CWD"
     exit $exit_code
 fi
 
 # 0: Exit normally
-cd $CWD
+cd "$CWD"
 echo "Exited."
 
 

@@ -38,7 +38,7 @@ To open the notebook, navigate to this folder on your computer and type `jupyter
 
 ## output_files/
 
-`output_files/` is a symbolic link to a directory in the RAMdisk filesystem in Raspberry Pi (and other Linux systems). The following files are created at run-time.
+`output_files/` is a symbolic link to a temporary directory in the RAMdisk filesystem in Raspberry Pi (and other Linux systems). The symbolic link is created on first run so that it points to the correct target location on Raspberry Pi and different desktop systems. The following files are created within the temporary directory at run-time.
 
 | Filename                      | Description                   |
 | :---------------------------- | :---------------------------- |

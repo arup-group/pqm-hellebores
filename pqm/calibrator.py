@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
 
 import subprocess
-import settings
 import sys
 import os
 import math
 
 # local
+from constants import *
 from settings import Settings
 
 
 ONE_MINUTE_OF_SAMPLES     = 468750
 READER                    = 'reader.py'
 READER_TEST               = 'rain_chooser.py'    # use this for testing
-HARDWARE_SCALE_FACTORS    = [ 4.07e-07, 2.44e-05, 0.00122, 0.0489 ]
 OFFSET_CAL                = 1
 VOLTAGE_CAL               = 2
 CURRENT_FULL_CAL          = 3

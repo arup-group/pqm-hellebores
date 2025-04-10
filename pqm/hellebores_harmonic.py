@@ -1,7 +1,7 @@
 import sys
 import thorpy
 import pygame
-from hellebores_constants import *
+from constants import *
 from hellebores_controls import *
 
 

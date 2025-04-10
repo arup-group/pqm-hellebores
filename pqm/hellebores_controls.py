@@ -2,7 +2,7 @@ import sys
 import thorpy
 import pygame
 import time
-from hellebores_constants import *
+from constants import *
 from version import Version
 
 

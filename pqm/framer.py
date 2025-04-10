@@ -23,6 +23,7 @@ import argparse
 import math
 
 # local
+from constants import *
 from settings import Settings
 
 
@@ -43,12 +44,8 @@ class Mapper:
     st = None
     # these parameters are set up on initialisation
     output_function = lambda: None
-    x_min = 0
-    x_max = 0
     x_zero = 0
-    y_min = 0
-    y_max = 0
-    y_zero = 0
+    y_zero = Y_MAX // 2
 
     def __init__(self, st, output_format):
         self.st = st
@@ -61,16 +58,13 @@ class Mapper:
 
     def configure_for_new_settings(self):
         """Set upper bounds for x,y coordinates and zero point for trigger position."""
-        self.x_max     = self.st.time_axis_divisions * self.st.horizontal_pixels_per_division
-        self.y_max     = self.st.vertical_axis_divisions * self.st.vertical_pixels_per_division
         self.x_zero    = (self.st.time_axis_pre_trigger_divisions
                           * self.st.horizontal_pixels_per_division)
-        self.y_zero    = self.y_max // 2
 
     def _pixels_out(self, timestamp, sample):
         """Prepare a line of stored buffer for output with pixel scaling."""
         # Clamping function to avoid exception errors in plotting.
-        y_clamp = lambda v: min(max(self.y_min, v), self.y_max)
+        y_clamp = lambda v: min(max(Y_MIN, v), Y_MAX)
 
         c0, c1, c2, c3 = sample
         x  = int(timestamp * self.st.horizontal_pixels_per_division

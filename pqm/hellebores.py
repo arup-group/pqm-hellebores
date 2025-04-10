@@ -22,7 +22,7 @@ import io
 
 # project imports
 from settings import Settings
-from hellebores_constants import *
+from constants import *
 from hellebores_controls import *
 from hellebores_waveform import Waveform
 from hellebores_multimeter import Multimeter

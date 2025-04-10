@@ -5,9 +5,11 @@ import random
 import time
 import sys
 import signal
-import settings
 
-HARDWARE_SCALE_FACTORS = [ 4.07e-07, 2.44e-05, 0.00122, 0.0489 ]
+# local imports
+from constants import *
+from settings import Settings
+
 AMPLITUDES             = [ 0.000100, 0.4, 0.4, 230.0 ]
 NOISE_AMPLITUDES       = [ 0.05, 0.05, 0.05, 0 ]   # as fraction of signal amplitude
 SIGNAL = [ math.sqrt(2)*ampl/sf for sf, ampl in zip(HARDWARE_SCALE_FACTORS, AMPLITUDES) ]
@@ -28,7 +30,7 @@ def get_sample(t):
 
 def main():
     # read settings from settings.json
-    st = settings.Settings(reload_on_signal=False)
+    st = Settings(reload_on_signal=False)
 
     # we use system clock to figure out when to print out the next sample
     ts = time.time()

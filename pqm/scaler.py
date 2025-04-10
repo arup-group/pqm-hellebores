@@ -15,13 +15,11 @@ import sys
 import signal
 
 # local
+from constants import *
 from settings import Settings
 
-# scale factors are for the following:
-# ch0 = earth leakage, ch1 = low range, ch2 = full range, ch3 = voltage
-HARDWARE_SCALE_FACTORS = [ 4.07e-07, 2.44e-05, 0.00122, 0.0489 ]
+# delay line length is for the time skew correction and is measured in samples
 DELAY_LINE_LENGTH = 64
-
 
 def from_twos_complement_hex(w):
     """Bit arithmetic on a two's complement, 16 bit number to convert to

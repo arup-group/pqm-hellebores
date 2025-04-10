@@ -10,11 +10,13 @@
 
 import math
 import numpy as np
-import settings
 import sys
 import json
 import csv
 import time
+
+# local
+from settings import Settings
 
 ROOT2 = math.sqrt(2)
 
@@ -370,7 +372,7 @@ def read_analyse_output(cache, analyser, output_interval):
 
 def main():
     analyser = Analyser()
-    st = settings.Settings(lambda: analyser.check_updated_settings())
+    st = Settings(lambda: analyser.check_updated_settings())
     # analyser needs a reference to the newly created settings object
     analyser.st = st
     # We will output new calculations approximately once per second.

@@ -69,7 +69,7 @@ To open the notebook, navigate to this folder on your computer and type `jupyter
 | `settings.py` | Imported into all `pqm` programs to provide a data object containing settings. Implements a mechanism to update settings between processes using a shared file and signals. |
 | `font/` | Contains the open source Roboto typeface used in the UI. |
 | `hellebores.py` | Implements the user interface and runs a custom display update and event loop. Imports all the other `hellebores` programs. |
-| `hellebores_constants.py` | Consolidates most of the constants used in the UI. |
+| `constants.py` | Shared project constants. |
 | `hellebores_controls.py` | Implements the UI required to alter settings, up/down buttons etc. |
 | `hellebores_waveform.py` | Implements the display and control layout for the waveform mode. |
 | `hellebores_multimeter.py` | Implements the display and control layout for the multimeter mode. |

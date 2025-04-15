@@ -61,3 +61,9 @@ pqm/rain_chooser.py | pqm/scaler.py | cat <(echo 'Time Voltage Current Power Ear
 ### PERFORMANCE TEST EXAMPLE
 #######
 ./rain.py | ./scaler.py | tee >(../tools/line_speed.py > /dev/tty) | tee >(./analyser.py > /dev/tty) | ./framer.py | ./hellebores.py
+
+
+#######
+### PRINTING
+#######
+enscript -Epython -fCourier6 --color=1 -C -o - sourcefile.py | ps2pdf - sourcefile.pdf

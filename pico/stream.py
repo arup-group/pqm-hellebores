@@ -65,6 +65,14 @@ PAGE_BIT       = const(0b01000000)   # test page number and streaming flag
 PAGE0          = const(0b00000000)   # bit6==0: in range 0-63, ie page 0
 PAGE1          = const(0b01000000)   # bit6==1: in range 64-127, ie page 1
 
+# If the ADCs are overloaded they need to be reset. The reset code path
+# temporarily stops ADC sampling. The SKIPPED_CELLS constant sets up a
+# corrective time offset so that we maintain continuity of the time axis
+# in the output. The code inserts OSC_HIGH and OSC_LOW data into the buffer
+# during this period.
+SKIPPED_CELLS  = 32
+OSC_HIGH = b'\x03\xe8\x03\xe8\x03\xe8\x03\xe8'  # +1000 decimal * 4 channels
+OSC_LOW  = b'\xfc\x18\xfc\x18\xfc\x18\xfc\x18'  # -1000 decimal * 4 channels
 
 ########################################################
 ######### Hardware control functions
@@ -363,10 +371,14 @@ def streaming_loop_core_1():
         # If Core 0 has raised OVERLOAD flag, we deal with it here.
         if flags & OVERLOAD:
             # Tell the ADC to clear overload.
-            # Note that while we skip data acquisition while we work through
-            # these steps, the cell index continues to be incremented by the
-            # ISR.
             stop_adc()
+            # Advance the cell pointer to compensate for missed samples
+            # show a wobble signal in the output to indicate the reset event
+            # in the output data stream
+            for i in range(SKIPPED_CELLS):
+                cell = (cell + 1) & WRAP_MASK
+                # Flip all output channels between OSC_HIGH and OSC_LOW
+	        cells_mv[cell] = OSC_HIGH if cell // 2 else OSC_LOW
             clear_adc_overload()
             start_adc()
             # Clear OVERLOAD flag 
@@ -436,22 +448,20 @@ def streaming_loop_core_0():
 ########################################################
 ######### High level functions to support main()
 ########################################################
-def in_reset_state():
+def reset_pin_held_high():
     '''This function supports recovery from some transient disturbances that
     can cause the inner sampling loops to exit. The function confirms that the
     reset_me pin of the Pico is sustained in a high state for a long enough
     period that we can rely on it being a genuine reset command.'''
-    global flags
-    reset_state = False
-    # We check to see if the reset pin is sustained in low state for at
-    # least 0.1 seconds
-    if pins['reset_me'].value() == 1:
-        time.sleep(0.1)
-        if pins['reset_me'].value() == 1:
-            reset_state = True
-            flags = RESET
-            print(pins['reset_me'].value())
-    return reset_state
+    # We check to see if the reset pin is sustained in high state
+    # 10 times at 10ms intervals
+    reset_status = True
+    for i in range(10):
+        if pins['reset_me'].value() == 0:
+            reset_status = False
+            break
+        time.sleep(0.01)
+    return reset_status
 
         
 def prepare_to_stream(adc_settings):
@@ -540,7 +550,7 @@ def main():
             # is not sustained for a long enough period, we consider it
             # spurious and we will restart the ADCs and the streaming, instead
             # of proceeding to reset the machine.
-            if flags & RESET and not in_reset_state():
+            if flags & RESET and not reset_pin_held_high():
                 flags = STREAMING
                 continue
 

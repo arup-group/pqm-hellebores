@@ -1,11 +1,11 @@
 #!/bin/bash
 
 # Get path information
-CWD=$(pwd)
-SOFTWARE_PATH=$(realpath $(dirname $0)/..)
+CWD="$(pwd)"
+SOFTWARE_PATH="$(realpath $(dirname $0)/..)"
 
 # Change to home directory for project, we'll change back on exit
-cd $SOFTWARE_PATH
+cd "$SOFTWARE_PATH"
 
 # If we've just booted, wait for network connection to be established
 if [[ $(cat /proc/uptime | cut -d '.' -f 1) -lt 60 ]]; then
@@ -13,14 +13,14 @@ if [[ $(cat /proc/uptime | cut -d '.' -f 1) -lt 60 ]]; then
 fi
 
 # Now get other configuration information from local system
-IDENTITY=$(cat $SOFTWARE_PATH/configuration/identity 2>/dev/null)
+IDENTITY="$(cat $SOFTWARE_PATH/configuration/identity 2>/dev/null)"
 if [[ "$IDENTITY" == "" ]]; then IDENTITY="PQM-0"; fi
-VERSION=$(cat $SOFTWARE_PATH/VERSION)
-GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-GIT_HEAD=$(git rev-parse HEAD)
-IP_ADDRESS=$(hostname -I | cut -d ' ' -f 1)
-MAC_ADDRESS=$(ip -oneline link | sed -rn 's/.+?wlan0.+?ether ([a-f0-9:]+).*/\1/p')
-USER=$(whoami)
+VERSION="$(cat $SOFTWARE_PATH/VERSION)"
+GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+GIT_HEAD="$(git rev-parse HEAD)"
+IP_ADDRESS="$(hostname -I | cut -d ' ' -f 1)"
+MAC_ADDRESS="$(ip -oneline link | sed -rn 's/.+?wlan0.+?ether ([a-f0-9:]+).*/\1/p')"
+USER="$(whoami)"
 
 # Check for failure to retrieve a config value, and substitute 'Unknown' instead
 # of empty string
@@ -33,9 +33,9 @@ done
 
 # Set directory for temporary files
 for TD in "/run/shm/pqm-hellebores" "/tmp/pqm-hellebores" "$SOFTWARE_PATH"; do
-    [[ -e $TD ]] || mkdir $TD
+    [[ -e "$TD" ]] || mkdir "$TD"
     if [[ $? -eq 0 ]]; then
-        export TEMP=$TD
+        export TEMP="$TD"
         break
     fi
 done
@@ -79,28 +79,28 @@ if [[ "$result" == "" ]]; then
 fi
 
 # Process selected command, exec $0 relaunches the script
+cd "$CWD"
 case "$result" in
     "START")
         echo "Starting PQM software."
-        $SOFTWARE_PATH/run/go.sh
-        exec $0;;
+        "$SOFTWARE_PATH/run/go.sh"
+        exec "$0";;
     "EXIT")
         echo "Exiting launcher.";;
     "Software update")
         echo "Updating software to Github $GIT_BRANCH branch HEAD..."
         git fetch origin
-        git reset --hard origin/$GIT_BRANCH
-        exec $0;;
+        git reset --hard "origin/$GIT_BRANCH"
+        exec "$0";;
     "Pico update")
         echo "Pico update not implemented."
-        exec $0;;
+        exec "$0";;
     "Shutdown")
         echo "Shutting down system."
         sudo shutdown -h now;;
     *)
         echo "Not implemented: $result"
-        exec $0;;
+        exec "$0";;
 esac
 
-cd $CWD
 exit 0

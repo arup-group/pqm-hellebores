@@ -10,22 +10,10 @@ PICO_DIR="$(realpath $SCRIPT_DIR/../pico)"
 PICO_FILES="main.py stream.py"
 
 
-get_local_sha256 () {
-    echo $(shasum -a 256 "$PICO_DIR/$1") | awk '{print $1}'
-}
-
-get_pico_sha256 () {
-    echo $("$PROGRAM_DIR/pico_control.py" --command "SHA256 $1") | awk '{print $3}'
-}
-
 compare_files () {
-    sha256_local=$(get_local_sha256 "$1")
-    sha256_pico=$(get_pico_sha256 "$2")
-    if [[ "$sha256_pico" == "$sha256_local" ]]; then
-        echo 0
-    else
-        echo 1
-    fi
+    sha256_local=$(shasum -a 256 "$PICO_DIR/$1" | awk '{print $1}')
+    sha256_pico=$("$PROGRAM_DIR/pico_control.py" --command "SHA256 $2" | tr '\n' ' ' | awk '{print $3}')
+    [[ "$sha256_pico" == "$sha256_local" ]]
 }
 
 transfer_file_to_pico () {
@@ -34,7 +22,7 @@ transfer_file_to_pico () {
     # transfer the file over to a temporary file
     "$PROGRAM_DIR/pico_control.py" --command "SAVE transfer_file $file_length" --send_file "$1"
     # we only actually overwrite the old file if the temporary file checksum matches the source
-    if [[ $(compare_files "$pico_file" transfer_file) ]]; then
+    if $(compare_files "$pico_file" transfer_file); then
         "$PROGRAM_DIR/pico_control.py" --command "RENAME transfer_file $pico_file"
     fi
 }
@@ -44,16 +32,17 @@ echo "***** UPDATE PICO UTILITY *****"
 echo "Resetting Pico."
 "$PROGRAM_DIR/pico_control.py" --hard_reset
 
+# Now compare local and Pico files, updating if the checksums differ
 echo "Comparing local versions of files with those currently on Pico..."
 for pico_file in $PICO_FILES; do
-    if [[ $(compare_files "$pico_file" "$pico_file") ]]; then
+    if $(compare_files "$pico_file" "$pico_file"); then
         echo "$pico_file: same version local and Pico, no need to update."
     else
 	echo "$pico_file: file versions are different, updating Pico..."
 	echo "$pico_file: copying new file over..."
         transfer_file_to_pico "$PICO_DIR/$pico_file"
 	echo "$pico_file: checking if the copied file is good."
-        if [[ $(compare_files "$pico_file" "$pico_file") ]]; then
+        if $(compare_files "$pico_file" "$pico_file"); then
             echo "$pico_file: update succeeded."
 	else
             echo "$pico_file: update failed, unfortunately."
@@ -61,6 +50,6 @@ for pico_file in $PICO_FILES; do
     fi
 done
 
-# Hard reset Pico again, so that we run the new code
+# Hard reset Pico again, so that we now run the new code
 echo "Resetting Pico."
 "$PROGRAM_DIR/pico_control.py" --hard_reset

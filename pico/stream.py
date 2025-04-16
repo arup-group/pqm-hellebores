@@ -351,7 +351,7 @@ def streaming_loop_core_1():
     handler) and reads new data from the ADC into memory. Also watches for
     change in flags variable to enable clean exit or recovery from OVERLOAD
     condition.'''
-    global flags
+    global flags, cell
     start_adc()
 
     # The overload flag may be raised by Core 0 at any time, so we have to

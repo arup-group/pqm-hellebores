@@ -55,7 +55,7 @@ source .venv/bin/activate
 
 4. Install the dependencies (the additional maths libraries are needed to support the numpy library):
 ```
-sudo apt install libatlas-base-dev libopenblas-dev
+sudo apt install libatlas-base-dev libopenblas-dev libjpeg-dev
 python -m pip install -r requirements.txt
 ```
 

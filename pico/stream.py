@@ -49,7 +49,7 @@ HALF_BUFFER_MEMORY_SIZE = const(512)
 # flags: operation flags used to control program flow on both CPU cores.
 STOP           = const(0b0001)       # tells both cores to exit
 RESET          = const(0b0010)       # initiate a machine reset
-OVERLOAD       = const(0b0100)       # perform an overload recovery on the ADC
+RESYNC         = const(0b0100)       # perform a soft reset on the ADC
 STREAMING      = const(0b1000)       # fast ADC streaming using both cores
 
 # cell:  sample pointer 0 to 127.
@@ -65,14 +65,16 @@ PAGE_BIT       = const(0b01000000)   # test page number and streaming flag
 PAGE0          = const(0b00000000)   # bit6==0: in range 0-63, ie page 0
 PAGE1          = const(0b01000000)   # bit6==1: in range 64-127, ie page 1
 
-# If the ADCs are overloaded they need to be reset. The reset code path
-# temporarily stops ADC sampling. The SKIPPED_CELLS constant sets up a
-# corrective time offset so that we maintain continuity of the time axis
-# in the output. The code inserts OSC_HIGH and OSC_LOW data into the buffer
-# during this period.
-SKIPPED_CELLS  = 32
-OSC_HIGH = b'\x03\xe8\x03\xe8\x03\xe8\x03\xe8'  # +1000 decimal * 4 channels
-OSC_LOW  = b'\xfc\x18\xfc\x18\xfc\x18\xfc\x18'  # -1000 decimal * 4 channels
+# ADC register addresses
+PHASE = 0x0a
+GAIN = 0x0b
+STATUSCOM = 0x0c
+CONFIG0 = 0x0d
+CONFIG1 = 0x0e
+LOCK_CRC = 0x1f
+# ADC commands
+ADC_WRITE = 0x40
+ADC_READ = 0x41
 
 ########################################################
 ######### Hardware control functions
@@ -129,45 +131,66 @@ def configure_adc_spi_interface():
 def set_adc_register(reg, bs):
     '''Write, and in DEBUG mode verify, values into selected register of the
     ADC.'''
-    # The actual address byte leads with binary 01 and ends with the read/write
-    # bit (1 or 0). The five bits in the middle are the 'register' address inside
-    # the ADC.
-    addr = 0x40 | (reg << 1)
-    # for writing, make sure lowest bit is cleared, hence & 0b11111110
-    pins['cs_adc'].low()
     if DEBUG:
         print('Writing: ' + ' '.join(hex(b) for b in bs))
-    spi_adc_interface.write(bytes([addr & 0b11111110]) + bs)
+    # The register address is inserted into bits 5..1 of the command byte.
+    addr = ADC_WRITE | (reg << 1)
+    pins['cs_adc'].low()
+    spi_adc_interface.write(bytes([addr]) + bs)
     pins['cs_adc'].high()
-
-    # for reading, make sure lowest bit is set, hence | 0b00000001
+    # Verify in debug mode
     if DEBUG:
-        pins['cs_adc'].low()
-        spi_adc_interface.write(bytes([addr | 0b00000001])) 
-        obs = spi_adc_interface.read(len(bs))
-        print('Verifying: ' + ' '.join(hex(b) for b in obs))
-    pins['cs_adc'].high()
- 
+        obs = get_adc_register(reg, len(bs))
+        print('Verifying: ' + ' '.join(hex(b) for b in obs)
 
-def reset_adc():
+
+def get_adc_register(reg, n):
+    'Read n bytes from register of ADC.'
+    addr = ADC_READ | (reg << 1)
+    pins['cs_adc'].low()
+    spi_adc_interface.write(bytes([addr]))
+    obs = spi_adc_interface.read(n)
+    pins['cs_adc'].high()
+    return obs
+
+
+def lock_adc_registers():
+    'Lock all writable register values apart from LOCK_CRC, to increase
+    resilence to electrical noise.'
+    set_adc_register(LOCK_CRC, bytes([0x00]))
+
+def unlock_adc_registers():
+    'Unlock registers for writing.'
+    set_adc_register(LOCK_CRC, bytes([0x0a]))
+
+
+def hard_reset_adc():
     '''Cycles the hardware reset pin of the ADC.'''
     pins['reset_adc'].low()
     pins['reset_adc'].high()
 
 
-def clear_adc_overload():
-    '''ADC codes at out-of-range values latch in the ADC output. Assigning to
-    the PHASE register resets the ADCs to allow them to resume operation
+def soft_reset_adc():
+    '''ADC codes can latch in the ADC output if spurious clock pulses are
+    received and new values can't be loaded. Assigning to the PHASE
+    register resets the ADCs to allow them to resume operation
     (datasheet section 5.5).'''
-    bs = bytes([0x00, 0x00, 0x00])
-    if DEBUG:
-        print('PHASE register.')
-    set_adc_register(0x0a, bs) 
+    unlock_adc_registers()
+    set_adc_register(PHASE, bytes([0x00, 0x00, 0x00]))
+    lock_adc_registers()
 
 
 def setup_adc(adc_settings):
     '''Setup the MCP3912 ADC. Refer to MCP3912 datasheet for detailed
     description of behaviour of all the settings configured here.'''
+    # Unlock registers, so that we can write to them
+    unlock_adc_registers()
+
+    # Set the phase configuration register which soft resets all ADCs
+    if DEBUG:
+        print('PHASE register.')
+    set_adc_register(PHASE, bytes([0x00, 0x00, 0x00]))
+
     # Set the gain configuration register 0x0b
     # 3 bits per channel (12 LSB in all)
     # XXXXXXXX XXXX---- --------
@@ -184,7 +207,7 @@ def setup_adc(adc_settings):
     bs = bytes([0x00, gain_bits >> 8, gain_bits & 0b11111111])
     if DEBUG:
         print('GAIN register.')
-    set_adc_register(0x0b, bs) 
+    set_adc_register(GAIN, bs)
 
     # Set the status and communication register 0x0c
     # required bytes are:
@@ -194,10 +217,9 @@ def setup_adc(adc_settings):
     # bits.
     # 0x00 = 0b00000000: 0 EN_CRCCOM CRC, 0 EN_INT CRC interrupt both disabled
     # 0x0f = 0b00001111: 1111 DRSTATUS data ready status bits for channels  
-    bs = bytes([0x88, 0x00, 0x0f])
     if DEBUG:
         print('STATUSCOM register.')
-    set_adc_register(0x0c, bs) 
+    set_adc_register(STATUSCOM, bytes([0x88, 0x00, 0x0f]))
 
     # Set the configuration register CONFIG0 at 0x0d
     # 1st byte sets various ADC modes
@@ -220,13 +242,15 @@ def setup_adc(adc_settings):
         bs = bytes([0x24, osr_table['7.812k'], 0x50])
     if DEBUG:
         print('CONFIG0 register.')
-    set_adc_register(0x0d, bs) 
+    set_adc_register(CONFIG0, bs)
 
     # Set the configuration register CONFIG1 at 0x0e
-    bs = bytes([0x00, 0x00, 0x00])
     if DEBUG:
         print('CONFIG1 register.')
-    set_adc_register(0x0e, bs)
+    set_adc_register(CONFIG1, bytes([0x00, 0x00, 0x00]))
+
+    # Lock the registers against further write access.
+    lock_adc_registers()
 
  
 
@@ -273,7 +297,9 @@ def start_adc():
     if DEBUG:
         print('Starting the ADC...')
     pins['cs_adc'].low()
-    spi_adc_interface.write(bytes([0b01000001]))
+    # Start reading from address 0x00. As the SPI clock pumps out data, the
+    # ADC will loop around the four ADC channel registers.
+    spi_adc_interface.write(bytes([0x41))
 
 
 def stop_adc():
@@ -331,9 +357,6 @@ def configure_buffer_memory():
     # samples are read into the other half.
     p0_mv = memoryview(acq_mv[:HALF_BUFFER_MEMORY_SIZE])
     p1_mv = memoryview(acq_mv[HALF_BUFFER_MEMORY_SIZE:])
-    # For testing ADC overload, make a reference to the last cell of each page.
-    p0_last_cell_mv = memoryview(p0_mv[-2:])
-    p1_last_cell_mv = memoryview(p1_mv[-2:])
     # Create a memoryview reference into each sample or slice of the buffer.
     # 8 bytes each cell, stepping 8 bytes.
     # This is used in the Core 1 loop to step through the memory sample by
@@ -349,7 +372,7 @@ def configure_buffer_memory():
 def streaming_loop_core_1():
     '''Watches for change in cell variable (incremented by the interrupt
     handler) and reads new data from the ADC into memory. Also watches for
-    change in flags variable to enable clean exit or recovery from OVERLOAD
+    change in flags variable to enable clean exit or recovery from RESYNC
     condition.'''
     global flags, cell
     start_adc()
@@ -368,21 +391,14 @@ def streaming_loop_core_1():
             cell == cell_p or \
                 spi_adc_interface.readinto(cells_mv[(cell_p := cell)])
 
-        # If Core 0 has raised OVERLOAD flag, we deal with it here.
-        if flags & OVERLOAD:
-            # Tell the ADC to clear overload.
+        # If Core 0 has raised RESYNC flag, we deal with it here.
+        if flags & RESYNC:
+            # Tell the ADC to stop and resychronise to the Pico.
             stop_adc()
-            # Advance the cell pointer to compensate for missed samples
-            # show a wobble signal in the output to indicate the reset event
-            # in the output data stream
-            for i in range(SKIPPED_CELLS):
-                cell = (cell + 1) & WRAP_MASK
-                # Flip all output channels between OSC_HIGH and OSC_LOW
-	        cells_mv[cell] = OSC_HIGH if cell // 2 else OSC_LOW
-            clear_adc_overload()
+            soft_reset_adc()
             start_adc()
-            # Clear OVERLOAD flag 
-            flags = flags & ~OVERLOAD
+            # Clear RESYNC flag
+            flags = flags & ~RESYNC
 
     if DEBUG:
         print('Streaming_loop_core_1() exited')
@@ -417,13 +433,13 @@ def streaming_loop_core_0():
     else:
         transfer_buffer = _transfer_buffer_normal
     
-    def overload_test(mv):
+    def sync_test(mv):
         global flags
-        # If overloaded the ADC will latch on all channels to one of
-        # these overload codes.
-        if (mv == b'\x80\x00') or (mv == b'\x7f\xff'):
-            # Raise OVERLOAD flag.
-            flags = flags | OVERLOAD
+        # If synchronisation fails, the ADC outputs will latch to the same
+        # values. We compare the last two samples:
+        if mv[-17:-9].tobytes() == mv[-9:-1].tobytes():
+            # Raise RESYNC flag.
+            flags = flags | RESYNC
 
     # Now loop...
     while flags & STREAMING:
@@ -431,12 +447,12 @@ def streaming_loop_core_0():
         while (cell & PAGE_BIT) == PAGE0:
             continue
         transfer_buffer(p0_mv)
-        overload_test(p0_last_cell_mv)
+        sync_test(p0_mv)
         # Wait while Core 1 is filling up page 1.
         while (cell & PAGE_BIT) == PAGE1:
             continue
         transfer_buffer(p1_mv)
-        overload_test(p1_last_cell_mv)
+        sync_test(p1_mv)
 
     if DEBUG:
         print('Streaming_loop_core_0() exited.')
@@ -480,8 +496,7 @@ def prepare_to_stream(adc_settings):
     if DEBUG:
         print('Configuring ADC and interrupts.')
     # Push required settings into the ADC.
-    reset_adc()
-    clear_adc_overload()    # NB The reset process can cause the ADCs to latch
+    hard_reset_adc()
     setup_adc(adc_settings)
 
     # ADC is responsible for sample timing. Every sample, it toggles the DR*
@@ -530,7 +545,8 @@ def main():
     #                  'sample_rate': '7.812k' }
     if len(sys.argv) == 6:
         _, g0, g1, g2, g3, sample_rate = sys.argv
-        adc_settings = { 'gains': [g0, g1, g2, g3], 'sample_rate': sample_rate }
+        adc_settings = { 'gains': [g0, g1, g2, g3],
+                         'sample_rate': sample_rate }
     else:
         adc_settings = DEFAULT_ADC_SETTINGS
     if DEBUG:
@@ -545,14 +561,13 @@ def main():
             # Inner sampling loops will exit if a rising edge pulse is detected
             # on the 'reset_me' pin. This is to make it possible to restart the
             # Pico via software, toggling this pin. However, this outer loop
-            # allows for automatic recovery if a reset edge has been detected
-            # due to an electrical disturbance (eg inrush). If the reset state
-            # is not sustained for a long enough period, we consider it
-            # spurious and we will restart the ADCs and the streaming, instead
-            # of proceeding to reset the machine.
+            # allows for automatic recovery if a reset edge was caused by an
+            # electrical disturbance (eg inrush). If the reset state is not
+            # sustained for a long enough period, we consider it spurious and
+            # we will restart the ADCs and continue streaming, instead of
+            # proceeding to reset the machine.
             if flags & RESET and not reset_pin_held_high():
                 flags = STREAMING
-                continue
 
     except KeyboardInterrupt:
         # Catch CTRL-C here.

@@ -377,7 +377,7 @@ def streaming_loop_core_1():
     global flags, cell
     start_adc()
 
-    # The overload flag may be raised by Core 0 at any time, so we have to
+    # The resync flag may be raised by Core 0 at any time, so we have to
     # allow for it in the outer loop test here by using a bitmask filter
     while flags & STREAMING:
         # cell_p is a local cache of the cell variable, so that the inner loop
@@ -437,7 +437,7 @@ def streaming_loop_core_0():
         global flags
         # If synchronisation fails, the ADC outputs will latch to the same
         # values. We compare the last two samples:
-        if mv[-17:-9].tobytes() == mv[-9:-1].tobytes():
+        if mv[-17:-9] == mv[-9:-1]:
             # Raise RESYNC flag.
             flags = flags | RESYNC
 

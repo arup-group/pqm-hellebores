@@ -1,5 +1,6 @@
 __pycache__
 .venv
 .venv-windows
+/output_files
 /local
 /configuration/identity

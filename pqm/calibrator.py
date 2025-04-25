@@ -11,13 +11,9 @@ from settings import Settings
 
 
 ONE_MINUTE_OF_SAMPLES     = 468750
+TWO_SECONDS_OF_SAMPLES    = 15625
 READER                    = 'reader.py'
 READER_TEST               = 'rain_chooser.py'    # use this for testing
-OFFSET_CAL                = 1
-VOLTAGE_CAL               = 2
-CURRENT_FULL_CAL          = 3
-CURRENT_LOW_CAL           = 4
-CURRENT_EARTHLEAKAGE_CAL  = 5
 
 def is_raspberry_pi():
     try:
@@ -86,16 +82,17 @@ def lines_to_samples(lines):
     return samples 
 
 
-def scaled(config, samples):
+def scaled(samples):
     scaled_samples = []
     for ns in samples:
-        scaled_samples.append([ h*g*(n+o) for h,g,o,n in zip(config['scaling'], config['gains'], config['offsets'], ns) ])
+        scaled_samples.append([ h*g*(n+o) for h,g,o,n
+            in zip(HARDWARE_SCALE_FACTORS, st.cal_gains, st.cal_offsets, ns) ])
     return scaled_samples
 
 
-def samples_to_rms(config, samples):
+def samples_to_rms(samples):
     number_of_samples = len(samples)
-    scaled_samples = scaled(config, samples)
+    scaled_samples = scaled(samples)
     sum_of_squares = [0,0,0,0]
     for ns in scaled_samples:
         sum_of_squares = [ n*n + s for n,s in zip(ns, sum_of_squares) ] 
@@ -114,7 +111,7 @@ def samples_to_offsets(samples):
 
 
 def get_choice():
-    print('''
+    print(f'''
 
 ******   CALIBRATOR UTILITY   *******
 The scaling transformations between ADC channels and output measurements are as
@@ -131,18 +128,28 @@ If 'N' is the channel number, then:
     HN    is a hardware scaling factor, fixed in the design
     GN    is a device-specific gain calibration factor.
 
+The hardware scale factors H[0-3] are {HARDWARE_SCALE_FACTORS}.
 This program helps to determine the device specific calibration constants
 O[0-3] and G[0-3].
 
+Currently configured settings are:
+Device identity: {st.identity}
+O[0-3]:          {st.cal_offsets}
+H[0-3]:          {HARDWARE_SCALE_FACTORS}
+G[0-3]:          {st.cal_gains}
+
 Proceed with the calibration in the following sequence: it is essential
-that offset calibration is completed first.
+that offset calibration is completed first and entered into calibration.json
+before proceeding to determine any gain calibration.
+
+VERIFY THE SETTINGS THAT YOU SEE ABOVE.
 
 Select option, or 'q' to quit:
-1. O0, O1, O2, O3 offset calibration
-2. G3 voltage calibration
-3. G2 current (full range) calibration
-4. G1 current (low range) calibration
-5. G0 current (earth leakage) calibration
+1. O0, O1, O2, O3 dc offset calibration
+2. G3 voltage gain calibration
+3. G2 current (full range) gain calibration
+4. G1 current (low range) gain calibration
+5. G0 current (earth leakage) gain calibration
 
 ''', end='')
 
@@ -157,24 +164,19 @@ Select option, or 'q' to quit:
 
 
 def offset_calibration():
-    samples = lines_to_samples(get_lines_from_reader(ONE_MINUTE_OF_SAMPLES))
     # offset report
-    labels = ['o0: Earth leakage current', 'o1: Current (low)', 'o2: Current (full)', 'o3: Voltage']
-    print('OFFSET VALUES:')
-    print('-'*80)
-    print('Channel                      :       Existing :     Calculated :')
-    print('                             :         offset :         offset :')
-    print('                             :          value :          value :')
-    print('                             :             oc :             oc :')
-    print('-'*80)
-    results = [ f'{l:28} : {o:14} : {co:14} :     adc counts' for l,o,co in zip(labels, c_config['offsets'], u_config['offsets']) ]
-    print('\n'.join(results))
-    print('-'*80)
-    print()
-
+    samples = lines_to_samples(get_lines_from_reader(ONE_MINUTE_OF_SAMPLES))
+    offsets = samples_to_offsets(samples)
+    print(f'Calculated O[0-3] = {offsets}')
 
 def voltage_calibration():
-    pass
+    while 1:
+        choice = input("'h' to increase, 'l' to lower, 'Enter' to repeat, 'q' to quit. ")
+        if choice == 'q':
+            break
+        samples = lines_to_samples(get_lines_from_reader(TWO_SECONDS_OF_SAMPLES))
+        rmses = samples_to_rms(samples)
+        print(f'Voltage with O3 = {st.cal_offsets[3]}, G3 = {st.cal_gains[3]}: {rmses[3]}')
 
 def current_full_calibration():
     pass
@@ -186,47 +188,9 @@ def current_earthleakage_calibration():
     pass
 
 
-def print_results(c_config, u_config, c_measurements, u_measurements):
-    # measurement report
-    labels = ['r0: Earth leakage current', 'r1: Current (low)', 'r2: Current (full)', 'r3: Voltage']
-    units = ['mA', 'A', 'A', 'V']
-    # for convenience, convert channel 0 into mA
-    c_measurements[0] = c_measurements[0] * 1000
-    u_measurements[0] = u_measurements[0] * 1000
-    print('GAIN FACTORS:')
-    print('-'*80)
-    print('Channel                      :       Existing :    Measurement :    Measurement')
-    print('                             :           gain :        #1 with :        #2 with')
-    print('                             :         factor :       existing :     calculated')
-    print('                             :             gc :         oc and :         oc and')
-    print('                             :                :             gc :         gc = 1')
-    print('-'*80)
-    results = [ f'{l:28} : {g:14} : {m1:11.4f} {u:2} : {m2:11.4f} {u:2}' for l,g,m1,m2,u in zip(labels, c_config['gains'], c_measurements, u_measurements, units) ]
-    print('\n'.join(results))
-    print('-'*80)
-    print('NB New calibration constant gc = multimeter reading/measurement #2')
-    print()
-
-
-def calibrate(samples):
-    st = Settings()
-    c_config = {
-        'offsets': st.cal_offsets,
-        'gains': st.cal_gains,
-        'scaling': HARDWARE_SCALE_FACTORS
-    }
-    u_config = {
-        'offsets': samples_to_offsets(samples),
-        'gains': [1,1,1,1],
-        'scaling': c_config['scaling']
-    }
-    # calculate the rms values of the samples, with both calibrated and uncalibrated configuration
-    c_measurements = samples_to_rms(c_config, samples)
-    u_measurements = samples_to_rms(u_config, samples)
-    return(c_config, u_config, c_measurements, u_measurements)
-
-
 def main():
+    global st
+    st = Settings()
     index = get_choice() - 1
     calibration_functions = [ offset_calibration, voltage_calibration, \
                               current_full_calibration, current_low_calibration, \

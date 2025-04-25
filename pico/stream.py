@@ -474,12 +474,10 @@ def reset_pin_held_high():
     reset_me pin of the Pico is sustained in a high state for a long enough
     period that we can rely on it being a genuine reset command.'''
     # We check to see if the reset pin is sustained in high state
-    # 10 times at 10ms intervals
     reset_status = True
-    for i in range(10):
+    for i in range(3):
         if pins['reset_me'].value() == 0:
             reset_status = False
-            break
         time.sleep(0.01)
     return reset_status
 

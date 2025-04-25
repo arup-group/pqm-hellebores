@@ -141,11 +141,11 @@ def set_adc_register(reg, bs):
     # Verify in debug mode
     if DEBUG:
         obs = get_adc_register(reg, len(bs))
-        print('Verifying: ' + ' '.join(hex(b) for b in obs)
+        print('Verifying: ' + ' '.join(hex(b) for b in obs))
 
 
 def get_adc_register(reg, n):
-    'Read n bytes from register of ADC.'
+    '''Read n bytes from register of ADC.'''
     addr = ADC_READ | (reg << 1)
     pins['cs_adc'].low()
     spi_adc_interface.write(bytes([addr]))
@@ -155,12 +155,16 @@ def get_adc_register(reg, n):
 
 
 def lock_adc_registers():
-    'Lock all writable register values apart from LOCK_CRC, to increase
-    resilence to electrical noise.'
+    '''Lock all writable register values apart from LOCK_CRC, to increase
+    resilence to electrical noise.'''
+    if DEBUG:
+        print('Locking registers.')
     set_adc_register(LOCK_CRC, bytes([0x00]))
 
 def unlock_adc_registers():
-    'Unlock registers for writing.'
+    '''Unlock registers for writing.'''
+    if DEBUG:
+        print('Unlocking registers.')
     set_adc_register(LOCK_CRC, bytes([0x0a]))
 
 
@@ -299,7 +303,7 @@ def start_adc():
     pins['cs_adc'].low()
     # Start reading from address 0x00. As the SPI clock pumps out data, the
     # ADC will loop around the four ADC channel registers.
-    spi_adc_interface.write(bytes([0x41))
+    spi_adc_interface.write(bytes([0x41]))
 
 
 def stop_adc():

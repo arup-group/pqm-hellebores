@@ -4,6 +4,10 @@
 # measurements signalled by the ADC (via the data ready, DR* pin), and sends
 # output from the buffer in blocks of 64x4x16 bit integer values.
 
+# BE VERY CAREFUL WITH EDITING! GARBAGE COLLECTOR IS SWITCHED OFF IN INNER
+# LOOPS TO MAINTAIN PERFORMANCE. MEMORYVIEW OBJECTS ARE USED TO AVOID NEW
+# MEMORY ALLOCATIONS.
+
 import time
 import machine
 from machine import Pin
@@ -45,6 +49,14 @@ DEFAULT_ADC_SETTINGS = { 'gains':       ['1x', '1x', '1x', '1x'],
 BUFFER_SIZE = const(128)
 BUFFER_MEMORY_SIZE = const(1024)
 HALF_BUFFER_MEMORY_SIZE = const(512)
+
+# Penultimate and final cell locations are used to test whether the SPI
+# interface has lost synchronisation with the ADC. The output shift register
+# will latch into a fixed state if this is the case.
+P0_CELL_A = 62
+P0_CELL_B = 63
+P1_CELL_A = 126
+P1_CELL_B = 127
 
 # flags: operation flags used to control program flow on both CPU cores.
 STOP           = const(0b0001)       # tells both cores to exit
@@ -349,7 +361,7 @@ def configure_buffer_memory():
     '''Buffer memory is allocated for retaining a cache of samples received from
     the ADC. The memory is referenced by various memoryview objects that point
     to different portions of it.'''
-    global p0_mv, p1_mv, p0_last_cell_mv, p1_last_cell_mv, cells_mv
+    global p0_mv, p1_mv, cells_mv
 
     # 2 bytes per channel, 4 channels
     acq = bytearray(BUFFER_MEMORY_SIZE)
@@ -367,7 +379,7 @@ def configure_buffer_memory():
     # sample, without needing to make an intermediate copy.
     cells_mv = [ memoryview(acq_mv[m:m+8])
                      for m in range(0, BUFFER_MEMORY_SIZE, 8) ]
- 
+
 
 
 ########################################################
@@ -437,11 +449,11 @@ def streaming_loop_core_0():
     else:
         transfer_buffer = _transfer_buffer_normal
     
-    def sync_test(mv):
+    def sync_test(cell1, cell2):
         global flags
         # If synchronisation fails, the ADC outputs will latch to the same
-        # values. We compare the last two samples:
-        if mv[-17:-9] == mv[-9:-1]:
+        # values on successive samples. We compare them to check:
+        if cells_mv[cell1] == cells_mv[cell2]:
             # Raise RESYNC flag.
             flags = flags | RESYNC
 
@@ -451,12 +463,12 @@ def streaming_loop_core_0():
         while (cell & PAGE_BIT) == PAGE0:
             continue
         transfer_buffer(p0_mv)
-        sync_test(p0_mv)
+        sync_test(P0_CELL_A, P0_CELL_B)
         # Wait while Core 1 is filling up page 1.
         while (cell & PAGE_BIT) == PAGE1:
             continue
         transfer_buffer(p1_mv)
-        sync_test(p1_mv)
+        sync_test(P1_CELL_A, P1_CELL_B)
 
     if DEBUG:
         print('Streaming_loop_core_0() exited.')

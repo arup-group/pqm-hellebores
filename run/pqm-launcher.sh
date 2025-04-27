@@ -88,12 +88,10 @@ case "$result" in
     "EXIT")
         echo "Exiting launcher.";;
     "Software update")
-        echo "Updating software to Github $GIT_BRANCH branch HEAD..."
-        git fetch origin
-        git reset --hard "origin/$GIT_BRANCH"
+        gnome-terminal --wait -- bash -c "echo \"Updating software to Github $GIT_BRANCH branch HEAD...\"; git fetch origin; git reset --hard \"origin/$GIT_BRANCH\"; sleep 2"
         exec "$0";;
     "Pico update")
-        echo "Pico update not implemented."
+        gnome-terminal --wait -- bash -c "echo 'Updating Pico software...'; \"$SOFTWARE_PATH/tools/pico_update.sh\"; sleep 2"
         exec "$0";;
     "Shutdown")
         echo "Shutting down system."

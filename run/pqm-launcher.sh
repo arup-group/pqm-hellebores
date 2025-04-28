@@ -78,7 +78,9 @@ if [[ "$result" == "" ]]; then
     fi
 fi
 
-# Process selected command, exec $0 relaunches the script
+# Process selected command, exec $0 relaunches the script.
+# For software update and Pico update, we launch a terminal so that we can
+# see the progress and outcome.
 cd "$CWD"
 case "$result" in
     "START")
@@ -88,10 +90,17 @@ case "$result" in
     "EXIT")
         echo "Exiting launcher.";;
     "Software update")
-        gnome-terminal --wait -- bash -c "echo \"Updating software to Github $GIT_BRANCH branch HEAD...\"; git fetch origin; git reset --hard \"origin/$GIT_BRANCH\"; sleep 2"
+        x-terminal-emulator -e "bash -c \
+            \"echo \"Updating software to Github $GIT_BRANCH branch HEAD...\"; \
+            git fetch origin; \
+            git reset --hard \"origin/$GIT_BRANCH\"; \
+            sleep 2\""
         exec "$0";;
     "Pico update")
-        gnome-terminal --wait -- bash -c "echo 'Updating Pico software...'; \"$SOFTWARE_PATH/tools/pico_update.sh\"; sleep 2"
+        x-terminal-emulator -e "bash -c \
+            \"echo 'Updating Pico software...'; \
+            \"$SOFTWARE_PATH/tools/pico_update.sh\"; \
+            sleep 2\""
         exec "$0";;
     "Shutdown")
         echo "Shutting down system."

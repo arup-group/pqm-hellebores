@@ -4,6 +4,7 @@ import subprocess
 import sys
 import os
 import math
+import json
 
 # local
 from constants import *
@@ -12,8 +13,51 @@ from settings import Settings
 
 ONE_MINUTE_OF_SAMPLES     = 468750
 TWO_SECONDS_OF_SAMPLES    = 15625
+TEN_SECONDS_OF_SAMPLES    = 78125
+DISCARD_SAMPLES           = 5000
 READER                    = 'reader.py'
 READER_TEST               = 'rain_chooser.py'    # use this for testing
+WIP_FILE                  = 'calibrator_wip.json'
+
+
+
+class WIP:
+    # calibration constants for channels 0-3
+    # these local constants are cached in a file so that they can be accessed
+    # during successive runs of calibrator.py
+    offsets = [ 0, 0, 0, 0 ]
+    gains = [ 1.0, 1.0, 1.0, 1.0 ]
+    skew_times = [ 0.0, 0.0, 0.0, 0.0 ]
+    identity = 'PQM-0'
+
+    def __init__(self):
+        st = Settings()
+        self.offsets = st.cal_offsets
+        self.gains = st.cal_gains
+        self.skew_times = st.cal_skew_times
+        self.identity = st.identity
+        self.read()
+
+    def write(self):
+        try:
+            with open(WIP_FILE, 'w') as f:
+                f.write(json.dumps({'offsets':self.offsets, 'gains':self.gains,
+                    'skew_times':self.skew_times}))
+            print(f"calibrator.py: work in progress written.", file=sys.stderr)
+        except:
+            print(f"calibrator.py, WIP.write(): Couldn't write "
+                f"to cache file {WIP_FILE}.", file=sys.stderr)
+
+    def read(self):
+        status = False
+        try:
+            with open(WIP_FILE, 'r') as f:
+                wip_file = json.loads(f.read())
+                self.offsets, self.gains, self.skew_times = wip_file.values()
+            status = True
+        except:
+            print(f"calibrator.py: no work in progress found.", file=sys.stderr)
+        return status
 
 def is_raspberry_pi():
     try:
@@ -42,8 +86,8 @@ def get_lines_from_reader(number_of_lines):
                                    stdout=subprocess.PIPE,
                                    stderr=subprocess.DEVNULL,
                                    shell=True)
-        # read some dummy lines, to get beyond pygame library startup lines
-        for i in range(5):
+        # discard some lines to clear pipeline buffers
+        for i in range(DISCARD_SAMPLES):
             process.stdout.readline()
         # read the correct number of lines
         lines = []
@@ -82,17 +126,17 @@ def lines_to_samples(lines):
     return samples 
 
 
-def scaled(samples):
+def scaled(wip, samples):
     scaled_samples = []
     for ns in samples:
         scaled_samples.append([ h*g*(n+o) for h,g,o,n
-            in zip(HARDWARE_SCALE_FACTORS, st.cal_gains, st.cal_offsets, ns) ])
+            in zip(HARDWARE_SCALE_FACTORS, wip.gains, wip.offsets, ns) ])
     return scaled_samples
 
 
-def samples_to_rms(samples):
+def samples_to_rms(wip, samples):
     number_of_samples = len(samples)
-    scaled_samples = scaled(samples)
+    scaled_samples = scaled(wip, samples)
     sum_of_squares = [0,0,0,0]
     for ns in scaled_samples:
         sum_of_squares = [ n*n + s for n,s in zip(ns, sum_of_squares) ] 
@@ -110,42 +154,38 @@ def samples_to_offsets(samples):
     return offsets
 
 
-def get_choice():
+def get_choice(wip):
     print(f'''
 
 ******   CALIBRATOR UTILITY   *******
-The scaling transformations between ADC channels and output measurements are as
-follows:
-    m0 = (adc0 + O0) * H0 * G0
-    m1 = (adc1 + O1) * H1 * G1
-    m2 = (adc2 + O2) * H2 * G2
-    m3 = (adc3 + O3) * H3 * G3
+If N is the channel number, the transformation between ADC channel
+reading and measurement is as follows:
+    mN = (adcN + ON) * HN * GN
 
-If 'N' is the channel number, then:
+where:
     mN    is the scaled measurement reading (eg Amps or Volts)
     adcN  is the raw ADC channel reading (expressed as a signed integer)
     ON    is a device-specific dc calibration offset
-    HN    is a hardware scaling factor, fixed in the design
+    HN    is a hardware scaling factor
     GN    is a device-specific gain calibration factor.
 
-The hardware scale factors H[0-3] are {HARDWARE_SCALE_FACTORS}.
+The hardware scale factors H[0-3] are fixed in the hardware design.
 This program helps to determine the device specific calibration constants
 O[0-3] and G[0-3].
 
 Currently configured settings are:
-Device identity: {st.identity}
-O[0-3]:          {st.cal_offsets}
+Device identity: {wip.identity}
+O[0-3]:          {wip.offsets}
 H[0-3]:          {HARDWARE_SCALE_FACTORS}
-G[0-3]:          {st.cal_gains}
+G[0-3]:          {wip.gains}
 
-Proceed with the calibration in the following sequence: it is essential
-that offset calibration is completed first and entered into calibration.json
-before proceeding to determine any gain calibration.
+Proceed with the calibration in sequence starting with dc offset
+calibration.
 
 VERIFY THE SETTINGS THAT YOU SEE ABOVE.
 
 Select option, or 'q' to quit:
-1. O0, O1, O2, O3 dc offset calibration
+1. O3, O2, O1, O0 dc offset calibration
 2. G3 voltage gain calibration
 3. G2 current (full range) gain calibration
 4. G1 current (low range) gain calibration
@@ -163,40 +203,41 @@ Select option, or 'q' to quit:
     return choice
 
 
-def offset_calibration():
+def offset_calibration(wip):
     # offset report
     samples = lines_to_samples(get_lines_from_reader(ONE_MINUTE_OF_SAMPLES))
     offsets = samples_to_offsets(samples)
     print(f'Calculated O[0-3] = {offsets}')
 
-def voltage_calibration():
+def voltage_calibration(wip):
     while 1:
         choice = input("'h' to increase, 'l' to lower, 'Enter' to repeat, 'q' to quit. ")
         if choice == 'q':
             break
-        samples = lines_to_samples(get_lines_from_reader(TWO_SECONDS_OF_SAMPLES))
-        rmses = samples_to_rms(samples)
-        print(f'Voltage with O3 = {st.cal_offsets[3]}, G3 = {st.cal_gains[3]}: {rmses[3]}')
+        samples = lines_to_samples(get_lines_from_reader(TEN_SECONDS_OF_SAMPLES))
+        rmses = samples_to_rms(wip, samples)
+        print(f'Voltage with O3 = {wip.cal_offsets[3]}, G3 = {wip.cal_gains[3]}: {rmses[3]}')
 
-def current_full_calibration():
+def current_full_calibration(wip):
     pass
 
-def current_low_calibration():
+def current_low_calibration(wip):
     pass
 
-def current_earthleakage_calibration():
+def current_earthleakage_calibration(wip):
     pass
 
 
 def main():
-    global st
-    st = Settings()
-    index = get_choice() - 1
+    wip = WIP()
+    index = get_choice(wip) - 1
     calibration_functions = [ offset_calibration, voltage_calibration, \
                               current_full_calibration, current_low_calibration, \
                               current_earthleakage_calibration ]
-    calibration_functions[index]()
-
+    calibration_functions[index](wip)
+    wip.write()
+    print("When you are done with calibrating, copy the values in calibrator_wip.json to "
+          "configuration/calibrations.json and commit to repository.")
 
 if __name__ == '__main__':
     main() 

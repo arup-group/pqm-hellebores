@@ -405,7 +405,7 @@ def streaming_loop_core_1():
             # read out from the ADC *immediately* if the cell variable changes
             cell == cell_p \
                 or (spi_adc_interface.readinto(cells_mv[cell]) \
-                    and (cell_p := cell))
+                    and cell_p := cell)
 
         # If Core 0 has raised RESYNC flag, we deal with it here.
         if flags & RESYNC:

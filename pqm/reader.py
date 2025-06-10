@@ -64,6 +64,8 @@ def main():
     if port_name:
         try:
             ser = serial.Serial(port_name)
+            # discard anything hanging around in the hardware buffer
+            ser.reset_input_buffer()
             print(f"reader.py, main(): Connected.", file=sys.stderr)
             read_and_print(ser)
         except (serial.serialutil.SerialException, FileNotFoundError, OSError):

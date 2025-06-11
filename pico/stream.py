@@ -53,10 +53,10 @@ HALF_BUFFER_MEMORY_SIZE = const(512)
 # Penultimate and final cell locations are used to test whether the SPI
 # interface has lost synchronisation with the ADC. The output shift register
 # will latch into a fixed state if this is the case.
-P0_CELL_A = 62
-P0_CELL_B = 63
-P1_CELL_A = 126
-P1_CELL_B = 127
+P0_CELL_A = const(62)
+P0_CELL_B = const(63)
+P1_CELL_A = const(126)
+P1_CELL_B = const(127)
 
 # flags: operation flags used to control program flow on both CPU cores.
 STOP           = const(0b0001)       # tells both cores to exit
@@ -140,7 +140,7 @@ def configure_adc_spi_interface():
                                     miso       = pins['sdo_adc'])
 
 
-def set_adc_register(reg, bs):
+def set_adc_register(reg: int, bs: bytes):
     '''Write, and in DEBUG mode verify, values into selected register of the
     ADC.'''
     if DEBUG:
@@ -156,7 +156,7 @@ def set_adc_register(reg, bs):
         print('Verifying: ' + ' '.join(hex(b) for b in obs))
 
 
-def get_adc_register(reg, n):
+def get_adc_register(reg: int, n: int) -> bytes:
     '''Read n bytes from register of ADC.'''
     addr = ADC_READ | (reg << 1)
     pins['cs_adc'].low()
@@ -196,7 +196,7 @@ def soft_reset_adc():
     lock_adc_registers()
 
 
-def setup_adc(adc_settings):
+def setup_adc(adc_settings: dict):
     '''Setup the MCP3912 ADC. Refer to MCP3912 datasheet for detailed
     description of behaviour of all the settings configured here.'''
     # Unlock registers, so that we can write to them
@@ -270,14 +270,14 @@ def setup_adc(adc_settings):
 
  
 
-def configure_interrupts(command='enable'):
+def configure_interrupts(command='enable': str):
     '''Two interrupt handlers are set up, one for the DR* pin, for notifying
     Pico that new data is ready for reading from the ADC, and a reset command
     from the Pi, to help with run-time error recovery.'''
 
     # Interrupt handler for data ready pin (this pin is commanded from the ADC)
     def adc_read_handler(_):
-        global cell
+        global cell: int
         # 'anding' the pointer with a bit mask that has binary '0' in the bit
         # above the largest buffer pointer makes the buffer pointer circulate
         # to zero without needing an 'if' conditional: this means the
@@ -286,8 +286,8 @@ def configure_interrupts(command='enable'):
 
     # we need this helper function, because we can't easily assign to global
     # variable within a lambda expression
-    def set_flags(required_flags):
-        global flags
+    def set_flags(required_flags: int):
+        global flags: int
         flags = required_flags
 
     if command == 'enable':
@@ -340,7 +340,7 @@ class Debug_cache:
     def reset(self):
         self.cache_pointer = 0
 
-    def save_snip(self, bs):
+    def save_snip(self, bs: bytearray) -> bool:
         if self.cache_pointer <= 15:
             self.cache[self.cache_pointer][:] = bs[:32]
             self.cache_pointer += 1
@@ -348,7 +348,7 @@ class Debug_cache:
         else:
             return False   
    
-    def as_text(self):
+    def as_text(self) -> str:
         text_out = ''
         for bs in self.cache:
             # NB 32 bytes become 64 characters.
@@ -361,7 +361,7 @@ def configure_buffer_memory():
     '''Buffer memory is allocated for retaining a cache of samples received from
     the ADC. The memory is referenced by various memoryview objects that point
     to different portions of it.'''
-    global p0_mv, p1_mv, cells_mv
+    global p0_mv: memoryview, p1_mv: memoryview, cells_mv: memoryview
 
     # 2 bytes per channel, 4 channels
     acq = bytearray(BUFFER_MEMORY_SIZE)
@@ -392,7 +392,7 @@ def streaming_loop_core_1():
     handler) and reads new data from the ADC into memory. Also watches for
     change in flags variable to enable clean exit or recovery from RESYNC
     condition.'''
-    global flags, cell
+    global flags: int, cell: int
 
     # performance: make a copy of the memoryview object references in a
     # local tuple, which has slightly faster lookup times
@@ -404,7 +404,7 @@ def streaming_loop_core_1():
     while flags & STREAMING:
         # cell_p is a local cache of the cell variable, so that the inner loop
         # can synchronise to when cell changes value
-        cell_p = cell
+        cell_p: int = cell
 
         # Inner loop -- speed critical -- we do sampling here, nothing else.
         while flags == STREAMING:
@@ -442,7 +442,7 @@ def streaming_loop_core_0():
         pins['buffer_led'].off()
 
     def _transfer_buffer_debug(bs):
-        global flags
+        global flags: int
         pins['buffer_led'].on()
         # saves snips until the debug cache is full
         if debug_cache.save_snip(bs) == False:
@@ -455,7 +455,7 @@ def streaming_loop_core_0():
     else:
         transfer_buffer = _transfer_buffer_normal
     
-    def sync_test(cell1, cell2):
+    def sync_test(cell1: int, cell2: int):
         global flags
         # If synchronisation fails, the ADC outputs will latch to the same
         # values on successive samples. We compare them to check:
@@ -486,7 +486,7 @@ def streaming_loop_core_0():
 ########################################################
 ######### High level functions to support main()
 ########################################################
-def reset_pin_held_high():
+def reset_pin_held_high() -> bool:
     '''This function supports recovery from some transient disturbances that
     can cause the inner sampling loops to exit. The function confirms that the
     reset_me pin of the Pico is sustained in a high state for a long enough
@@ -500,7 +500,7 @@ def reset_pin_held_high():
     return reset_status
 
         
-def prepare_to_stream(adc_settings):
+def prepare_to_stream(adc_settings: dict):
     '''Configures all the pre-requisities: pins, SPI interface, ADC settings
     circular buffer memory, interrupts and garbage collection.'''
 
@@ -555,7 +555,7 @@ def cleanup():
 
 
 def main():
-    global flags, cell
+    global flags: int, cell: int
     
     # We can pass configuration variables into the program from main.py
     # via the sys.argv variable.
@@ -564,7 +564,7 @@ def main():
     # adc_settings = { 'gains':       ['1x', '1x', '1x', '1x'],
     #                  'sample_rate': '7.812k' }
     if len(sys.argv) == 6:
-        _, g0, g1, g2, g3, sample_rate = sys.argv
+        _, g0: int, g1: int, g2: int, g3: int, sample_rate: float = sys.argv
         adc_settings = { 'gains': [g0, g1, g2, g3],
                          'sample_rate': sample_rate }
     else:

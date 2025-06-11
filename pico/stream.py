@@ -435,18 +435,17 @@ def streaming_loop_core_0():
     # Create local debug cache for memorising a few sampling loops
     debug_cache = Debug_cache()
 
-    def _transfer_buffer_normal(mv: memoryview):
+    def _transfer_buffer_normal(bs):
         pins['buffer_led'].on()
         # write out the selected portion of buffer as raw bytes
-        #sys.stdout.buffer.write(mv)
-        sys.stdout.write(mv)
+        sys.stdout.buffer.write(bs)
         pins['buffer_led'].off()
 
-    def _transfer_buffer_debug(mv: memoryview):
+    def _transfer_buffer_debug(bs):
         global flags
         pins['buffer_led'].on()
         # saves snips until the debug cache is full
-        if debug_cache.save_snip(mv) == False:
+        if debug_cache.save_snip(bs) == False:
             flags = STOP
         pins['buffer_led'].off()
 

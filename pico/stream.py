@@ -391,10 +391,14 @@ def streaming_loop_core_1():
     change in flags variable to enable clean exit or recovery from RESYNC
     condition.'''
     global flags, cell
-    start_adc()
+
+    # performance: make a copy of the memoryview object references in a
+    # local tuple, which has slightly faster lookup times
+    cells_mv_tuple = tuple(cells_mv)
 
     # The resync flag may be raised by Core 0 at any time, so we have to
     # allow for it in the outer loop test here by using a bitmask filter
+    start_adc()
     while flags & STREAMING:
         # cell_p is a local cache of the cell variable, so that the inner loop
         # can synchronise to when cell changes value
@@ -405,7 +409,7 @@ def streaming_loop_core_1():
             # read out from the ADC *immediately* if the cell variable has
             # changed
             cell == cell_p or \
-                spi_adc_interface.readinto(cells_mv[(cell_p := cell)])
+                spi_adc_interface.readinto(cells_mv_tuple[(cell_p := cell)])
 
         # If Core 0 has raised RESYNC flag, we deal with it here.
         if flags & RESYNC:

@@ -270,14 +270,14 @@ def setup_adc(adc_settings: dict):
 
  
 
-def configure_interrupts(command='enable': str):
+def configure_interrupts(command: str ='enable'):
     '''Two interrupt handlers are set up, one for the DR* pin, for notifying
     Pico that new data is ready for reading from the ADC, and a reset command
     from the Pi, to help with run-time error recovery.'''
 
     # Interrupt handler for data ready pin (this pin is commanded from the ADC)
     def adc_read_handler(_):
-        global cell: int
+        global cell
         # 'anding' the pointer with a bit mask that has binary '0' in the bit
         # above the largest buffer pointer makes the buffer pointer circulate
         # to zero without needing an 'if' conditional: this means the
@@ -287,7 +287,7 @@ def configure_interrupts(command='enable': str):
     # we need this helper function, because we can't easily assign to global
     # variable within a lambda expression
     def set_flags(required_flags: int):
-        global flags: int
+        global flags
         flags = required_flags
 
     if command == 'enable':
@@ -361,7 +361,7 @@ def configure_buffer_memory():
     '''Buffer memory is allocated for retaining a cache of samples received from
     the ADC. The memory is referenced by various memoryview objects that point
     to different portions of it.'''
-    global p0_mv: memoryview, p1_mv: memoryview, cells_mv: memoryview
+    global p0_mv, p1_mv, cells_mv
 
     # 2 bytes per channel, 4 channels
     acq = bytearray(BUFFER_MEMORY_SIZE)
@@ -392,7 +392,7 @@ def streaming_loop_core_1():
     handler) and reads new data from the ADC into memory. Also watches for
     change in flags variable to enable clean exit or recovery from RESYNC
     condition.'''
-    global flags: int, cell: int
+    global flags, cell
 
     # performance: make a copy of the memoryview object references in a
     # local tuple, which has slightly faster lookup times
@@ -442,7 +442,7 @@ def streaming_loop_core_0():
         pins['buffer_led'].off()
 
     def _transfer_buffer_debug(bs):
-        global flags: int
+        global flags
         pins['buffer_led'].on()
         # saves snips until the debug cache is full
         if debug_cache.save_snip(bs) == False:
@@ -555,7 +555,7 @@ def cleanup():
 
 
 def main():
-    global flags: int, cell: int
+    global flags, cell
     
     # We can pass configuration variables into the program from main.py
     # via the sys.argv variable.
@@ -564,7 +564,7 @@ def main():
     # adc_settings = { 'gains':       ['1x', '1x', '1x', '1x'],
     #                  'sample_rate': '7.812k' }
     if len(sys.argv) == 6:
-        _, g0: int, g1: int, g2: int, g3: int, sample_rate: float = sys.argv
+        _, g0, g1, g2, g3, sample_rate = sys.argv
         adc_settings = { 'gains': [g0, g1, g2, g3],
                          'sample_rate': sample_rate }
     else:
@@ -610,5 +610,3 @@ def main():
 # Run from here
 if __name__ == '__main__':
     main()
-
-

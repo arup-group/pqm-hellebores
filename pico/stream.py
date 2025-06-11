@@ -385,6 +385,8 @@ def configure_buffer_memory():
 ########################################################
 ######### STREAMING LOOP FOR CORE 1 STARTS HERE
 ########################################################
+# performance: optimise this function to native code rather than bytecode
+@micropython.native
 def streaming_loop_core_1():
     '''Watches for change in cell variable (incremented by the interrupt
     handler) and reads new data from the ADC into memory. Also watches for

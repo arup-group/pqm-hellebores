@@ -27,7 +27,7 @@ from micropython import const
 # Pico and ADC. Its setting is independent from the sampling rate, but needs
 # to be fast enough to complete communications in the period between successive
 # samples.
-SPI_CLOCK_RATE = 8000000 
+SPI_CLOCK_RATE = 6000000
  
 # NB set the DEBUG flag to True when testing the code inside the Thonny REPL.
 # This maintains code paths as much as possible, but outputs progress and

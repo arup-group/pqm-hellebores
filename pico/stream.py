@@ -46,17 +46,17 @@ DEFAULT_ADC_SETTINGS = { 'gains':       ['1x', '1x', '1x', '1x'],
 # easily. The buffer size is measured in 'samples' or number of cells.
 # However note the underlying memory size in bytes is BUFFER_SIZE * 8 because
 # we have 4 measurement channels and 2 bytes per channel.
-BUFFER_SIZE = const(128)
-BUFFER_MEMORY_SIZE = const(1024)
-HALF_BUFFER_MEMORY_SIZE = const(512)
+BUFFER_SIZE = const(256)
+BUFFER_MEMORY_SIZE = const(2048)
+HALF_BUFFER_MEMORY_SIZE = const(1024)
 
 # Penultimate and final cell locations are used to test whether the SPI
 # interface has lost synchronisation with the ADC. The output shift register
 # will latch into a fixed state if this is the case.
-P0_CELL_A = const(62)
-P0_CELL_B = const(63)
-P1_CELL_A = const(126)
-P1_CELL_B = const(127)
+P0_CELL_A = const(126)
+P0_CELL_B = const(127)
+P1_CELL_A = const(254)
+P1_CELL_B = const(255)
 
 # flags: operation flags used to control program flow on both CPU cores.
 STOP           = const(0b0001)       # tells both cores to exit
@@ -64,18 +64,18 @@ RESET          = const(0b0010)       # initiate a machine reset
 RESYNC         = const(0b0100)       # perform a soft reset on the ADC
 STREAMING      = const(0b1000)       # fast ADC streaming using both cores
 
-# cell:  sample pointer 0 to 127.
+# cell:  sample pointer 0 to 255.
 # Bit-and the cell variable with WRAP_MASK after incrementing it, to make the
-# pointer circular. Increment from 127 & WRAP_MASK wraps round to 0.
-WRAP_MASK      = const(0b01111111)
+# pointer circular. Increment from 255 & WRAP_MASK wraps round to 0.
+WRAP_MASK      = const(0b11111111)
 
 # The following three constants are used to test whether a page boundary has
 # been crossed, and therefore time to output the next page of sample buffer.
 # The cell variable is bit-anded with the PAGE_BIT mask and the result
 # checked against PAGE0 and PAGE1 respectively.
-PAGE_BIT       = const(0b01000000)   # test page number and streaming flag
-PAGE0          = const(0b00000000)   # bit6==0: in range 0-63, ie page 0
-PAGE1          = const(0b01000000)   # bit6==1: in range 64-127, ie page 1
+PAGE_BIT       = const(0b10000000)   # test page number and streaming flag
+PAGE0          = const(0b00000000)   # bit7==0: in range 0-127, ie page 0
+PAGE1          = const(0b10000000)   # bit7==1: in range 128-255, ie page 1
 
 # ADC register addresses
 PHASE = 0x0a

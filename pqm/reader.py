@@ -39,14 +39,16 @@ def read_and_print(ser):
     Sometimes (rarely) there is a serial read error. This can be caused by the getty
     terminal process trying to read/write the serial port. We allow up to 5 successive
     re-tries before quitting.'''
+    bs = bytearray(BLOCKSIZE)
     retries = 5
     while retries > 0:    
         try:
-            bs = (ser.read(BLOCK_SIZE).hex())
+            # read exactly BLOCKSIZE bytes
+            ser.readinto(bs)
             # process data as lines of 8 bytes, or 16 hex characters
+            hexstr = bs.hex()
             for i in range(0, BLOCK_SIZE*2, 16):
-                print(f'{bs[i:i+4]} {bs[i+4:i+8]} {bs[i+8:i+12]} {bs[i+12:i+16]}')
-            sys.stdout.flush()
+                print(f'{hexstr[i:i+4]} {hexstr[i+4:i+8]} {hexstr[i+8:i+12]} {hexstr[i+12:i+16]}')
             retries = 5
 
         except ValueError:

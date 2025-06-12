@@ -439,6 +439,7 @@ def streaming_loop_core_0():
         pins['buffer_led'].on()
         # write out the selected portion of buffer as raw bytes
         sys.stdout.buffer.write(bs)
+        sys.stdout.buffer.flush()
         pins['buffer_led'].off()
 
     def _transfer_buffer_debug(bs):

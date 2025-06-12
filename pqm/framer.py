@@ -211,9 +211,9 @@ class Buffer:
         # stopped mode), flush it through with a longer line of dots
         if self.st.run_mode == 'stopped' or self.stop_flag:
             print(LONG_DOTS)
+            sys.stdout.flush()
         else:
             print(SHORT_DOTS)
-        sys.stdout.flush()
 
     def build_frame(self, line):
         """Store samples, except in stopped mode beyond MAX_FORWARD_READ"""

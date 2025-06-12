@@ -15,7 +15,7 @@ import sys
 import serial
 import serial.tools.list_ports
 
-BUFFER_SIZE = 32
+BUFFER_SIZE = 128
 BLOCK_SIZE = BUFFER_SIZE * 8
  
  
@@ -39,11 +39,11 @@ def read_and_print(ser):
     Sometimes (rarely) there is a serial read error. This can be caused by the getty
     terminal process trying to read/write the serial port. We allow up to 5 successive
     re-tries before quitting.'''
-    bs = bytearray(BLOCKSIZE)
+    bs = bytearray(BLOCK_SIZE)
     retries = 5
     while retries > 0:    
         try:
-            # read exactly BLOCKSIZE bytes
+            # read exactly BLOCKSIZE bytes into bytearray buffer
             ser.readinto(bs)
             # process data as lines of 8 bytes, or 16 hex characters
             hexstr = bs.hex()

@@ -67,3 +67,9 @@ pqm/rain_chooser.py | pqm/scaler.py | cat <(echo 'Time Voltage Current Power Ear
 ### PRINTING
 #######
 enscript -Epython -fCourier6 --color=1 -C -o - sourcefile.py | ps2pdf - sourcefile.pdf
+
+#######
+### FAULT FINDING EXAMPLE
+#######
+(checks for anomalous voltage changes (delta between samples larger than 15V)
+./reader.py | ./scaler.py | sed -E 's/ +/ /g' | cut -d ' ' -f 3 | sed -E 's/\..+$//' | awk -W interactive '{if(NR>1){_d=_n-$0; if(_d>15 || _d<-15){print _d}};_n=$0}'

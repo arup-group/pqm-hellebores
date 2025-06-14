@@ -53,29 +53,29 @@ HALF_BUFFER_MEMORY_SIZE = const(1024)
 # Penultimate and final cell locations are used to test whether the SPI
 # interface has lost synchronisation with the ADC. The output shift register
 # will latch into a fixed state if this is the case.
-P0_CELL_A = const(126)
-P0_CELL_B = const(127)
-P1_CELL_A = const(254)
-P1_CELL_B = const(255)
+P0_CELL_A: int   = const(126)
+P0_CELL_B: int   = const(127)
+P1_CELL_A: int   = const(254)
+P1_CELL_B: int   = const(255)
 
 # flags: operation flags used to control program flow on both CPU cores.
-STOP           = const(0b0001)       # tells both cores to exit
-RESET          = const(0b0010)       # initiate a machine reset
-RESYNC         = const(0b0100)       # perform a soft reset on the ADC
-STREAMING      = const(0b1000)       # fast ADC streaming using both cores
+STOP: int        = const(0b0001)       # tells both cores to exit
+RESET: int       = const(0b0010)       # initiate a machine reset
+RESYNC: int      = const(0b0100)       # perform a soft reset on the ADC
+STREAMING: int   = const(0b1000)       # fast ADC streaming using both cores
 
 # cell:  sample pointer 0 to 255.
 # Bit-and the cell variable with WRAP_MASK after incrementing it, to make the
 # pointer circular. Increment from 255 & WRAP_MASK wraps round to 0.
-WRAP_MASK      = const(0b11111111)
+WRAP_MASK: int   = const(0b11111111)
 
 # The following three constants are used to test whether a page boundary has
 # been crossed, and therefore time to output the next page of sample buffer.
 # The cell variable is bit-anded with the PAGE_BIT mask and the result
 # checked against PAGE0 and PAGE1 respectively.
-PAGE_BIT       = const(0b10000000)   # test page number and streaming flag
-PAGE0          = const(0b00000000)   # bit7==0: in range 0-127, ie page 0
-PAGE1          = const(0b10000000)   # bit7==1: in range 128-255, ie page 1
+PAGE_BIT: int    = const(0b10000000)   # test page number and streaming flag
+PAGE0: int       = const(0b00000000)   # bit7==0: in range 0-127, ie page 0
+PAGE1: int       = const(0b10000000)   # bit7==1: in range 128-255, ie page 1
 
 # ADC register addresses
 PHASE = 0x0a
@@ -94,7 +94,7 @@ ADC_READ = 0x41
 ########################################################
 # Define the global variables with type hints to assist the optimiser
 pins: dict               # pin configuration for the Pico
-spi_adc_interface        # object holding SPI interface configuration
+spi_adc_interface: SPI   # object holding SPI interface configuration
 flags: int               # bit field with flags to control operation
 cell: int                # pointer to current cell in the buffer
 p0_mv: memoryview        # page 0 of the storage buffer
@@ -298,7 +298,7 @@ def configure_interrupts(command: str ='enable'):
         # above the largest buffer pointer makes the buffer pointer circulate
         # to zero without needing an 'if' conditional: this means the
         # instruction executes in constant time
-        cell = (cell + 1) & WRAP_MASK
+        cell = (int(cell) + 1) & int(WRAP_MASK)
 
     # we need this helper function, because we can't easily assign to global
     # variable within a lambda expression
@@ -445,12 +445,12 @@ def streaming_loop_core_1():
 ########################################################
 ######### STREAMING LOOP FOR CORE 0 STARTS HERE
 ########################################################
+# Debug cache for memorising a few sampling loops
+debug_cache = Debug_cache()
 @micropython.viper
 def streaming_loop_core_0(): 
     '''Prints data from memory to stdout in 'half-buffer' chunks.'''
-
-    # Create local debug cache for memorising a few sampling loops
-    debug_cache = Debug_cache()
+    global debug_cache
 
     def _transfer_buffer_normal(bs):
         pins['buffer_led'].on()
@@ -462,7 +462,7 @@ def streaming_loop_core_0():
         global flags
         pins['buffer_led'].on()
         # saves snips until the debug cache is full
-        if debug_cache.save_snip(bs) == False:
+        if not bool(debug_cache.save_snip(bs)):
             flags = STOP
         pins['buffer_led'].off()
 

@@ -88,6 +88,20 @@ LOCK_CRC = 0x1f
 ADC_WRITE = 0x40
 ADC_READ = 0x41
 
+
+########################################################
+######### Global variables
+########################################################
+# Define the global variables with type hints to assist the optimiser
+pins: dict               # pin configuration for the Pico
+spi_adc_interface        # object holding SPI interface configuration
+flags: int               # bit field with flags to control operation
+cell: int                # pointer to current cell in the buffer
+p0_mv: memoryview        # page 0 of the storage buffer
+p1_mv: memoryview        # page 1 of the storage buffer
+cells_mv: memoryview     # array of all the cells of the storage buffer
+
+
 ########################################################
 ######### Hardware control functions
 ########################################################
@@ -276,6 +290,8 @@ def configure_interrupts(command: str ='enable'):
     from the Pi, to help with run-time error recovery.'''
 
     # Interrupt handler for data ready pin (this pin is commanded from the ADC)
+    # Use viper native optimiser to minimise response time.
+    @micropython.viper
     def adc_read_handler(_):
         global cell
         # 'anding' the pointer with a bit mask that has binary '0' in the bit
@@ -386,7 +402,7 @@ def configure_buffer_memory():
 ######### STREAMING LOOP FOR CORE 1 STARTS HERE
 ########################################################
 # performance: optimise this function to native code rather than bytecode
-@micropython.native
+@micropython.viper
 def streaming_loop_core_1():
     '''Watches for change in cell variable (incremented by the interrupt
     handler) and reads new data from the ADC into memory. Also watches for
@@ -429,6 +445,7 @@ def streaming_loop_core_1():
 ########################################################
 ######### STREAMING LOOP FOR CORE 0 STARTS HERE
 ########################################################
+@micropython.viper
 def streaming_loop_core_0(): 
     '''Prints data from memory to stdout in 'half-buffer' chunks.'''
 
@@ -552,7 +569,6 @@ def cleanup():
     stop_adc()
     gc.enable()
     configure_interrupts('disable')
-
 
 def main():
     global flags, cell

@@ -52,7 +52,9 @@ BUFFER_MEMORY_SIZE = const(2048)
 
 # Penultimate and final cell locations per page are used to test whether the
 # SPI interface has lost synchronisation with the ADC. The output shift
-# register will latch into a fixed state if this is the case.
+# register will latch into a fixed state if this is the case. We compare the
+# contents of adjacent cells: if they are exactly the same then we reset the
+# comms to the ADC.
 P0_CELL_A: int   = const(62)
 P0_CELL_B: int   = const(63)
 P1_CELL_A: int   = const(126)
@@ -77,7 +79,7 @@ WRAP_MASK: int   = const(0b11111111)
 # been crossed, and therefore time to output the next page of sample buffer.
 # The cell variable is bit-anded with the PAGE_BITS bit mask and the result
 # checked against PAGEn constants.
-PAGE_BITS: int   = const(0b11000000)   # test page number and streaming flag
+PAGE_BITS: int   = const(0b11000000)   # test page number
 PAGE0: int       = const(0b00000000)   # bit76==00: in range 0-63, ie page 0
 PAGE1: int       = const(0b01000000)   # bit76==01: in range 64-127, ie page 1
 PAGE2: int       = const(0b10000000)   # bit76==10: in range 128-191, ie page 2
@@ -107,7 +109,7 @@ p0_mv: memoryview        # page 0 of the storage buffer
 p1_mv: memoryview        # page 1 of the storage buffer
 p2_mv: memoryview        # page 2 of the storage buffer
 p3_mv: memoryview        # page 3 of the storage buffer
-cells_mv: memoryview     # array of all the memory cells of the storage buffer
+cells_mv: list           # array of all the memory cells of the storage buffer
 
 
 ########################################################
@@ -393,7 +395,7 @@ def get_unstriped_regions(bs: bytearray):
     test_data = b'abcdefghijklmnopqrstuvwxyz'
     if len(test_data) > length:
         print('ERROR: stream.py, get_unstriped_regions() was called with a '
-              'bytearray that was too short')
+              'bytearray that was too short.')
         sys.exit(1)
     bs[:len(test_data)] = test_data
     # with the test_data written into memory, adjacent words of the unstriped
@@ -405,15 +407,20 @@ def get_unstriped_regions(bs: bytearray):
     for i in range(0, 16384):
         if ((uctypes.bytearray_at(0x21000000 + i, 4) == search_data1)
             and (uctypes.bytearray_at(0x21000000 + i + 4, 4) == search_data2)):
-            found = i
+            offset = i
             break
-    # convert into bytearray objects for each page
-    base = 0x21000000 + found
-    b0 = uctypes.bytearray_at(base, length // 4)
-    b1 = uctypes.bytearray_at(base + 0x10000, length // 4)
-    b2 = uctypes.bytearray_at(base + 0x20000, length // 4)
-    b3 = uctypes.bytearray_at(base + 0x30000, length // 4)
-    return (b0, b1, b2, b3)
+    # quit if we can't find the test data
+    if not 'offset' in locals():
+        print('ERROR: stream.py, get_unstriped_regions() could not locate '
+              'unstriped memory regions.')
+        sys.exit(1)
+    # make memoryview objects that correspond to each page
+    base = 0x21000000 + offset
+    p0_mv = memoryview(uctypes.bytearray_at(base, length // 4))
+    p1_mv = memoryview(uctypes.bytearray_at(base + 0x10000, length // 4))
+    p2_mv = memoryview(uctypes.bytearray_at(base + 0x20000, length // 4))
+    p3_mv = memoryview(uctypes.bytearray_at(base + 0x30000, length // 4))
+    return (p0_mv, p1_mv, p2_mv, p3_mv)
 
 
 def configure_buffer_memory():
@@ -433,9 +440,6 @@ def configure_buffer_memory():
 
     # 2 bytes per channel, 4 channels
     acq = bytearray(BUFFER_MEMORY_SIZE)
-    # we make a memoryview to allow this to be sub-divided into pages and
-    # cells
-    acq_mv = memoryview(acq)
     # Create memoryviews for each unstriped region of the buffer (ie four pages).
     # This is used in the Core 0 loop to output one region of the memory while new
     # samples are read into another region.
@@ -445,7 +449,7 @@ def configure_buffer_memory():
     # This is used in the Core 1 loop to step through the memory sample by
     # sample, without needing to store an intermediate copy.
     plen = BUFFER_MEMORY_SIZE // 4
-    cells_mv = [ memoryview(p0_mv[m:m+8]) for m in range(0, plen, 8) ]
+    cells_mv =      [ memoryview(p0_mv[m:m+8]) for m in range(0, plen, 8) ]
     cells_mv.extend([ memoryview(p1_mv[m:m+8]) for m in range(0, plen, 8) ])
     cells_mv.extend([ memoryview(p2_mv[m:m+8]) for m in range(0, plen, 8) ])
     cells_mv.extend([ memoryview(p3_mv[m:m+8]) for m in range(0, plen, 8) ])
@@ -478,15 +482,12 @@ def streaming_loop_core_1():
         # Inner loop -- speed critical -- we do sampling here, nothing else.
         while flags == STREAMING:
             # Read out from the ADC *immediately* if the cell variable has
-            # changed. We read into a local variable first so that if there is
-            # contention in the memory shared with core 0, it doesn't disrupt
-            # the SPI bus read. (There can be occasional errors if the DMA
-            # scheduler has to to resolve shared memory access during an SPI
-            # transmission.)
+            # changed.
             cell == cell_p \
                 or spi_adc_interface.readinto(cells_mv_tuple[(cell_p := cell)])
 
-        # If Core 0 has raised RESYNC flag, we deal with it here.
+        # If Core 0 has raised RESYNC flag, we miss a few samples and deal
+        # with it here.
         if flags & RESYNC:
             # Tell the ADC to stop and resychronise to the Pico.
             stop_adc()
@@ -537,7 +538,7 @@ def streaming_loop_core_0():
             # Raise RESYNC flag.
             flags = flags | RESYNC
 
-    # Now loop...
+    # Now transfer buffers in turn and loop...
     while flags & STREAMING:
         # Wait while we fill page 0, then transfer it
         while (cell & PAGE_BITS) == PAGE0:

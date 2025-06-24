@@ -399,18 +399,21 @@ def get_unstriped_regions(bs: bytearray):
         sys.exit(1)
     bs[:len(test_data)] = test_data
     # with the test_data written into memory, adjacent words of the unstriped
-    # memory region will have the following contents
+    # memory region will have the following contents. We search in two steps
+    # to prevent the search matching on python source or bytecode that might
+    # also be in memory.
     search_data1 = b'abcd'
     search_data2 = b'qrst'
     # figure out base address offset into unstriped memory, searching the
-    # first 16kB of unstriped space
-    for i in range(0, 16384):
+    # first 64kB of unstriped address space
+    offset = None
+    for i in range(0, 65536):
         if ((uctypes.bytearray_at(0x21000000 + i, 4) == search_data1)
             and (uctypes.bytearray_at(0x21000000 + i + 4, 4) == search_data2)):
             offset = i
             break
     # quit if we can't find the test data
-    if not 'offset' in locals():
+    if offset == None:
         print('ERROR: stream.py, get_unstriped_regions() could not locate '
               'unstriped memory regions.')
         sys.exit(1)
@@ -428,12 +431,12 @@ def configure_buffer_memory():
     the ADC. The memory is referenced by various memoryview objects that point
     to different portions of it. By default, buffer memory allocated from global
     heap is striped across 4 x 64kB memory regions, with striping at 32 bit
-    word boundaries. When we are accessing memory across 2 cores, we want to
+    word boundaries. When we are accessing memory from 2 CPU cores, we want to
     avoid accessing the same memory region from both cores simultaneously (one
-    will be blocked by the DMA scheduler).
-    Consequently, we re-cast the allocated bytearray into memoryview regions that
+    access will be delayed by the DMA scheduler).
+    Consequently, we re-cast the allocated bytearray into memoryview objects that
     are in contigous memory regions, using the unstriped memory mapping.
-    Thie layout means that at a hardware level, reading and writing from
+    This memory layout means that at a hardware level, reading and writing from
     different pages can occur in the same clock cycle.
     '''
     global p0_mv, p1_mv, p2_mv, p3_mv, cells_mv
@@ -442,13 +445,14 @@ def configure_buffer_memory():
     acq = bytearray(BUFFER_MEMORY_SIZE)
     # Create memoryviews for each unstriped region of the buffer (ie four pages).
     # This is used in the Core 0 loop to output one region of the memory while new
-    # samples are read into another region.
+    # samples are read into a different region.
     p0_mv, p1_mv, p2_mv, p3_mv = get_unstriped_regions(acq)
     # Create a memoryview reference into each sample or slice of the buffer.
     # 8 bytes each cell, stepping 8 bytes.
-    # This is used in the Core 1 loop to step through the memory sample by
-    # sample, without needing to store an intermediate copy.
-    plen = BUFFER_MEMORY_SIZE // 4
+    # This is used in the Core 1 loop to step through the memory regions sample by
+    # sample, without needing to store an intermediate copy or calculate byte
+    # offsets on the fly.
+    plen = len(acq) // 4
     cells_mv =      [ memoryview(p0_mv[m:m+8]) for m in range(0, plen, 8) ]
     cells_mv.extend([ memoryview(p1_mv[m:m+8]) for m in range(0, plen, 8) ])
     cells_mv.extend([ memoryview(p2_mv[m:m+8]) for m in range(0, plen, 8) ])
@@ -468,7 +472,8 @@ def streaming_loop_core_1():
     global flags, cell
 
     # performance: make a copy of the memoryview object references in a
-    # local tuple, which has slightly faster lookup times
+    # local tuple, which has slightly faster lookup times than a list in
+    # the global namespace
     cells_mv_tuple = tuple(cells_mv)
 
     # The resync flag may be raised by Core 0 at any time, so we have to
@@ -481,8 +486,8 @@ def streaming_loop_core_1():
 
         # Inner loop -- speed critical -- we do sampling here, nothing else.
         while flags == STREAMING:
-            # Read out from the ADC *immediately* if the cell variable has
-            # changed.
+            # Read out from the ADC *immediately* if the cell variable changes
+            # value, then repeat.
             cell == cell_p \
                 or spi_adc_interface.readinto(cells_mv_tuple[(cell_p := cell)])
 

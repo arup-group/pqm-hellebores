@@ -28,7 +28,7 @@ from micropython import const
 # to be fast enough to complete communications in the period between successive
 # samples.
 SPI_CLOCK_RATE = 6000000
- 
+
 # NB set the DEBUG flag to True when testing the code inside the Thonny REPL.
 # This maintains code paths as much as possible, but outputs progress and
 # diagnostic information. Instead of pushing sample data to stdout, it caches
@@ -122,7 +122,7 @@ def configure_pins():
         'reset_me'    : Pin(14, Pin.IN),            # reset Pico (from Pi)
         'flags_select': Pin(26, Pin.IN)             # NOT USED
     }
-    
+
 
 def configure_adc_spi_interface():
     '''Sets up the Pico SPI interface using selected hardware pins. This will be
@@ -133,7 +133,7 @@ def configure_adc_spi_interface():
     # clock pulse, and output (asserted) on the falling edge of the clock pulse.
     # The quiescent mode of the clock ('polarity') is low.
     # SPI messages begin and end when the chip select (CS*) pin is set low
-    # and high. Note that the sending device does not know the clock speed and 
+    # and high. Note that the sending device does not know the clock speed and
     # will assert the first bit immediately the CS* is activated.
     # Example: transferring the byte 201d or 11001001b in both directions.
     #
@@ -246,7 +246,7 @@ def setup_adc(adc_settings: dict):
     # only 1 DR pulse is generated, 0 WIDTH_CRC is 16 bit, 00 WIDTH_DATA is 16
     # bits.
     # 0x00 = 0b00000000: 0 EN_CRCCOM CRC, 0 EN_INT CRC interrupt both disabled
-    # 0x0f = 0b00001111: 1111 DRSTATUS data ready status bits for channels  
+    # 0x0f = 0b00001111: 1111 DRSTATUS data ready status bits for channels
     if DEBUG:
         print('STATUSCOM register.')
     set_adc_register(STATUSCOM, bytes([0x88, 0x00, 0x0f]))
@@ -282,7 +282,7 @@ def setup_adc(adc_settings: dict):
     # Lock the registers against further write access.
     lock_adc_registers()
 
- 
+
 
 def configure_interrupts(command: str ='enable'):
     '''Two interrupt handlers are set up, one for the DR* pin, for notifying
@@ -352,7 +352,7 @@ class Debug_cache:
     def __init__(self):
         self.cache_pointer = 0
         self.cache = [ bytearray(32) for i in range(16) ]
- 
+
     def reset(self):
         self.cache_pointer = 0
 
@@ -362,8 +362,8 @@ class Debug_cache:
             self.cache_pointer += 1
             return True
         else:
-            return False   
-   
+            return False
+
     def as_text(self) -> str:
         text_out = ''
         for bs in self.cache:
@@ -454,7 +454,7 @@ def streaming_loop_core_1():
 # Debug cache for memorising a few sampling loops
 debug_cache = Debug_cache()
 @micropython.viper
-def streaming_loop_core_0(): 
+def streaming_loop_core_0():
     '''Prints data from memory to stdout in 'half-buffer' chunks.'''
     global debug_cache
 
@@ -477,7 +477,7 @@ def streaming_loop_core_0():
         transfer_buffer = _transfer_buffer_debug
     else:
         transfer_buffer = _transfer_buffer_normal
-    
+
     def sync_test(cell1: int, cell2: int):
         global flags
         # If synchronisation fails, the ADC outputs will latch to the same
@@ -522,7 +522,7 @@ def reset_pin_held_high() -> bool:
         time.sleep(0.01)
     return reset_status
 
-        
+
 def prepare_to_stream(adc_settings: dict):
     '''Configures all the pre-requisities: pins, SPI interface, ADC settings
     circular buffer memory, interrupts and garbage collection.'''
@@ -567,7 +567,7 @@ def stream():
     # runs forever, unless:
     #     CTRL-C:             STOP flag raised.
     #     reset_me pin:       RESET flag raised.
-    
+
 
 def cleanup():
     '''For debugging, it's useful for the Pico to be returned to a quiescent
@@ -578,7 +578,7 @@ def cleanup():
 
 def main():
     global flags, cell
-    
+
     # We can pass configuration variables into the program from main.py
     # via the sys.argv variable.
     # sys.argv = [ 'stream.py', '1x', '1x', '1x', '1x', '7.812k' ]
@@ -627,7 +627,7 @@ def main():
             # allow the reset pin to clear to normal
             time.sleep(1)
             machine.reset()
-    
+
 
 # Run from here
 if __name__ == '__main__':

@@ -413,7 +413,6 @@ def streaming_loop_core_1():
     # performance: make a copy of the memoryview object references in a
     # local tuple, which has slightly faster lookup times
     cells_mv_tuple = tuple(cells_mv)
-    adc_value = bytearray(8)
 
     # The resync flag may be raised by Core 0 at any time, so we have to
     # allow for it in the outer loop test here by using a bitmask filter
@@ -432,8 +431,7 @@ def streaming_loop_core_1():
             # scheduler has to to resolve shared memory access during an SPI
             # transmission.)
             cell == cell_p \
-                or (spi_adc_interface.readinto(adc_value) \
-                    and cells_mv_tuple[(cell_p := cell)][:] = adc_value)
+                or spi_adc_interface.readinto(cells_mv_tuple[(cell_p := cell)])
 
         # If Core 0 has raised RESYNC flag, we deal with it here.
         if flags & RESYNC:

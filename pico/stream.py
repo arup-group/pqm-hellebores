@@ -106,7 +106,7 @@ def configure_pins():
     '''Pico pin setup, referenced by a global variable 'pins'. Pins labelled *
     are active low. We initialise with the RESET* and CS* pins high, since we
     don't want them to operate until needed.'''
-    global pins: dict
+    global pins
     pins = {
         'pico_led'    : Pin(25, Pin.OUT, value=0),  # led on the Pico
         'buffer_led'  : Pin(15, Pin.OUT, value=0),  # 'buffer' LED on PCB
@@ -426,10 +426,9 @@ def configure_buffer_memory():
     This memory layout means that at a hardware level, reading and writing from
     different pages can occur in the same clock cycle.
     '''
-    global acq: bytearray
-    global p0_mv: memoryview, p1_mv: memoryview
-    global p2_mv: memoryview, p3_mv: memoryview
-    global cells_mv: tuple
+    global acq
+    global p0_mv, p1_mv, p2_mv, p3_mv
+    global cells_mv
 
     # 2 bytes per channel, 4 channels
     # acq is a global variable to prevent it being garbage collected

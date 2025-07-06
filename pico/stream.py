@@ -50,20 +50,6 @@ DEFAULT_ADC_SETTINGS = { 'gains':       ['1x', '1x', '1x', '1x'],
 BUFFER_SIZE = const(256)
 BUFFER_MEMORY_SIZE = const(2048)
 
-# Penultimate and final cell locations per page are used to test whether the
-# SPI interface has lost synchronisation with the ADC. The output shift
-# register will latch into a fixed state if this is the case. We compare the
-# contents of adjacent cells: if they are exactly the same then we reset the
-# comms to the ADC.
-P0_CELL_A: int   = const(62)
-P0_CELL_B: int   = const(63)
-P1_CELL_A: int   = const(126)
-P1_CELL_B: int   = const(127)
-P2_CELL_A: int   = const(190)
-P2_CELL_B: int   = const(191)
-P3_CELL_A: int   = const(254)
-P3_CELL_B: int   = const(255)
-
 # flags: operation flags used to control program flow on both CPU cores.
 STOP: int        = const(0b0001)       # tells both cores to exit
 RESET: int       = const(0b0010)       # initiate a machine reset
@@ -102,14 +88,15 @@ ADC_READ = 0x41
 ########################################################
 # Define the global variables with type hints to assist the optimiser
 pins: dict               # pin configuration for the Pico
-spi_adc_interface: SPI   # object holding SPI interface configuration
+spi_adc_interface        # object holding SPI interface configuration
 flags: int               # bit field with flags to control operation
 cell: int                # pointer to current cell in the buffer
+acq: bytearray           # underlying storage for the sample buffer
 p0_mv: memoryview        # page 0 of the storage buffer
 p1_mv: memoryview        # page 1 of the storage buffer
 p2_mv: memoryview        # page 2 of the storage buffer
 p3_mv: memoryview        # page 3 of the storage buffer
-cells_mv: list           # array of all the memory cells of the storage buffer
+cells_mv: tuple          # index to the individual cells of the buffer
 
 
 ########################################################
@@ -119,7 +106,7 @@ def configure_pins():
     '''Pico pin setup, referenced by a global variable 'pins'. Pins labelled *
     are active low. We initialise with the RESET* and CS* pins high, since we
     don't want them to operate until needed.'''
-    global pins
+    global pins: dict
     pins = {
         'pico_led'    : Pin(25, Pin.OUT, value=0),  # led on the Pico
         'buffer_led'  : Pin(15, Pin.OUT, value=0),  # 'buffer' LED on PCB
@@ -439,11 +426,13 @@ def configure_buffer_memory():
     This memory layout means that at a hardware level, reading and writing from
     different pages can occur in the same clock cycle.
     '''
-    global p0_mv, p1_mv, p2_mv, p3_mv, cells_mv
+    global acq: bytearray
+    global p0_mv: memoryview, p1_mv: memoryview
+    global p2_mv: memoryview, p3_mv: memoryview
+    global cells_mv: tuple
 
     # 2 bytes per channel, 4 channels
-    # we make acq a global variable to prevent it being garbage collected
-    global acq
+    # acq is a global variable to prevent it being garbage collected
     acq = bytearray(BUFFER_MEMORY_SIZE)
     # Create memoryviews for each unstriped region of the buffer (ie four pages).
     # This is used in the Core 0 loop to output one region of the memory while new

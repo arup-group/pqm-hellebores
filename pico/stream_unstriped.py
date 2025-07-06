@@ -391,6 +391,7 @@ def get_unstriped_regions(bs: bytearray):
     bytearray objects.
     '''
     length = len(bs)
+    qlen = length // 4
     # write some test data into the bytearray
     test_data = b'abcdefghijklmnopqrstuvwxyz'
     if len(test_data) > length:
@@ -418,11 +419,10 @@ def get_unstriped_regions(bs: bytearray):
               'unstriped memory regions.')
         sys.exit(1)
     # make memoryview objects that correspond to each page
-    base = 0x21000000 + offset
-    p0_mv = memoryview(uctypes.bytearray_at(base, length // 4))
-    p1_mv = memoryview(uctypes.bytearray_at(base + 0x10000, length // 4))
-    p2_mv = memoryview(uctypes.bytearray_at(base + 0x20000, length // 4))
-    p3_mv = memoryview(uctypes.bytearray_at(base + 0x30000, length // 4))
+    p0_mv = memoryview(uctypes.bytearray_at(0x21000000 + offset, qlen))
+    p1_mv = memoryview(uctypes.bytearray_at(0x21010000 + offset, qlen))
+    p2_mv = memoryview(uctypes.bytearray_at(0x21020000 + offset, qlen))
+    p3_mv = memoryview(uctypes.bytearray_at(0x21030000 + offset, qlen))
     return (p0_mv, p1_mv, p2_mv, p3_mv)
 
 
@@ -434,7 +434,7 @@ def configure_buffer_memory():
     word boundaries. When we are accessing memory from 2 CPU cores, we want to
     avoid accessing the same memory region from both cores simultaneously (one
     access will be delayed by the DMA scheduler).
-    Consequently, we re-cast the allocated bytearray into memoryview objects that
+    Consequently, we re-map the allocated bytearray into memoryview objects that
     are in contigous memory regions, using the unstriped memory mapping.
     This memory layout means that at a hardware level, reading and writing from
     different pages can occur in the same clock cycle.
@@ -452,11 +452,13 @@ def configure_buffer_memory():
     # This is used in the Core 1 loop to step through the memory regions sample by
     # sample, without needing to store an intermediate copy or calculate byte
     # offsets on the fly.
-    plen = len(acq) // 4
-    cells_mv =      [ memoryview(p0_mv[m:m+8]) for m in range(0, plen, 8) ]
-    cells_mv.extend([ memoryview(p1_mv[m:m+8]) for m in range(0, plen, 8) ])
-    cells_mv.extend([ memoryview(p2_mv[m:m+8]) for m in range(0, plen, 8) ])
-    cells_mv.extend([ memoryview(p3_mv[m:m+8]) for m in range(0, plen, 8) ])
+    qlen = len(acq) // 4
+    cells_mv_list =      [ memoryview(p0_mv[m:m+8]) for m in range(0, qlen, 8) ]
+    cells_mv_list.extend([ memoryview(p1_mv[m:m+8]) for m in range(0, qlen, 8) ])
+    cells_mv_list.extend([ memoryview(p2_mv[m:m+8]) for m in range(0, qlen, 8) ])
+    cells_mv_list.extend([ memoryview(p3_mv[m:m+8]) for m in range(0, qlen, 8) ])
+    # Convert list into a tuple for slight performance gain
+    cells_mv = tuple(cells_mv_list)
 
 
 ########################################################
@@ -471,11 +473,6 @@ def streaming_loop_core_1():
     condition.'''
     global flags, cell
 
-    # performance: make a copy of the memoryview object references in a
-    # local tuple, which has slightly faster lookup times than a list in
-    # the global namespace
-    cells_mv_tuple = tuple(cells_mv)
-
     # The resync flag may be raised by Core 0 at any time, so we have to
     # allow for it in the outer loop test here by using a bitmask filter
     start_adc()
@@ -489,7 +486,7 @@ def streaming_loop_core_1():
             # Read out from the ADC *immediately* if the cell variable changes
             # value, then repeat.
             cell == cell_p \
-                or spi_adc_interface.readinto(cells_mv_tuple[(cell_p := cell)])
+                or spi_adc_interface.readinto(cells_mv[(cell_p := cell)])
 
         # If Core 0 has raised RESYNC flag, we miss a few samples and deal
         # with it here.
@@ -500,6 +497,8 @@ def streaming_loop_core_1():
             start_adc()
             # Clear RESYNC flag
             flags = flags & ~RESYNC
+            # Clear garbage
+            gc.collect()
 
     if DEBUG:
         print('Streaming_loop_core_1() exited')
@@ -535,11 +534,19 @@ def streaming_loop_core_0():
     else:
         transfer_buffer = _transfer_buffer_normal
 
-    def sync_test(cell1: int, cell2: int):
+    def sync_test():
         global flags
-        # If synchronisation fails, the ADC outputs will latch to the same
-        # values on successive samples. We compare them to check:
-        if cells_mv[cell1] == cells_mv[cell2]:
+        # If SPI clock synchronisation fails, the ADC outputs will latch to the same
+        # values on successive samples. So we two sample contents to check:
+        # (truncates to the first 32 bits of each sample, ie two of the channels)
+        c1 = const(BUFFER_SIZE - 2)
+        c2 = const(BUFFER_SIZE - 1)
+        v1 = int(cells_mv[c1])
+        v2 = int(cells_mv[c2])
+        # A single ADC reading occupies 16 bits, so we compare the two sample values
+        # and also the high and low portions of the sample to see if they are all
+        # the same
+        if v1 == v2 and v1 >> 16 & 0xffff == v1 & 0xffff:
             # Raise RESYNC flag.
             flags = flags | RESYNC
 
@@ -549,22 +556,20 @@ def streaming_loop_core_0():
         while (cell & PAGE_BITS) == PAGE0:
             continue
         transfer_buffer(p0_mv)
-        sync_test(P0_CELL_A, P0_CELL_B)
         # Wait while we fill page 1, then transfer it
         while (cell & PAGE_BITS) == PAGE1:
             continue
         transfer_buffer(p1_mv)
-        sync_test(P1_CELL_A, P1_CELL_B)
         # Wait while we fill page 2, then transfer it
         while (cell & PAGE_BITS) == PAGE2:
             continue
         transfer_buffer(p2_mv)
-        sync_test(P2_CELL_A, P2_CELL_B)
         # Wait while we fill page 3. then transfer it
         while (cell & PAGE_BITS) == PAGE3:
             continue
         transfer_buffer(p3_mv)
-        sync_test(P3_CELL_A, P3_CELL_B)
+        # Check to see if SPI clock is still sync'ed with ADC readouts
+        sync_test()
 
     if DEBUG:
         print('Streaming_loop_core_0() exited.')

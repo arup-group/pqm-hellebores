@@ -265,14 +265,14 @@ def setup_adc(adc_settings: dict):
     # 1st byte sets various ADC modes
     # 2nd byte sets sampling rate via over-sampling ratio (OSR), possible OSR
     # settings are as per the table:
-    # 0x00 = 32:  31.25 kSa/s
-    # 0x20 = 64:  15.625 kSa/s
-    # 0x40 = 128:  7.8125 kSa/s
+    # 0x00 = 32:  31.25    kSa/s
+    # 0x20 = 64:  15.625   kSa/s
+    # 0x40 = 128:  7.8125  kSa/s
     # 0x60 = 256:  3.90625 kSa/s
-    # 0x80 = 512:  1.953 kSa/s
-    # 0xa0 = 1024:   976 Sa/s
-    # 0xc0 = 2048:   488 Sa/s
-    # 0xe0 = 4096:   244 Sa/s
+    # 0x80 = 512:  1.953   kSa/s
+    # 0xa0 = 1024:   976   Sa/s
+    # 0xc0 = 2048:   488   Sa/s
+    # 0xe0 = 4096:   244   Sa/s
     # 3rd byte sets temperature coefficient (leave as default 0x50)
     osr_table = { '244':0xe0, '488':0xc0, '976':0xa0, '1.953k':0x80,
                   '3.906k':0x60, '7.812k':0x40, '15.625k':0x20, '31.250k':0x00 }
@@ -442,6 +442,8 @@ def configure_buffer_memory():
     global p0_mv, p1_mv, p2_mv, p3_mv, cells_mv
 
     # 2 bytes per channel, 4 channels
+    # we make acq a global variable to prevent it being garbage collected
+    global acq
     acq = bytearray(BUFFER_MEMORY_SIZE)
     # Create memoryviews for each unstriped region of the buffer (ie four pages).
     # This is used in the Core 0 loop to output one region of the memory while new
@@ -457,7 +459,7 @@ def configure_buffer_memory():
     cells_mv_list.extend([ memoryview(p1_mv[m:m+8]) for m in range(0, qlen, 8) ])
     cells_mv_list.extend([ memoryview(p2_mv[m:m+8]) for m in range(0, qlen, 8) ])
     cells_mv_list.extend([ memoryview(p3_mv[m:m+8]) for m in range(0, qlen, 8) ])
-    # Convert list into a tuple for slight performance gain
+    # Convert list into a tuple object for slight performance gain
     cells_mv = tuple(cells_mv_list)
 
 
@@ -509,7 +511,6 @@ def streaming_loop_core_1():
 ########################################################
 # Debug cache for memorising a few sampling loops
 debug_cache = Debug_cache()
-@micropython.viper
 def streaming_loop_core_0():
     '''Prints data from memory to stdout in chunks.'''
     global debug_cache
@@ -537,18 +538,18 @@ def streaming_loop_core_0():
     def sync_test():
         global flags
         # If SPI clock synchronisation fails, the ADC outputs will latch to the same
-        # values on successive samples. So we two sample contents to check:
-        # (truncates to the first 32 bits of each sample, ie two of the channels)
+        # values on successive samples. So we compare the readings from two successive
+        # samples to check:
         c1 = const(BUFFER_SIZE - 2)
         c2 = const(BUFFER_SIZE - 1)
-        v1 = int(cells_mv[c1])
-        v2 = int(cells_mv[c2])
-        # A single ADC reading occupies 16 bits, so we compare the two sample values
-        # and also the high and low portions of the sample to see if they are all
-        # the same
-        if v1 == v2 and v1 >> 16 & 0xffff == v1 & 0xffff:
-            # Raise RESYNC flag.
-            flags = flags | RESYNC
+        if (cells_mv[c1][0:4] == cells_mv[c1][4:8]
+            and cells_mv[c1][4:8] == cells_mv[c2][0:4]
+            and cells_mv[c2][0:4] == cells_mv[c2][4:8]):
+           # Raise RESYNC flag.
+           flags = flags | RESYNC
+
+    # Wait for receiving programs to be ready to receive data
+    time.sleep(5)
 
     # Now transfer buffers in turn and loop...
     while flags & STREAMING:
@@ -690,6 +691,12 @@ def main():
             print('Interrupted.')
         # Stop Core 1.
         flags = STOP
+
+    except:
+        # Catch other exceptions.
+        if DEBUG:
+           print('There was an exception.')
+        flags = RESET
 
     finally:
         # If we reach here, STOP or RESET flags are raised.

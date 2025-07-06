@@ -87,16 +87,16 @@ ADC_READ = 0x41
 ######### Global variables
 ########################################################
 # Define the global variables with type hints to assist the optimiser
-pins: dict               # pin configuration for the Pico
-spi_adc_interface        # object holding SPI interface configuration
-flags: int               # bit field with flags to control operation
-cell: int                # pointer to current cell in the buffer
-acq: bytearray           # underlying storage for the sample buffer
-p0_mv: memoryview        # page 0 of the storage buffer
-p1_mv: memoryview        # page 1 of the storage buffer
-p2_mv: memoryview        # page 2 of the storage buffer
-p3_mv: memoryview        # page 3 of the storage buffer
-cells_mv: tuple          # index to the individual cells of the buffer
+pins: dict                   # pin configuration for the Pico
+spi_adc_interface: object    # object holding SPI interface configuration
+flags: int                   # bit field with flags to control operation
+cell: int                    # pointer to current cell in the buffer
+acq: bytearray               # underlying storage for the sample buffer
+p0: bytearray                # page 0 of the storage buffer
+p1: bytearray                # page 1 of the storage buffer
+p2: bytearray                # page 2 of the storage buffer
+p3: bytearray                # page 3 of the storage buffer
+cells_mv: tuple              # index to the individual cells of the buffer
 
 
 ########################################################
@@ -405,12 +405,12 @@ def get_unstriped_regions(bs: bytearray):
         print('ERROR: stream.py, get_unstriped_regions() could not locate '
               'unstriped memory regions.')
         sys.exit(1)
-    # make memoryview objects that correspond to each page
-    p0_mv = memoryview(uctypes.bytearray_at(0x21000000 + offset, qlen))
-    p1_mv = memoryview(uctypes.bytearray_at(0x21010000 + offset, qlen))
-    p2_mv = memoryview(uctypes.bytearray_at(0x21020000 + offset, qlen))
-    p3_mv = memoryview(uctypes.bytearray_at(0x21030000 + offset, qlen))
-    return (p0_mv, p1_mv, p2_mv, p3_mv)
+    # make bytearray objects that correspond to each page
+    p0 = uctypes.bytearray_at(0x21000000 + offset, qlen)
+    p1 = uctypes.bytearray_at(0x21010000 + offset, qlen)
+    p2 = uctypes.bytearray_at(0x21020000 + offset, qlen)
+    p3 = uctypes.bytearray_at(0x21030000 + offset, qlen)
+    return (p0, p1, p2, p3)
 
 
 def configure_buffer_memory():
@@ -421,32 +421,32 @@ def configure_buffer_memory():
     word boundaries. When we are accessing memory from 2 CPU cores, we want to
     avoid accessing the same memory region from both cores simultaneously (one
     access will be delayed by the DMA scheduler).
-    Consequently, we re-map the allocated bytearray into memoryview objects that
+    Consequently, we re-map the allocated bytearray into bytearray objects that
     are in contigous memory regions, using the unstriped memory mapping.
     This memory layout means that at a hardware level, reading and writing from
     different pages can occur in the same clock cycle.
     '''
     global acq
-    global p0_mv, p1_mv, p2_mv, p3_mv
+    global p0, p1, p2, p3
     global cells_mv
 
     # 2 bytes per channel, 4 channels
     # acq is a global variable to prevent it being garbage collected
     acq = bytearray(BUFFER_MEMORY_SIZE)
-    # Create memoryviews for each unstriped region of the buffer (ie four pages).
+    # Create bytearrays for each unstriped region of the buffer (ie four pages).
     # This is used in the Core 0 loop to output one region of the memory while new
     # samples are read into a different region.
-    p0_mv, p1_mv, p2_mv, p3_mv = get_unstriped_regions(acq)
+    p0, p1, p2, p3 = get_unstriped_regions(acq)
     # Create a memoryview reference into each sample or slice of the buffer.
     # 8 bytes each cell, stepping 8 bytes.
     # This is used in the Core 1 loop to step through the memory regions sample by
     # sample, without needing to store an intermediate copy or calculate byte
     # offsets on the fly.
     qlen = len(acq) // 4
-    cells_mv_list =      [ memoryview(p0_mv[m:m+8]) for m in range(0, qlen, 8) ]
-    cells_mv_list.extend([ memoryview(p1_mv[m:m+8]) for m in range(0, qlen, 8) ])
-    cells_mv_list.extend([ memoryview(p2_mv[m:m+8]) for m in range(0, qlen, 8) ])
-    cells_mv_list.extend([ memoryview(p3_mv[m:m+8]) for m in range(0, qlen, 8) ])
+    cells_mv_list =      [ memoryview(p0[m:m+8]) for m in range(0, qlen, 8) ]
+    cells_mv_list.extend([ memoryview(p1[m:m+8]) for m in range(0, qlen, 8) ])
+    cells_mv_list.extend([ memoryview(p2[m:m+8]) for m in range(0, qlen, 8) ])
+    cells_mv_list.extend([ memoryview(p3[m:m+8]) for m in range(0, qlen, 8) ])
     # Convert list into a tuple object for slight performance gain
     cells_mv = tuple(cells_mv_list)
 
@@ -544,19 +544,19 @@ def streaming_loop_core_0():
         # Wait while we fill page 0, then transfer it
         while (cell & PAGE_BITS) == PAGE0:
             continue
-        transfer_buffer(p0_mv)
+        transfer_buffer(p0)
         # Wait while we fill page 1, then transfer it
         while (cell & PAGE_BITS) == PAGE1:
             continue
-        transfer_buffer(p1_mv)
+        transfer_buffer(p1)
         # Wait while we fill page 2, then transfer it
         while (cell & PAGE_BITS) == PAGE2:
             continue
-        transfer_buffer(p2_mv)
+        transfer_buffer(p2)
         # Wait while we fill page 3. then transfer it
         while (cell & PAGE_BITS) == PAGE3:
             continue
-        transfer_buffer(p3_mv)
+        transfer_buffer(p3)
         # Check to see if SPI clock is still sync'ed with ADC readouts
         sync_test()
 

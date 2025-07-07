@@ -96,7 +96,7 @@ p0: bytearray                # page 0 of the storage buffer
 p1: bytearray                # page 1 of the storage buffer
 p2: bytearray                # page 2 of the storage buffer
 p3: bytearray                # page 3 of the storage buffer
-cells_mv: tuple              # index to the individual cells of the buffer
+cells: tuple                 # index to the individual cells of the buffer
 
 
 ########################################################
@@ -378,39 +378,48 @@ def get_unstriped_regions(bs: bytearray):
     bytearray objects.
     '''
     length = len(bs)
-    qlen = length // 4
     # write some test data into the bytearray
     test_data = b'abcdefghijklmnopqrstuvwxyz'
+    clear_data = b'\x00' * len(test_data)
     if len(test_data) > length:
         print('ERROR: stream.py, get_unstriped_regions() was called with a '
               'bytearray that was too short.')
         sys.exit(1)
     bs[:len(test_data)] = test_data
     # with the test_data written into memory, adjacent words of the unstriped
-    # memory region will have the following contents. We search in two steps
-    # to prevent the search matching on python source or bytecode that might
-    # also be in memory.
-    search_data1 = b'abcd'
-    search_data2 = b'qrst'
-    # figure out base address offset into unstriped memory, searching the
-    # first 64kB of unstriped address space
+    # memory region will have the following contents.
+    search_data = test_data[0:4] + test_data[16:20]
+    # Figure out base address offset into unstriped memory, searching the
+    # first 64kB of unstriped address space and using the last location
+    # found.
     offset = None
-    for i in range(0, 65536):
-        if ((uctypes.bytearray_at(0x21000000 + i, 4) == search_data1)
-            and (uctypes.bytearray_at(0x21000000 + i + 4, 4) == search_data2)):
+    # We rely on empirical observation that the buffer has been allocated in
+    # the highest memory, so we use the final match rather than just using
+    # the first one (which can be the match string in the run-time environment)
+    for i in range(0, 65528):
+        if (uctypes.bytearray_at(0x21000000 + i, 8) == search_data):
+            print(f'Found data in unstriped memory at offset {i}')
             offset = i
-            break
-    # quit if we can't find the test data
+    # quit if we can't find the match string at all
     if offset == None:
         print('ERROR: stream.py, get_unstriped_regions() could not locate '
               'unstriped memory regions.')
         sys.exit(1)
-    # make bytearray objects that correspond to each page
-    p0 = uctypes.bytearray_at(0x21000000 + offset, qlen)
-    p1 = uctypes.bytearray_at(0x21010000 + offset, qlen)
-    p2 = uctypes.bytearray_at(0x21020000 + offset, qlen)
-    p3 = uctypes.bytearray_at(0x21030000 + offset, qlen)
-    return (p0, p1, p2, p3)
+    # clear the test data
+    bs[:len(clear_data)] = clear_data
+    # make bytearray objects that correspond to each page, using unstriped memory mapping
+    p0 = uctypes.bytearray_at(0x21000000 + offset, length // 4)
+    p1 = uctypes.bytearray_at(0x21010000 + offset, length // 4)
+    p2 = uctypes.bytearray_at(0x21020000 + offset, length // 4)
+    p3 = uctypes.bytearray_at(0x21030000 + offset, length // 4)
+    # also make bytearray objects that correspond to each cell, in page order
+    cells_list =      [ uctypes.bytearray_at(0x21000000 + offset + i, 8) for i in range(0, length // 4, 8) ]
+    cells_list.extend([ uctypes.bytearray_at(0x21010000 + offset + i, 8) for i in range(0, length // 4, 8) ])
+    cells_list.extend([ uctypes.bytearray_at(0x21020000 + offset + i, 8) for i in range(0, length // 4, 8) ])
+    cells_list.extend([ uctypes.bytearray_at(0x21030000 + offset + i, 8) for i in range(0, length // 4, 8) ])
+    # convert list to tuple, for marginal performance benefit
+    cells = tuple(cells_list)
+    return (p0, p1, p2, p3, cells)
 
 
 def configure_buffer_memory():
@@ -428,7 +437,7 @@ def configure_buffer_memory():
     '''
     global acq
     global p0, p1, p2, p3
-    global cells_mv
+    global cells
 
     # 2 bytes per channel, 4 channels
     # acq is a global variable to prevent it being garbage collected
@@ -436,19 +445,7 @@ def configure_buffer_memory():
     # Create bytearrays for each unstriped region of the buffer (ie four pages).
     # This is used in the Core 0 loop to output one region of the memory while new
     # samples are read into a different region.
-    p0, p1, p2, p3 = get_unstriped_regions(acq)
-    # Create a memoryview reference into each sample or slice of the buffer.
-    # 8 bytes each cell, stepping 8 bytes.
-    # This is used in the Core 1 loop to step through the memory regions sample by
-    # sample, without needing to store an intermediate copy or calculate byte
-    # offsets on the fly.
-    qlen = len(acq) // 4
-    cells_mv_list =      [ memoryview(p0[m:m+8]) for m in range(0, qlen, 8) ]
-    cells_mv_list.extend([ memoryview(p1[m:m+8]) for m in range(0, qlen, 8) ])
-    cells_mv_list.extend([ memoryview(p2[m:m+8]) for m in range(0, qlen, 8) ])
-    cells_mv_list.extend([ memoryview(p3[m:m+8]) for m in range(0, qlen, 8) ])
-    # Convert list into a tuple object for slight performance gain
-    cells_mv = tuple(cells_mv_list)
+    p0, p1, p2, p3, cells = get_unstriped_regions(acq)
 
 
 ########################################################
@@ -476,7 +473,7 @@ def streaming_loop_core_1():
             # Read out from the ADC *immediately* if the cell variable changes
             # value, then repeat.
             cell == cell_p \
-                or spi_adc_interface.readinto(cells_mv[(cell_p := cell)])
+                or spi_adc_interface.readinto(cells[(cell_p := cell)])
 
         # If Core 0 has raised RESYNC flag, we miss a few samples and deal
         # with it here.
@@ -530,9 +527,9 @@ def streaming_loop_core_0():
         # samples to check:
         c1 = const(BUFFER_SIZE - 2)
         c2 = const(BUFFER_SIZE - 1)
-        if (cells_mv[c1][0:4] == cells_mv[c1][4:8]
-            and cells_mv[c1][4:8] == cells_mv[c2][0:4]
-            and cells_mv[c2][0:4] == cells_mv[c2][4:8]):
+        if (cells[c1][0:4] == cells[c1][4:8]
+            and cells[c1][4:8] == cells[c2][0:4]
+            and cells[c2][0:4] == cells[c2][4:8]):
            # Raise RESYNC flag.
            flags = flags | RESYNC
 

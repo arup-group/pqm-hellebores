@@ -92,11 +92,11 @@ spi_adc_interface: object    # object holding SPI interface configuration
 flags: int                   # bit field with flags to control operation
 cell: int                    # pointer to current cell in the buffer
 acq: bytearray               # underlying storage for the sample buffer
-p0: bytearray                # page 0 of the storage buffer
-p1: bytearray                # page 1 of the storage buffer
-p2: bytearray                # page 2 of the storage buffer
-p3: bytearray                # page 3 of the storage buffer
-cells: tuple                 # index to the individual cells of the buffer
+p0_mv: bytearray             # page 0 of the storage buffer
+p1_mv: bytearray             # page 1 of the storage buffer
+p2_mv: bytearray             # page 2 of the storage buffer
+p3_mv: bytearray             # page 3 of the storage buffer
+cells_mv: tuple              # index to the individual cells of the buffer
 
 
 ########################################################
@@ -372,10 +372,10 @@ class Debug_cache:
 
 def get_unstriped_regions(bs: bytearray):
     '''From a given bytearray or memoryview, finds the starting address and
-    places some test data in the bytearray. Then searches for the unstriped
+    places some test data in the memory. Then searches for the unstriped
     form of the data across the unstriped memory space. Then computes
     starting addresses for each unstriped region and returns them as
-    bytearray objects.
+    memoryview objects.
     '''
     length = len(bs)
     # write some test data into the bytearray
@@ -390,36 +390,27 @@ def get_unstriped_regions(bs: bytearray):
     # memory region will have the following contents.
     search_data = test_data[0:4] + test_data[16:20]
     # Figure out base address offset into unstriped memory, searching the
-    # first 64kB of unstriped address space and using the last location
-    # found.
+    # first 64kB of unstriped address space. We want to find the last match of
+    # search data: this avoids a false match on data in the run-time environment.
     offset = None
-    # We rely on empirical observation that the buffer has been allocated in
-    # the highest memory, so we use the final match rather than just using
-    # the first one (which can be the match string in the run-time environment)
-    for i in range(0, 65528):
-        if (uctypes.bytearray_at(0x21000000 + i, 8) == search_data):
-            print(f'Found data in unstriped memory at offset {i}')
+    # Memory allocations are word-aligned (32 bits) so we can step through in
+    # 4 byte increments
+    for i in range(0, 65536-length, 4):
+        if uctypes.bytearray_at(0x21000000 + i, 8) == search_data:
             offset = i
-    # quit if we can't find the match string at all
+    # Quit if we can't find the test data
     if offset == None:
         print('ERROR: stream.py, get_unstriped_regions() could not locate '
               'unstriped memory regions.')
         sys.exit(1)
     # clear the test data
     bs[:len(clear_data)] = clear_data
-    # make bytearray objects that correspond to each page, using unstriped memory mapping
-    p0 = uctypes.bytearray_at(0x21000000 + offset, length // 4)
-    p1 = uctypes.bytearray_at(0x21010000 + offset, length // 4)
-    p2 = uctypes.bytearray_at(0x21020000 + offset, length // 4)
-    p3 = uctypes.bytearray_at(0x21030000 + offset, length // 4)
-    # also make bytearray objects that correspond to each cell, in page order
-    cells_list =      [ uctypes.bytearray_at(0x21000000 + offset + i, 8) for i in range(0, length // 4, 8) ]
-    cells_list.extend([ uctypes.bytearray_at(0x21010000 + offset + i, 8) for i in range(0, length // 4, 8) ])
-    cells_list.extend([ uctypes.bytearray_at(0x21020000 + offset + i, 8) for i in range(0, length // 4, 8) ])
-    cells_list.extend([ uctypes.bytearray_at(0x21030000 + offset + i, 8) for i in range(0, length // 4, 8) ])
-    # convert list to tuple, for marginal performance benefit
-    cells = tuple(cells_list)
-    return (p0, p1, p2, p3, cells)
+    # make bytearray objects that correspond to each page of unstriped memory
+    p0_mv = memoryview(uctypes.bytearray_at(0x21000000 + offset, length // 4))
+    p1_mv = memoryview(uctypes.bytearray_at(0x21010000 + offset, length // 4))
+    p2_mv = memoryview(uctypes.bytearray_at(0x21020000 + offset, length // 4))
+    p3_mv = memoryview(uctypes.bytearray_at(0x21030000 + offset, length // 4))
+    return (p0_mv, p1_mv, p2_mv, p3_mv)
 
 
 def configure_buffer_memory():
@@ -436,16 +427,21 @@ def configure_buffer_memory():
     different pages can occur in the same clock cycle.
     '''
     global acq
-    global p0, p1, p2, p3
-    global cells
+    global p0_mv, p1_mv, p2_mv, p3_mv
+    global cells_mv
 
     # 2 bytes per channel, 4 channels
     # acq is a global variable to prevent it being garbage collected
     acq = bytearray(BUFFER_MEMORY_SIZE)
-    # Create bytearrays for each unstriped region of the buffer (ie four pages).
-    # This is used in the Core 0 loop to output one region of the memory while new
-    # samples are read into a different region.
-    p0, p1, p2, p3, cells = get_unstriped_regions(acq)
+    # Create memoryviews for each unstriped region of the buffer (ie four pages).
+    p0_mv, p1_mv, p2_mv, p3_mv = get_unstriped_regions(acq)
+    # Create an array of memoryviews for each storage cell of the buffer.
+    cells_list =      [ memoryview(p0_mv[i:i+8]) for i in range(0, len(p0_mv), 8) ]
+    cells_list.extend([ memoryview(p1_mv[i:i+8]) for i in range(0, len(p1_mv), 8) ])
+    cells_list.extend([ memoryview(p2_mv[i:i+8]) for i in range(0, len(p2_mv), 8) ])
+    cells_list.extend([ memoryview(p3_mv[i:i+8]) for i in range(0, len(p3_mv), 8) ])
+    # Convert to a tuple for slight performance gain
+    cells_mv = tuple(cells_list)
 
 
 ########################################################
@@ -473,7 +469,7 @@ def streaming_loop_core_1():
             # Read out from the ADC *immediately* if the cell variable changes
             # value, then repeat.
             cell == cell_p \
-                or spi_adc_interface.readinto(cells[(cell_p := cell)])
+                or spi_adc_interface.readinto(cells_mv[(cell_p := cell)])
 
         # If Core 0 has raised RESYNC flag, we miss a few samples and deal
         # with it here.
@@ -527,9 +523,9 @@ def streaming_loop_core_0():
         # samples to check:
         c1 = const(BUFFER_SIZE - 2)
         c2 = const(BUFFER_SIZE - 1)
-        if (cells[c1][0:4] == cells[c1][4:8]
-            and cells[c1][4:8] == cells[c2][0:4]
-            and cells[c2][0:4] == cells[c2][4:8]):
+        if (cells_mv[c1][0:4] == cells_mv[c1][4:8]
+            and cells_mv[c1][4:8] == cells_mv[c2][0:4]
+            and cells_mv[c2][0:4] == cells_mv[c2][4:8]):
            # Raise RESYNC flag.
            flags = flags | RESYNC
 
@@ -541,19 +537,19 @@ def streaming_loop_core_0():
         # Wait while we fill page 0, then transfer it
         while (cell & PAGE_BITS) == PAGE0:
             continue
-        transfer_buffer(p0)
+        transfer_buffer(p0_mv)
         # Wait while we fill page 1, then transfer it
         while (cell & PAGE_BITS) == PAGE1:
             continue
-        transfer_buffer(p1)
+        transfer_buffer(p1_mv)
         # Wait while we fill page 2, then transfer it
         while (cell & PAGE_BITS) == PAGE2:
             continue
-        transfer_buffer(p2)
+        transfer_buffer(p2_mv)
         # Wait while we fill page 3. then transfer it
         while (cell & PAGE_BITS) == PAGE3:
             continue
-        transfer_buffer(p3)
+        transfer_buffer(p3_mv)
         # Check to see if SPI clock is still sync'ed with ADC readouts
         sync_test()
 

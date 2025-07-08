@@ -49,6 +49,8 @@ DEFAULT_ADC_SETTINGS = { 'gains':       ['1x', '1x', '1x', '1x'],
 # we have 4 measurement channels and 2 bytes per channel.
 BUFFER_SIZE = const(256)
 BUFFER_MEMORY_SIZE = const(2048)
+PENULTIMATE_CELL = const(BUFFER_SIZE - 2)
+FINAL_CELL = const(BUFFER_SIZE - 1)
 
 # flags: operation flags used to control program flow on both CPU cores.
 STOP: int        = const(0b0001)       # tells both cores to exit
@@ -521,11 +523,10 @@ def streaming_loop_core_0():
         # If SPI clock synchronisation fails, the ADC outputs will latch to the same
         # values on successive samples. So we compare the readings from two successive
         # samples to check:
-        c1 = const(BUFFER_SIZE - 2)
-        c2 = const(BUFFER_SIZE - 1)
-        if (cells_mv[c1][0:4] == cells_mv[c1][4:8]
-            and cells_mv[c1][4:8] == cells_mv[c2][0:4]
-            and cells_mv[c2][0:4] == cells_mv[c2][4:8]):
+        if (cells_mv[FINAL_CELL][0:2] == cells_mv[FINAL_CELL][2:4]
+            and cells_mv[FINAL_CELL][0:2] == cells_mv[FINAL_CELL][4:6]
+            and cells_mv[FINAL_CELL][0:2] == cells_mv[FINAL_CELL][6:8]
+            and cells_mv[FINAL_CELL][:] == cells_mv[PENULTIMATE_CELL][:])
            # Raise RESYNC flag.
            flags = flags | RESYNC
 

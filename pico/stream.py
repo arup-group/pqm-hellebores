@@ -526,7 +526,7 @@ def streaming_loop_core_0():
         if (cells_mv[FINAL_CELL][0:2] == cells_mv[FINAL_CELL][2:4]
             and cells_mv[FINAL_CELL][0:2] == cells_mv[FINAL_CELL][4:6]
             and cells_mv[FINAL_CELL][0:2] == cells_mv[FINAL_CELL][6:8]
-            and cells_mv[FINAL_CELL][:] == cells_mv[PENULTIMATE_CELL][:])
+            and cells_mv[FINAL_CELL][:] == cells_mv[PENULTIMATE_CELL][:]):
            # Raise RESYNC flag.
            flags = flags | RESYNC
 

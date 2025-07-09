@@ -518,17 +518,22 @@ def streaming_loop_core_0():
     else:
         transfer_buffer = _transfer_buffer_normal
 
-    def sync_test():
+    @micropython.viper
+    def latch_test(cell1: memoryview, cell2: memoryview):
+        # SPI clock synchronisation can fail during a large power disturbance.
+        # If this happens, the ADC outputs will latch to the same values
+        # on successive SPI reads. So we compare all the readings from two
+        # samples to check, and set a RESYNC flag if necessary:
         global flags
-        # If SPI clock synchronisation fails, the ADC outputs will latch to the same
-        # values on successive samples. So we compare the readings from two successive
-        # samples to check:
-        if (cells_mv[FINAL_CELL][0:2] == cells_mv[FINAL_CELL][2:4]
-            and cells_mv[FINAL_CELL][0:2] == cells_mv[FINAL_CELL][4:6]
-            and cells_mv[FINAL_CELL][0:2] == cells_mv[FINAL_CELL][6:8]
-            and cells_mv[FINAL_CELL][:] == cells_mv[PENULTIMATE_CELL][:]):
-           # Raise RESYNC flag.
-           flags = flags | RESYNC
+        # each sample reading in the cell occupies 16 bits
+        c1: ptr16 = ptr16(cell1)
+        c2: ptr16 = ptr16(cell2)
+        # compare all the readings to the first one
+        r = c1[0]
+        if (c1[1] == r & c1[2] == r & c1[3] == r
+            & c2[0] == r & c2[1] == r & c2[2] == r & c2[3] == r):
+            # and raise RESYNC flag if they're all the same.
+            flags = flags | RESYNC
 
     # Wait for receiving programs to be ready to receive data
     time.sleep(5)
@@ -551,8 +556,8 @@ def streaming_loop_core_0():
         while (cell & PAGE_BITS) == PAGE3:
             continue
         transfer_buffer(p3_mv)
-        # Check to see if SPI clock is still sync'ed with ADC readouts
-        sync_test()
+        # Check to see if ADC readouts have latched to a constant value
+        latch_test(cells_mv[FINAL_CELL], cells_mv[PENULTIMATE_CELL])
 
     if DEBUG:
         print('Streaming_loop_core_0() exited.')

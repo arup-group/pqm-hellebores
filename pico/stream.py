@@ -519,7 +519,7 @@ def streaming_loop_core_0():
         transfer_buffer = _transfer_buffer_normal
 
     @micropython.viper
-    def latch_test(cell1: memoryview, cell2: memoryview):
+    def latch_test(cell1, cell2):
         # SPI clock synchronisation can fail during a large power disturbance.
         # If this happens, the ADC outputs will latch to the same values
         # on successive SPI reads. So we compare all the readings from two

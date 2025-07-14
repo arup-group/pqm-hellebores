@@ -526,17 +526,22 @@ def streaming_loop_core_0():
         # samples to check, and set a RESYNC flag if necessary:
         global flags
         # each sample reading in the cell occupies 16 bits
+        # these pointer variables are native viper variables to help avoid
+        # expensive bytestring slicing operations in python
         c1: ptr16 = ptr16(cell1)
         c2: ptr16 = ptr16(cell2)
         # compare all the readings to the first one
         r = c1[0]
         if (c1[1] == r & c1[2] == r & c1[3] == r
             & c2[0] == r & c2[1] == r & c2[2] == r & c2[3] == r):
-            # and raise RESYNC flag if they're all the same.
+            # if the individual readings are all the same, set two readings
+            # to different values, to prevent this function re-triggering if
+            # we happen to check the the same cells again before the RESYNC
+            # is completed.
+            c1[0] = 0xffff
+            c1[1] = 0x0000
+            # raise RESYNC flag
             flags = flags | RESYNC
-
-    # Wait for receiving programs to be ready to receive data
-    time.sleep(5)
 
     # Now transfer buffers in turn and loop...
     while flags & STREAMING:
@@ -556,7 +561,9 @@ def streaming_loop_core_0():
         while (cell & PAGE_BITS) == PAGE3:
             continue
         transfer_buffer(p3_mv)
-        # Check to see if ADC readouts have latched to a constant value
+        # Check to see if ADC readouts have latched to a constant value.
+        # This function will raise a flag if necessary and the other CPU
+        # core will reset ADC comms.
         latch_test(cells_mv[FINAL_CELL], cells_mv[PENULTIMATE_CELL])
 
     if DEBUG:

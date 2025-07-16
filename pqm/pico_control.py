@@ -61,7 +61,7 @@ def hard_reset():
         gp.output(RESET, False)
         gp.cleanup()
     except ModuleNotFoundError:
-        print(f'{program_name}, hard_reset(): will only work on Raspberry Pi hardware.', file=sys.stderr)
+        print(f'{program_name}, hard_reset(): will only work on PQM hardware.', file=sys.stderr)
     
 
 def send_command(ser, command):

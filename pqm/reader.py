@@ -70,8 +70,8 @@ def main():
             ser.reset_input_buffer()
             print(f"reader.py, main(): Connected.", file=sys.stderr)
             read_and_print(ser)
-        except (serial.serialutil.SerialException, FileNotFoundError, OSError):
-            print(f"reader.py, main(): Serial error.", file=sys.stderr)
+        except:
+            print(f"reader.py, main(): No connection, exiting.", file=sys.stderr)
         finally:
             # make sure we have closed the port if it was opened
             if 'ser' in locals():

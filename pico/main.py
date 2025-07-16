@@ -50,7 +50,8 @@ def read_command():
 def process_command(command_string):
     '''Implements the following commands: RESET, SAVE [filename] [length],
     SHA256 [filename], RENAME [from_name] [to_name], REMOVE [filename],
-    LISTDIR, START [filename] [args], CAT [filename]''' 
+    LISTDIR, START [filename] [args], CAT [filename], MACHINE, VERSION,
+    BOOTLOADER'''
 
     # make an array of words
     words = command_string.split()
@@ -143,6 +144,13 @@ def process_command(command_string):
             command_status = file_contents
         except:
             command_status = f'Failed to read {filename}'
+    elif command == 'MACHINE' and len(arguments) == 0:
+        command_status = os.uname().machine
+    elif command == 'VERSION' and len(arguments) == 0:
+        command_status = os.uname().version
+    elif command == 'BOOTLOADER' and len(arguments) == 0:
+        # Put the Pico into bootloader mode so that it can accept new firmware via USB MASS STORAGE
+        machine.bootloader()
     else:
         command_status = f'Error: failed to parse {words}.'
     print(command_status)
@@ -150,8 +158,8 @@ def process_command(command_string):
    
 # Run from here
 try:
-    print('main.py started on Pico.')
     configure_reset_interrupt('enable')
+    print('Control program main.py started on Pico.')
     while True:
         command_string = read_command()
         process_command(command_string)
@@ -161,5 +169,3 @@ finally:
     pins['pico_led'].low()
     # leave the reset interrupt enabled, even when returning to the REPL.
     #configure_reset_interrupt('disable')
-
-

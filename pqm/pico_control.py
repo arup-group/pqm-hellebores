@@ -86,6 +86,7 @@ def receive_response(ser):
     wait_attempts = 20
     while wait_attempts > 0:
         while ser.in_waiting:
+            # We get rid of Pico style CRLF endings and add system native line-endings
             response = ser.readline().decode('utf-8').strip('\r\n')
             print(response)
             wait_attempts = 20

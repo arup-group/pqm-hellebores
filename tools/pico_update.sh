@@ -32,6 +32,17 @@ echo "***** UPDATE PICO UTILITY *****"
 echo "Resetting Pico."
 "$PROGRAM_DIR/pico_control.py" --hard_reset
 
+# Check to see if Pico is responsive to commands
+echo -n "Checking if Pico is responsive: "
+run_check=$("$PROGRAM_DIR/pico_control.py" --command MACHINE)
+if [[ "$run_check" =~ "Raspberry Pi Pico" ]]; then
+    echo "yes"
+else
+    echo "no"
+    echo "Quitting here."
+    exit 1
+fi
+
 # Now compare local and Pico files, updating if the checksums differ
 echo "Comparing local versions of files with those currently on Pico..."
 for pico_file in $PICO_FILES; do

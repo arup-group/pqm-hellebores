@@ -91,7 +91,7 @@ case "$result" in
         echo "Exiting launcher.";;
     "Software update")
         x-terminal-emulator -e "bash -c \
-            \"echo \"Updating software to Github $GIT_BRANCH branch HEAD...\"; \
+            \"echo 'Updating software to Github branch HEAD...'; \
             git fetch origin; \
             git reset --hard \"origin/$GIT_BRANCH\"; \
             sleep 2\""

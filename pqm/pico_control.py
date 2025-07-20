@@ -47,7 +47,7 @@ def get_command_args():
 
 def hard_reset():
     '''The Pico software has a hardware interrupt configured to monitor pin 6.
-    When a falling edge is detected, the ISR will stop and restart the software.
+    When a rising edge is detected, the ISR will stop and restart the software.
     Running this function will cycle pin 6 thus triggering the reset routine.'''
     try:
         # We import on demand, so that the rest of the program will work on
@@ -56,10 +56,19 @@ def hard_reset():
         RESET = 6
         gp.setmode(gp.BCM)
         gp.setup(RESET, gp.OUT)
-        gp.output(RESET, True)
-        time.sleep(0.2)
+        # make sure we start asserted low
         gp.output(RESET, False)
-        gp.cleanup()
+        # raise high to trigger the Pico ISR with a rising edge
+        gp.output(RESET, True)
+        # the Pico verifies that the signal remains asserted high for a period of time
+        time.sleep(0.2)
+        # return low
+        gp.output(RESET, False)
+        # We leave the output asserted low to enhance signal integrity on
+        # the connection between Pi and Pico (both are ground referenced, but
+        # have different power supply regulator sources).
+        # If we need to release the GPIO, use gp.cleanup() however this will
+        # leave the connection with a pull-high via a resistor in the Pi.
     except ModuleNotFoundError:
         print(f'{program_name}, hard_reset(): will only work on PQM hardware.', file=sys.stderr)
     

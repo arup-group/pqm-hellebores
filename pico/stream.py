@@ -8,6 +8,10 @@
 # LOOPS TO MAINTAIN PERFORMANCE. MEMORYVIEW OBJECTS ARE USED TO AVOID NEW
 # MEMORY ALLOCATIONS.
 
+# DOUBLE CHECK ANY OUTPUT ASSERTIONS. HARDWARE DAMAGE IS POSSIBLE IF PINS ARE
+# ASSERTED INCORRECTLY IE ASSERTING OUTPUT STATE TO A PIN THAT IS WIRED TO
+# THE OUTPUT OF ANOTHER DEVICE.
+
 import time
 import machine
 import uctypes
@@ -676,8 +680,14 @@ def main():
             # sustained for a long enough period, we consider it spurious and
             # we will restart the ADCs and continue streaming, instead of
             # proceeding to reset the machine.
-            if flags & RESET and not reset_pin_held_high():
-                flags = STREAMING
+            if flags & RESET:
+                # Show the world that we have a RESET situation...
+                pins['pico_led'].high()
+                if not reset_pin_held_high():
+                    # If the pin is held high, we'll quit, otherwise we will
+                    # return to streaming
+                    flags = STREAMING
+                    pins['pico_led'].low()
 
     except KeyboardInterrupt:
         # Catch CTRL-C here.
@@ -700,6 +710,7 @@ def main():
                 print('Reset flag raised: resetting shortly.')
             # allow the reset pin to clear to normal
             time.sleep(1)
+            pins['pico_led'].low()
             machine.reset()
 
 

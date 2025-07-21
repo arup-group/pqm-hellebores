@@ -17,8 +17,8 @@ import sys
 import os
 import argparse
 import select
-import ast
 import io
+import json
 
 # project imports
 from settings import Settings
@@ -200,7 +200,7 @@ class Sample_Buffer:
         if l:=self.data_comms.get_analysis_line(0.0):
             try:
                 # load the analysis into a local dictionary
-                self.cs = ast.literal_eval(l)
+                self.cs = json.loads(l)
             except (ValueError, AttributeError, SyntaxError):
                 print('hellebores.py: Sample_Buffer.load_analysis()'
                       ' file reading error.', file=sys.stderr) 

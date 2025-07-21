@@ -10,8 +10,9 @@
 # 
 
 import sys
-import ast
 import csv
+import math
+import json
 from datetime import datetime, timezone
 from settings import Settings
 
@@ -25,7 +26,7 @@ def string_to_dict(line):
                    'rms_leakage_current','total_harmonic_distortion_voltage_percentage',\
                    'total_harmonic_distortion_current_percentage']
     try:
-        analysis = ast.literal_eval(line)
+        analysis = json.loads(line)
         # insert timestamp, rounded down to nearest second
         # Excel-compatible datetime without timezone information
         # for RFC3339 format with timezone, add .astimezone().isoformat('T)

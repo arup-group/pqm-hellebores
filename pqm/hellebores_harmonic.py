@@ -108,11 +108,12 @@ class Harmonic:
         """Harmonic display, on main part of screen.
         Pushes a group of thorpy text objects into self.harmonic_display"""
         #  Voltage rms /V
+        #  Voltage h1 /V
         #  Frequency /Hz
         #  THD(v) /%
         #  THD(i) /%
         #
-        #  Harmonic voltage magnitudes (% of Voltage rms)
+        #  Harmonic voltage magnitudes (% of Voltage h1)
         #
         #  h0
         #  h1        h11        h21        h31        h41
@@ -135,39 +136,47 @@ class Harmonic:
             rms_label = 'Voltage rms /V'
             rms_value = 'rms_voltage'
             rms_resolution = 1
-            harmonic_table_label = 'Harmonic voltage magnitudes (% of Voltage rms)' 
+            h1_label = 'Voltage h1 /V'
+            h1_value = 'voltage_h1'
+            h1_resolution = 1
+            harmonic_table_label = 'Harmonic voltage magnitudes (% of h1)'
             harmonic_value_root = 'harmonic_voltage_percentages'
+            distortion_label = 'THD(v) /%'
+            distortion_value = 'total_harmonic_distortion_voltage_percentage'
             value_colour = GREEN
         elif harmonic_of_what == 'current':
             rms_label = 'Current rms /A'
             rms_value = 'rms_current'
             rms_resolution = 3
-            harmonic_table_label = 'Harmonic current magnitudes (% of Current rms)' 
+            h1_label = 'Current h1 /A'
+            h1_value = 'current_h1'
+            h1_resolution = 3
+            harmonic_table_label = 'Harmonic current magnitudes (% of h1)'
             harmonic_value_root = 'harmonic_current_percentages'
+            distortion_label = 'THD(i) /%'
+            distortion_value = 'total_harmonic_distortion_current_percentage'
             value_colour = YELLOW
         else:
             print(f'Harmonic.create_harmonic_display(): Incorrect harmonic table selector {harmonic_of_what}', \
                 file=sys.stderr)
 
-        self.add_ui_text(text=rms_label, text_length=16)
-        self.add_ui_text(text_length=10, font_colour=value_colour, value_key=rms_value, \
-            dp_fix=rms_resolution, p_offset=(140,0), p_move=(0,18))
-
         self.add_ui_text(text='Frequency /Hz', text_length=16)
         self.add_ui_text(text_length=10, font_colour=GREEN, value_key='frequency', \
             dp_fix=2, p_offset=(140,0), p_move=(0,18))
 
-        self.add_ui_text(text='THD(v) /%', text_length=16)
-        self.add_ui_text(text_length=10, font_colour=GREEN, \
-            value_key='total_harmonic_distortion_voltage_percentage', \
-            p_offset=(140,0), p_move=(0,18))
+        self.add_ui_text(text=rms_label, text_length=16)
+        self.add_ui_text(text_length=10, font_colour=value_colour, value_key=rms_value, \
+            dp_fix=rms_resolution, p_offset=(140,0), p_move=(0,18))
 
-        self.add_ui_text(text='THD(i) /%', text_length=16)
-        self.add_ui_text(text_length=10, font_colour=YELLOW, \
-            value_key='total_harmonic_distortion_current_percentage', \
-            p_offset=(140,0), p_move=(0,28))
+        self.add_ui_text(text=h1_label, text_length=16)
+        self.add_ui_text(text_length=10, font_colour=value_colour, value_key=h1_value, \
+            dp_fix=h1_resolution, p_offset=(140,0), p_move=(0,18))
 
-        self.add_ui_text(text=harmonic_table_label, text_length=49, p_move=(0,28))
+        self.add_ui_text(text=distortion_label, text_length=16)
+        self.add_ui_text(text_length=10, font_colour=value_colour, value_key=distortion_value, \
+            dp_fix=1, p_offset=(140,0), p_move=(0,28))
+
+        self.add_ui_text(text=harmonic_table_label, text_length=39, p_move=(0,28))
 
         for i in range(0,11):
             self.add_ui_text(text=f'h{i}', text_length=8)

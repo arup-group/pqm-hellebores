@@ -66,9 +66,11 @@ class Harmonic:
         valid_keys = self.harmonic_value_objects.keys()
         
         # set the value into the display object
-        def set_value(key, value):
+        def set_value(key, value, color=None):
             tp_text, text_length, dp_fix, scale_factor = self.harmonic_value_objects[key]
             tp_text.set_text(f'{value*scale_factor:7.{dp_fix}f}'.rjust(text_length), adapt_parent=False)
+            if color:
+                tp_text.set_font_color(color)
 
         # push readings into display text fields
         for key in readings:
@@ -78,7 +80,11 @@ class Harmonic:
                 if f'{key}_0' in valid_keys:
                     # we have to extend the key by the harmonic order (the input value is an array)
                     for i in range(51):
-                        set_value(f'{key}_{i}', readings[key][i])
+                        v = readings[key][i]
+                        # change the color if low value
+                        color = VERY_LIGHT_GREY if v < 0.2 else GREEN if 'voltage' in key else YELLOW
+                        set_value(f'{key}_{i}', v, color)
+
             # the remainder of reading keys map directly into the corresponding text value fields
             elif key in valid_keys:
                 set_value(key, readings[key])
@@ -86,7 +92,7 @@ class Harmonic:
     def update_position(self, p_move=(0,0)):
         self._item_position = (self._item_position[0] + p_move[0], self._item_position[1] + p_move[1])
     
-    def add_ui_text(self, text='999.9', text_length=10, font_size=FONT_SIZE, font_colour=WHITE, \
+    def add_ui_text(self, text='999.9', text_length=10, font_size=FONT_SIZE, font_color=WHITE, \
         scale_factor=1, dp_fix=1, value_key=None, p_offset=(0,0), p_move=(0,0)):
         """Creates a text object for describing or displaying values of results. Default
         text parameters in the function prototype can be changed when calling. p_offset is a position
@@ -94,7 +100,7 @@ class Harmonic:
         affect subsequent calls."""
         tp_text = thorpy.Text(text.rjust(text_length))
         tp_text.set_font_size(font_size)
-        tp_text.set_font_color(font_colour)
+        tp_text.set_font_color(font_color)
         tp_text.set_topleft(self._item_position[0] + p_offset[0], self._item_position[1] + p_offset[1])
         # if it's a value field, add a lookup for the multimeter value object
         if value_key:
@@ -135,15 +141,15 @@ class Harmonic:
         if harmonic_of_what == 'voltage':
             rms_label = 'Voltage rms /V'
             rms_value = 'rms_voltage'
-            rms_resolution = 1
+            rms_resolution = 2
             h1_label = 'Voltage h1 /V'
             h1_value = 'voltage_h1'
-            h1_resolution = 1
+            h1_resolution = 2
             harmonic_table_label = 'Harmonic voltage magnitudes (% of h1)'
             harmonic_value_root = 'harmonic_voltage_percentages'
             distortion_label = 'THD(v) /%'
             distortion_value = 'total_harmonic_distortion_voltage_percentage'
-            value_colour = GREEN
+            value_color = GREEN
         elif harmonic_of_what == 'current':
             rms_label = 'Current rms /A'
             rms_value = 'rms_current'
@@ -155,57 +161,57 @@ class Harmonic:
             harmonic_value_root = 'harmonic_current_percentages'
             distortion_label = 'THD(i) /%'
             distortion_value = 'total_harmonic_distortion_current_percentage'
-            value_colour = YELLOW
+            value_color = YELLOW
         else:
             print(f'Harmonic.create_harmonic_display(): Incorrect harmonic table selector {harmonic_of_what}', \
                 file=sys.stderr)
 
         self.add_ui_text(text='Frequency /Hz', text_length=16)
-        self.add_ui_text(text_length=10, font_colour=GREEN, value_key='frequency', \
+        self.add_ui_text(text_length=10, font_color=GREEN, value_key='frequency', \
             dp_fix=2, p_offset=(140,0), p_move=(0,18))
 
         self.add_ui_text(text=rms_label, text_length=16)
-        self.add_ui_text(text_length=10, font_colour=value_colour, value_key=rms_value, \
+        self.add_ui_text(text_length=10, font_color=value_color, value_key=rms_value, \
             dp_fix=rms_resolution, p_offset=(140,0), p_move=(0,18))
 
         self.add_ui_text(text=h1_label, text_length=16)
-        self.add_ui_text(text_length=10, font_colour=value_colour, value_key=h1_value, \
+        self.add_ui_text(text_length=10, font_color=value_color, value_key=h1_value, \
             dp_fix=h1_resolution, p_offset=(140,0), p_move=(0,18))
 
         self.add_ui_text(text=distortion_label, text_length=16)
-        self.add_ui_text(text_length=10, font_colour=value_colour, value_key=distortion_value, \
-            dp_fix=1, p_offset=(140,0), p_move=(0,28))
+        self.add_ui_text(text_length=10, font_color=value_color, value_key=distortion_value, \
+            dp_fix=2, p_offset=(140,0), p_move=(0,28))
 
         self.add_ui_text(text=harmonic_table_label, text_length=39, p_move=(0,28))
 
         for i in range(0,11):
             self.add_ui_text(text=f'h{i}', text_length=8)
-            self.add_ui_text(text_length=6, font_colour=value_colour, \
-                value_key=f'{harmonic_value_root}_{i}', p_offset=(70,0), p_move=(0,28))
+            self.add_ui_text(text_length=6, font_color=value_color, \
+                value_key=f'{harmonic_value_root}_{i}', dp_fix=1, p_offset=(70,0), p_move=(0,28))
         self.update_position((130,-280))
 
         for i in range(11,21):
             self.add_ui_text(text=f'h{i}', text_length=8)
-            self.add_ui_text(text_length=6, font_colour=value_colour, \
-                value_key=f'{harmonic_value_root}_{i}', p_offset=(70,0), p_move=(0,28))
+            self.add_ui_text(text_length=6, font_color=value_color, \
+                value_key=f'{harmonic_value_root}_{i}', dp_fix=1, p_offset=(70,0), p_move=(0,28))
         self.update_position((130,-280))
 
         for i in range(21,31):
             self.add_ui_text(text=f'h{i}', text_length=8)
-            self.add_ui_text(text_length=6, font_colour=value_colour, \
-                value_key=f'{harmonic_value_root}_{i}', p_offset=(70,0), p_move=(0,28))
+            self.add_ui_text(text_length=6, font_color=value_color, \
+                value_key=f'{harmonic_value_root}_{i}', dp_fix=1, p_offset=(70,0), p_move=(0,28))
         self.update_position((130,-280))
 
         for i in range(31,41):
             self.add_ui_text(text=f'h{i}', text_length=8)
-            self.add_ui_text(text_length=6, font_colour=value_colour, \
-                value_key=f'{harmonic_value_root}_{i}', p_offset=(70,0), p_move=(0,28))
+            self.add_ui_text(text_length=6, font_color=value_color, \
+                value_key=f'{harmonic_value_root}_{i}', dp_fix=1, p_offset=(70,0), p_move=(0,28))
         self.update_position((130,-280))
 
         for i in range(41,51):
             self.add_ui_text(text=f'h{i}', text_length=8)
-            self.add_ui_text(text_length=6, font_colour=value_colour, \
-                value_key=f'{harmonic_value_root}_{i}', p_offset=(70,0), p_move=(0,28))
+            self.add_ui_text(text_length=6, font_color=value_color, \
+                value_key=f'{harmonic_value_root}_{i}', dp_fix=1, p_offset=(70,0), p_move=(0,28))
 
         self.harmonic_display = thorpy.Group( self._hd_items, mode=None, gap=0, margins=(0,0) )
         self.harmonic_display.set_topleft(*METER_POSITION)

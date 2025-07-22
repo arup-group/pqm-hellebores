@@ -218,27 +218,25 @@ class Analyser:
             if fft_voltages[1] > 1.0:
                 thdv = math.sqrt(np.sum(np.square(fft_voltages[2:]))) / fft_voltages[1]
                 sf = 100.0/fft_voltages[1]
-                self.results['total_harmonic_distortion_voltage_percentage'] = self.round_to(thdv*100, 1)
+                self.results['total_harmonic_distortion_voltage_percentage'] = self.round_to(thdv*100, 2)
                 self.results['harmonic_voltage_percentages'] = np.round(fft_voltages*sf, 1).tolist()
-                self.results['voltage_h1'] = fft_voltages[1]
             else:
                 # indicate invalid results for low value of V(h1)
                 self.results['total_harmonic_distortion_voltage_percentage'] = math.nan
                 self.results['harmonic_voltage_percentages'] = [ math.nan for i in fft_voltages ]
-                self.results['voltage_h1'] = fft_voltages[1]
+            self.results['voltage_h1'] = self.round_to(fft_voltages[1], 3)
 
             # convert harmonic currents to % of h1 value, and calculate THD(i)
             if fft_currents[1] > 0.001:
                 thdi = math.sqrt(np.sum(np.square(fft_currents[2:]))) / fft_currents[1]
                 sf = 100.0/fft_currents[1]
-                self.results['total_harmonic_distortion_current_percentage'] = self.round_to(thdi*100, 1)
+                self.results['total_harmonic_distortion_current_percentage'] = self.round_to(thdi*100, 2)
                 self.results['harmonic_current_percentages'] = np.round(fft_currents*sf, 1).tolist()
-                self.results['current_h1'] = fft_currents[1]
             else:
                 # indicate invalid results for low value of I(h1)
                 self.results['total_harmonic_distortion_current_percentage'] = math.nan
                 self.results['harmonic_current_percentages'] = [ math.nan for i in fft_currents ]
-                self.results['current_h1'] = fft_currents[1]
+            self.results['current_h1'] = self.round_to(fft_currents[1], 5)
 
         except (ZeroDivisionError, OverflowError, ValueError, IndexError):
             self.results['total_harmonic_distortion_voltage_percentage'] = 0.0

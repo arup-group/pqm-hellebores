@@ -551,6 +551,9 @@ def main():
             # will be drawn as necessary.
             if ui.mode == 'waveform' or events or analysis_updated:
                 ui.refresh(screen)
+            else:
+                # if nothing much is happening, have a short snooze instead
+                time.sleep(0.05)
 
             # ui.get_updater().update() is an expensive function, so we use the simplest possible
             # thorpy theme to achieve the quickest redraw time. Then, we only update/redraw when

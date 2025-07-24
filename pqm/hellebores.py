@@ -369,14 +369,6 @@ class App_Actions:
             return True
         else:
             return False
-        # if the time has increased by at least 0.2 second, update the wf/s text
-        # and other status information
-        #elapsed = tn - self.update_time
-        #if elapsed >= 0.2:
-        #    self.update_time = tn
-        #    return True
-        #else:
-        #    return False
 
     def post_clear_screen_event(self):
         pygame.event.post(pygame.event.Event(self.clear_screen_event, {}))
@@ -514,16 +506,13 @@ def main():
                 # one or both incoming data pipes were closed, quit the application
                 app_actions.exit_application('quit')
     
-            # update annunciators only periodically, not every time
+            # update text annunciators only periodically, not every time
             if app_actions.time_to_update_status():
                 if st.run_mode=='running':
-                    datetime.update()
                     wfs.update()
-                # update the annunciators in both running and stopped mode
+                    datetime.update()
                 # force controls - including new text - to be re-drawn
-                ui.update_annunciators()
                 app_actions.post_draw_controls_event()
-                print('We posted a controls redraw event.')
     
             # here we process mouse/touch/keyboard events.
             events = pygame.event.get()
@@ -542,7 +531,6 @@ def main():
                     # this event is posted when the 'mode' of the software is changed and we
                     # want to clear the screen completely
                     screen.fill(LIGHT_GREY)
-                    print('We cleared the screen.')
     
             # SCREEN REDRAWING FUNCTIONS FOLLOW
             # The 'if' conditions optimise the redraw work to reduce CPU usage.
@@ -559,6 +547,7 @@ def main():
             # buttons are pressed or the text needs updating. When there is an overlay menu displayed
             # there is more drawing work to do, so we use multi_trace to help optimise.
             if ui.overlay_dialog_active or events:
+                ui.update_annunciators()
                 ui.set_multi_trace()
                 ui.get_updater().update(events=events)
     
@@ -566,10 +555,6 @@ def main():
             if ui.mode == 'waveform' or events or ui.overlay_dialog_active:
                 pygame.display.flip()
 
-            # debugging excessive screen refresh in meter mode
-            if events:
-                print(events, ui.overlay_dialog_active)
-                sys.stdout.flush()
 
     # General exception catch here will attempt to exit cleanly and signal to the controlling script
     # a suitable exit code, so that it knows that something went wrong.

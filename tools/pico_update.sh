@@ -34,8 +34,8 @@ echo "Resetting Pico."
 
 # Check to see if Pico is responsive to commands
 echo -n "Checking if Pico is responsive: "
-run_check=$("$PROGRAM_DIR/pico_control.py" --command MACHINE)
-if [[ "$run_check" =~ "Raspberry Pi Pico" ]]; then
+run_check=$("$PROGRAM_DIR/pico_control.py" --command LISTDIR)
+if [[ "$run_check" =~ "main.py" ]]; then
     echo "yes"
 else
     echo "no"

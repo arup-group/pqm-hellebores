@@ -300,7 +300,7 @@ class Data_comms:
                 self.analysis_stream = self.open_pipe(analysis_stream_name)
             self.pipes_ok = True
         except (PermissionError, FileNotFoundError, OSError):
-            print(f"{sys.argv[0]}: App_Actions.open_streams() couldn't open the input streams "
+            print(f"{sys.argv[0]}: Data_comms.open_streams() couldn't open the input streams "
                   f"{waveform_stream_name} and {analysis_stream_name}", file=sys.stderr)
             self.exit_application('error')
 
@@ -349,7 +349,7 @@ class App_Actions:
         # for high frame rates or dialog overlay
         self.multi_trace = 1
         # keep track of time to update the status texts on screen periodically
-        self.update_time = time.time()
+        self.update_time = time.ctime()
         # create custom pygame events, which we use for clearing the screen
         # and triggering a redraw of the controls
         self.clear_screen_event = pygame.event.custom_type()
@@ -363,8 +363,9 @@ class App_Actions:
 
     def time_to_update_status(self):
         # returns true if time has increased by at least 1 second
-        tn = int(time.time())
-        if tn != self.update_time:
+        tn = time.ctime()
+        if tn[18] != self.update_time[18]:
+            # seconds field is different
             self.update_time = tn
             return True
         else:
@@ -383,6 +384,7 @@ class App_Actions:
         if self.former_run_mode!='stopped' and self.st.run_mode=='stopped':
             self.ui.catch_latest_analysis()
         self.former_run_mode = self.st.run_mode
+        self.post_draw_controls_event()
 
     def start_stop(self, action='flip'):
         former_run_mode = self.st.run_mode
@@ -510,7 +512,7 @@ def main():
             if app_actions.time_to_update_status():
                 if st.run_mode=='running':
                     wfs.update()
-                    datetime.update()
+                    datetime.update(app_actions.update_time)
                 # force controls - including new text - to be re-drawn
                 app_actions.post_draw_controls_event()
     

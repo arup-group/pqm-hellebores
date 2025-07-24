@@ -536,26 +536,16 @@ def main():
                     # this event is posted when the 'mode' of the software is changed and we
                     # want to clear the screen completely
                     screen.fill(LIGHT_GREY)
-                #elif e.type == app_actions.draw_controls_event:
-                    # we don't actually do anything here, just want the side effect of 'events'
-                    # having something in it because it is tested shortly, and will cause the 
-                    # controls to be re-drawn
-                #    pass
     
             # SCREEN REDRAWING FUNCTIONS FOLLOW
             # The 'if' conditions optimise the redraw work to reduce CPU usage.
     
-            # we don't use the event handler to schedule plotting updates, because it is not
-            # efficient enough for high frame rates. Instead we plot explicitly each
+            # we don't use the event handler to schedule waveform plotting updates, because it is
+            # not efficient enough for high frame rates. Instead we plot explicitly each
             # time round the loop. Depending on the current mode, waveforms, meter readings etc
             # will be drawn as necessary.
-            if ui.mode == 'waveform':
+            if ui.mode == 'waveform' or events:
                 ui.refresh(screen)
-            elif events:
-                # we can afford a short snooze if we are on one of the metering screens and have
-                # just refreshed the display
-                ui.refresh(screen)
-                time.sleep(0.02)
 
             # ui.get_updater().update() is an expensive function, so we use the simplest possible
             # thorpy theme to achieve the quickest redraw time. Then, we only update/redraw when
@@ -568,7 +558,8 @@ def main():
             # push all of our updated work into the active display framebuffer
             if ui.mode == 'waveform' or events or ui.overlay_dialog_active:
                 pygame.display.flip()
-    
+                print('-', end='')
+
     # General exception catch here will attempt to exit cleanly and signal to the controlling script
     # a suitable exit code, so that it knows that something went wrong.
     except Exception as e:

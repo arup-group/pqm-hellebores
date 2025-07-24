@@ -518,6 +518,7 @@ def main():
                 # force controls - including new text - to be re-drawn
                 ui.update_annunciators()
                 app_actions.post_draw_controls_event()
+                print('We posted a controls redraw event.')
     
             # here we process mouse/touch/keyboard events.
             events = pygame.event.get()
@@ -536,6 +537,7 @@ def main():
                     # this event is posted when the 'mode' of the software is changed and we
                     # want to clear the screen completely
                     screen.fill(LIGHT_GREY)
+                    print('We cleared the screen.')
     
             # SCREEN REDRAWING FUNCTIONS FOLLOW
             # The 'if' conditions optimise the redraw work to reduce CPU usage.

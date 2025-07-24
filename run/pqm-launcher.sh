@@ -90,16 +90,18 @@ case "$result" in
     "EXIT")
         echo "Exiting launcher.";;
     "Software update")
+        # DON'T run this option on a development computer
+        # it will overwrite local changes and ruin your day
         x-terminal-emulator -e "bash -c \
             \"echo 'Updating software to Github branch HEAD...'; \
             git fetch origin; \
-            git reset --hard \"origin/$GIT_BRANCH\"; \
+            git reset --hard origin/$GIT_BRANCH; \
             sleep 2\""
         exec "$0";;
     "Pico update")
         x-terminal-emulator -e "bash -c \
             \"echo 'Updating Pico software...'; \
-            \"$SOFTWARE_PATH/tools/pico_update.sh\"; \
+            $SOFTWARE_PATH/tools/pico_update.sh; \
             sleep 2\""
         exec "$0";;
     "Shutdown")

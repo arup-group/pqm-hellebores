@@ -362,16 +362,21 @@ class App_Actions:
         self.data_comms = data_comms
 
     def time_to_update_status(self):
-        # time now
-        tn = time.time()
-        # if the time has increased by at least 0.2 second, update the wf/s text
-        # and other status information
-        elapsed = tn - self.update_time
-        if elapsed >= 0.2:
+        # returns true if time has increased by at least 1 second
+        tn = int(time.time())
+        if tn != self.update_time:
             self.update_time = tn
             return True
         else:
             return False
+        # if the time has increased by at least 0.2 second, update the wf/s text
+        # and other status information
+        #elapsed = tn - self.update_time
+        #if elapsed >= 0.2:
+        #    self.update_time = tn
+        #    return True
+        #else:
+        #    return False
 
     def post_clear_screen_event(self):
         pygame.event.post(pygame.event.Event(self.clear_screen_event, {}))

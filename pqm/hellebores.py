@@ -553,7 +553,7 @@ def main():
                 ui.refresh(screen)
             else:
                 # if nothing much is happening, have a short snooze instead
-                time.sleep(0.05)
+                time.sleep(0.02)
 
             # ui.get_updater().update() is an expensive function, so we use the simplest possible
             # thorpy theme to achieve the quickest redraw time. Then, we only update/redraw when

@@ -558,7 +558,11 @@ def main():
             # push all of our updated work into the active display framebuffer
             if ui.mode == 'waveform' or events or ui.overlay_dialog_active:
                 pygame.display.flip()
-                print('-', end='')
+
+            # debugging excessive screen refresh in meter mode
+            if events:
+                print(events, ui.overlay_dialog_active)
+                sys.stdout.flush()
 
     # General exception catch here will attempt to exit cleanly and signal to the controlling script
     # a suitable exit code, so that it knows that something went wrong.

@@ -495,7 +495,7 @@ def main():
             # artifacts on screen. Check if the BUFFER led on PCB is stalling if performance
             # problems are suspected here.
             # The load_waveform() function also indirectly manages display refresh speed
-            # by waiting for a definite time for new data.
+            # and the loop repeat rate by waiting for a definite time for new data.
     
             # if multi_trace is active, read multiple frames into the buffer, otherwise just one
             for i in range(app_actions.multi_trace):
@@ -536,11 +536,11 @@ def main():
                     # this event is posted when the 'mode' of the software is changed and we
                     # want to clear the screen completely
                     screen.fill(LIGHT_GREY)
-                elif e.type == app_actions.draw_controls_event:
+                #elif e.type == app_actions.draw_controls_event:
                     # we don't actually do anything here, just want the side effect of 'events'
                     # having something in it because it is tested shortly, and will cause the 
                     # controls to be re-drawn
-                    pass
+                #    pass
     
             # SCREEN REDRAWING FUNCTIONS FOLLOW
             # The 'if' conditions optimise the redraw work to reduce CPU usage.
@@ -549,10 +549,12 @@ def main():
             # efficient enough for high frame rates. Instead we plot explicitly each
             # time round the loop. Depending on the current mode, waveforms, meter readings etc
             # will be drawn as necessary.
-            if ui.mode == 'waveform' or events or analysis_updated:
+            if ui.mode == 'waveform':
                 ui.refresh(screen)
-            else:
-                # if nothing much is happening, have a short snooze instead
+            elif events:
+                # we can afford a short snooze if we are on one of the metering screens and have
+                # just refreshed the display
+                ui.refresh(screen)
                 time.sleep(0.02)
 
             # ui.get_updater().update() is an expensive function, so we use the simplest possible
@@ -564,7 +566,7 @@ def main():
                 ui.get_updater().update(events=events)
     
             # push all of our updated work into the active display framebuffer
-            if ui.mode == 'waveform' or events or ui.overlay_dialog_active or analysis_updated:
+            if ui.mode == 'waveform' or events or ui.overlay_dialog_active:
                 pygame.display.flip()
     
     # General exception catch here will attempt to exit cleanly and signal to the controlling script

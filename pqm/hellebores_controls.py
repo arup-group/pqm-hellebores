@@ -193,7 +193,6 @@ class WFS:
 class Datetime:
 
     def __init__(self):
-        self.time = time.ctime()
         self.create_text_object()
 
     def create_text_object(self):
@@ -202,9 +201,8 @@ class Datetime:
         self.tt.set_font_color(WHITE)
         self.tt.set_topleft(*DATETIME_POSITION)
 
-    def update(self):
-        self.time = time.ctime()
-        self.tt.set_text(self.time)
+    def update(self, newtime):
+        self.tt.set_text(newtime)
 
     def draw(self):
         self.tt.draw()

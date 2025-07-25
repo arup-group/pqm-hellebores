@@ -392,8 +392,8 @@ class App_Actions:
             self.st.run_mode = 'running'
         elif (action=='flip' and former_run_mode=='running') or action == 'stop':
             self.st.run_mode = 'stopped'
-        self.st.send_to_all()
         self.settings_changed()
+        self.st.send_to_all()
 
     def exit_application(self, option='quit'):
         exit_codes = { 'quit'           : 0,

@@ -80,7 +80,7 @@ fi
 
 # Process selected command, exec $0 relaunches the script.
 # For software update and Pico update, we launch a terminal so that we can
-# see the progress and outcome.
+# monitor the progress and outcome.
 cd "$CWD"
 case "$result" in
     "START")
@@ -96,13 +96,13 @@ case "$result" in
             \"echo 'Updating software to Github branch HEAD...'; \
             git fetch origin; \
             git reset --hard origin/$GIT_BRANCH; \
-            sleep 2\""
+            sleep 5\""
         exec "$0";;
     "Pico update")
         x-terminal-emulator -e "bash -c \
             \"echo 'Updating Pico software...'; \
             $SOFTWARE_PATH/tools/pico_update.sh; \
-            sleep 2\""
+            sleep 5\""
         exec "$0";;
     "Shutdown")
         echo "Shutting down system."

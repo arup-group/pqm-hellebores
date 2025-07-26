@@ -92,17 +92,18 @@ case "$result" in
     "Software update")
         # DON'T run this option on a development computer
         # it will overwrite local changes and ruin your day
-        x-terminal-emulator -e "bash -c \
-            \"echo 'Updating software to Github branch HEAD...'; \
+        x-terminal-emulator -e \
+            "echo 'Updating software to Github branch origin/$GIT_BRANCH HEAD...'; \
+            cd $SOFTWARE_PATH;
             git fetch origin; \
             git reset --hard origin/$GIT_BRANCH; \
-            sleep 5\""
+            sleep 5"
         exec "$0";;
     "Pico update")
-        x-terminal-emulator -e "bash -c \
-            \"echo 'Updating Pico software...'; \
+        x-terminal-emulator -e \
+            "echo 'Updating software stored on Pico...'; \
             $SOFTWARE_PATH/tools/pico_update.sh; \
-            sleep 5\""
+            sleep 5"
         exec "$0";;
     "Shutdown")
         echo "Shutting down system."

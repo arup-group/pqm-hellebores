@@ -184,7 +184,7 @@ class Multimeter:
         self.update_position((240,-430))
 
         self.add_ui_text(text='Energy /Wh', text_length=24)
-        self.add_ui_text(text_length=24, font_colour=ORANGE, \
+        self.add_ui_text(text_length=24, font_colour=MAGENTA, \
             dp_fix=3, value_key='watt_hour', p_offset=(0,18), p_move=(0,38))
 
         self.add_ui_text(text='Reactive energy /VARh', text_length=24)

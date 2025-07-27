@@ -6,7 +6,7 @@ ulimit -n 2048
 # Raspberry Pi running Bookworm or later is enabled for Wayland graphics compositor
 # We set the environment variable to tell the SDL graphics library used by pygame
 # to use the wayland driver rather than X11 (which would have to be translated)
-if [[ $XDG_SESSION_TYPE -eq "wayland" ]]; then
+if [[ $XDG_SESSION_TYPE == "wayland" ]]; then
     SDL_VIDEODRIVER=wayland
     export SDL_VIDEODRIVER
 fi

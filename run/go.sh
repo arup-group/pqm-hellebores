@@ -3,6 +3,14 @@
 # Increase the number of file descriptors that we can have in the current shell
 ulimit -n 2048
 
+# Raspberry Pi running Bookworm or later is enabled for Wayland graphics compositor
+# We set the environment variable to tell the SDL graphics library used by pygame
+# to use the wayland driver rather than X11 (which would have to be translated)
+if [[ $XDG_SESSION_TYPE -eq "wayland" ]]; then
+    SDL_VIDEODRIVER=wayland
+    export SDL_VIDEODRIVER
+fi
+
 # Find current working directory and absolute paths of script and program file directories
 CWD="$(pwd)"
 SCRIPT_DIR="$(realpath $(dirname $0))"

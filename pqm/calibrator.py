@@ -5,6 +5,7 @@ import sys
 import os
 import math
 import json
+import re
 
 # local
 from constants import *
@@ -22,9 +23,9 @@ WIP_FILE                  = 'calibrator_wip.json'
 
 
 class WIP:
-    # calibration constants for channels 0-3
-    # these local constants are cached in a file so that they can be accessed
-    # during successive runs of calibrator.py
+    """work-in-progress calibration constants for channels 0-3.
+    These local constants are cached in a file so that they can be accessed
+    during successive runs of calibrator.py"""
     offsets = [ 0, 0, 0, 0 ]
     gains = [ 1.0, 1.0, 1.0, 1.0 ]
     skew_times = [ 0.0, 0.0, 0.0, 0.0 ]
@@ -43,7 +44,7 @@ class WIP:
             with open(WIP_FILE, 'w') as f:
                 f.write(json.dumps({'offsets':self.offsets, 'gains':self.gains,
                     'skew_times':self.skew_times}))
-            print(f"calibrator.py: work in progress written.", file=sys.stderr)
+            print(f"calibrator.py: work-in-progress file {WIP_FILE} written.")
         except:
             print(f"calibrator.py, WIP.write(): Couldn't write "
                 f"to cache file {WIP_FILE}.", file=sys.stderr)
@@ -56,8 +57,25 @@ class WIP:
                 self.offsets, self.gains, self.skew_times = wip_file.values()
             status = True
         except:
-            print(f"calibrator.py: no work in progress found.", file=sys.stderr)
+            print(f"calibrator.py: no work-in-progress found.")
         return status
+
+    def inc(self, channel):
+        # keep the setting truncated to 3dp
+        self.gains[channel] = (round(self.gains[channel] * 1000) + 1) / 1000.0
+
+    def dec(self, channel):
+        # keep the setting truncated to 3dp
+        self.gains[channel] = (round(self.gains[channel] * 1000) - 1) / 1000.0
+
+    def set(self, channel, text):
+        try:
+            value = float(text)
+            # keep the setting truncated to 3dp
+            self.gains[channel] = round(value * 1000) / 1000.0
+        except ValueError:
+            print(f"calibrator.py, WIP.set(): Value entered wasn't recognised.", file=sys.stderr)
+
 
 def is_raspberry_pi():
     try:
@@ -74,12 +92,13 @@ def resolve_path(path, file):
 
 
 def get_lines_from_reader(number_of_lines):
+    """Retrieves a specific number of sample lines from the reader program, which is
+    run as a sub-process."""
     pyth = sys.executable
     if is_raspberry_pi():
         reader = resolve_path('.', READER)
     else:
         reader = resolve_path('.', READER_TEST)
-    print('Receiving', end='')
     # receive the measurements
     try:
         process = subprocess.Popen(f'{pyth} {reader}',
@@ -93,7 +112,7 @@ def get_lines_from_reader(number_of_lines):
         lines = []
         for i in range(number_of_lines):
             if i % 2000 == 0:
-                sys.stdout.write('.')
+                sys.stdout.write('-')
                 sys.stdout.flush()
             line = process.stdout.readline()
             # check if readline() returned empty bytestring: indicates subprocess terminated
@@ -102,7 +121,7 @@ def get_lines_from_reader(number_of_lines):
                 raise EOFError
             else:
                 lines.append(line)
-        print(f' {len(lines)} samples, done.\n')
+        sys.stdout.write('>')
     except EOFError:
         print(f'{os.path.basename(__file__)}, get_lines_from_reader(): Reader program terminated.', file=sys.stderr)
         raise ValueError    # bump the error to caller, we need to exit.
@@ -112,7 +131,7 @@ def get_lines_from_reader(number_of_lines):
 
 
 def lines_to_samples(lines):
-
+    """Converts from two's complement hex words to real number integer values"""
     def from_twos_complement(v):
         return -(v & 0x8000) | (v & 0x7fff)
 
@@ -127,14 +146,19 @@ def lines_to_samples(lines):
 
 
 def scaled(wip, samples):
+    """Applies work-in-progress calibration constants to an array of samples."""
     scaled_samples = []
-    for ns in samples:
-        scaled_samples.append([ h*g*(n+o) for h,g,o,n
-            in zip(HARDWARE_SCALE_FACTORS, wip.gains, wip.offsets, ns) ])
+    for vs in samples:
+        # The sample values in each line are first zipped into tuples with the appropriate
+        # calibration contants and then an adjusted value calculated
+        scaled_samples.append([ h*g*(v+o) for h,g,o,v
+            in zip(HARDWARE_SCALE_FACTORS, wip.gains, wip.offsets, vs) ])
     return scaled_samples
 
 
 def samples_to_rms(wip, samples):
+    """Using a work-in-progress calibration object and list of samples, determines the RMS
+    amplitude of the samples for each channel."""
     number_of_samples = len(samples)
     scaled_samples = scaled(wip, samples)
     sum_of_squares = [0,0,0,0]
@@ -146,11 +170,13 @@ def samples_to_rms(wip, samples):
 
 
 def samples_to_offsets(samples):
+    """From an array of samples, calculates the average dc value and corrective offset
+    required for the sum to be zero."""
     number_of_samples = len(samples)
     accumulators = [0,0,0,0]
     for ns in samples:
         accumulators = [ a+n for a,n in zip(accumulators, ns) ]
-    offsets = [ round(-n/number_of_samples) for n in accumulators ]
+    offsets = [ round(-acc/number_of_samples) for acc in accumulators ]
     return offsets
 
 
@@ -209,23 +235,34 @@ def offset_calibration(wip):
     offsets = samples_to_offsets(samples)
     print(f'Calculated O[0-3] = {offsets}')
 
-def voltage_calibration(wip):
+def gain_calibration(wip, channel):
     while 1:
-        choice = input("'h' to increase, 'l' to lower, 'Enter' to repeat, 'q' to quit. ")
+        choice = input("Enter a new gain, 'i' to increment, 'd' to decrement, 'q' to quit, or nothing to repeat. ")
         if choice == 'q':
             break
+        elif choice == 'i':
+            wip.inc(channel)
+        elif choice == 'd':
+            wip.dec(channel)
+        elif re.match(r'^[0-9]+\.[0-9]*$', choice):
+            wip.set(channel, choice)
+        print(f'O{channel} = {wip.offsets[channel]}, G{channel} = {wip.gains[channel]}: ', end='')
         samples = lines_to_samples(get_lines_from_reader(TEN_SECONDS_OF_SAMPLES))
         rmses = samples_to_rms(wip, samples)
-        print(f'Voltage with O3 = {wip.cal_offsets[3]}, G3 = {wip.cal_gains[3]}: {rmses[3]}')
+        print(f' Adjusted reading = {rmses[channel]:5g}')
+
+
+def voltage_calibration(wip):
+    gain_calibration(wip, 3)
 
 def current_full_calibration(wip):
-    pass
+    gain_calibration(wip, 2)
 
 def current_low_calibration(wip):
-    pass
+    gain_calibration(wip, 1)
 
 def current_earthleakage_calibration(wip):
-    pass
+    gain_calibration(wip, 0)
 
 
 def main():

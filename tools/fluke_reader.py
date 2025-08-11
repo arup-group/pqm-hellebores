@@ -66,9 +66,11 @@ class Accumulators:
         self.count1 += 1
 
     def get_average(self):
+        """The average reading is the accumulators divided by the number of readings taken."""
         return (self.acc0 + self.acc1) / (self.count0 + self.count1)
 
     def shift(self):
+        """Copies the second accumulator into the first, and clears the second accumulator."""
         self.acc0 = self.acc1
         self.acc1 = 0
         self.count0 = self.count1
@@ -76,8 +78,6 @@ class Accumulators:
 
 
 def main():
-    '''This program needs the Pico to have been set into streaming mode by the
-    pico_control.py program first.'''
     port_name = find_serial_device()
     if port_name:
         try:
@@ -97,17 +97,19 @@ def main():
                 if tn != tp:
                     # output the mean of the accumulators (2 seconds of readings)
                     print(f'{acc.get_average():.5g}')
-                    # move the second accumulator into the first, and reset the second
+                    # advance the accumulator for fresh readings
                     acc.shift()
                     tp = tn
         except KeyboardInterrupt:
             print(f"fluke_reader.py, main(): Interrupted.", file=sys.stderr)
         except:
-            print(f"fluke_reader.py, main(): No connection, exiting.", file=sys.stderr)
+            print(f"fluke_reader.py, main(): Connection failed, exiting.", file=sys.stderr)
         finally:
             # make sure we have closed the port if it was opened
             if 'ser' in locals():
                 ser.close()
+    else:
+        print(f"Couldn't find a serial comms port to communicate with the meter.", file=sys.stderr)
 
 
 if __name__ == '__main__':

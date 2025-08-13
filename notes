@@ -73,3 +73,9 @@ enscript -Epython -fCourier6 --color=1 -C -o - sourcefile.py | ps2pdf - sourcefi
 #######
 (checks for anomalous voltage changes (delta between samples larger than 15V)
 ./reader.py | ./scaler.py | sed -E 's/ +/ /g' | cut -d ' ' -f 3 | sed -E 's/\..+$//' | awk -W interactive '{if(NR>1){_d=_n-$0; if(_d>15 || _d<-15){print _d}};_n=$0}'
+
+#######
+### FIND RASPBERRY PI ON NETWORK
+#######
+(doesn't work on WSL2)
+sudo nmap -sn -T5 192.168.1.0/24 | awk '/^Nmap/{ip=$NF;name=$(NF-1)}/B8:27:EB/{print ip,$0}'

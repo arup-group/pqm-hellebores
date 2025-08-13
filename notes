@@ -79,3 +79,5 @@ enscript -Epython -fCourier6 --color=1 -C -o - sourcefile.py | ps2pdf - sourcefi
 #######
 (doesn't work on WSL2)
 sudo nmap -sn -T5 192.168.1.0/24 | awk '/^Nmap/{ip=$NF;name=$(NF-1)}/B8:27:EB/{print ip,$0}'
+(example output)
+(192.168.1.117) power-quality-meter.lan MAC Address: B8:27:EB:4A:C9:52 (Raspberry Pi Foundation)

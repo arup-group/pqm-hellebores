@@ -26,12 +26,12 @@ struct Settings {
     double interval;
     int time_axis_pre_trigger_divisions;
     int horizontal_pixels_per_division;
-    int time_axis_per_division;
+    double time_axis_per_division;
     int vertical_pixels_per_division;
-    int voltage_axis_per_division;
-    int current_axis_per_division;
-    int power_axis_per_division;
-    int earth_leakage_current_axis_per_division;
+    double voltage_axis_per_division;
+    double current_axis_per_division;
+    double power_axis_per_division;
+    double earth_leakage_current_axis_per_division;
     char run_mode[16];
     char trigger_mode[16];
     char trigger_slope[16];

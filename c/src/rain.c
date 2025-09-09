@@ -12,7 +12,8 @@
 #include <unistd.h>
 #include "cjson/cJSON.h"
 
-#define SETTINGS_PATH "../configuration/settings.json"
+#define SETTINGS_PATH1 "../configuration/settings.json"
+#define SETTINGS_PATH2 "../../configuration/settings.json"
 
 // Constants from constants.py
 const double HARDWARE_SCALE_FACTORS[4] = { 4.07e-07, 2.44e-05, 0.00122, 0.0489 };
@@ -31,8 +32,12 @@ struct Settings {
 
 // Read settings.json and extract interval
 int read_settings(struct Settings *st) {
-    FILE *f = fopen(SETTINGS_PATH, "r");
-    if (!f) return -1;
+    FILE *f = fopen(SETTINGS_PATH1, "r");
+    // Second attempt, working from deeper directory (eg build directory)
+    if (!f) {
+        f = fopen(SETTINGS_PATH2, "r");
+        if (!f) return -1;
+    } 
     fseek(f, 0, SEEK_END);
     long len = ftell(f);
     fseek(f, 0, SEEK_SET);

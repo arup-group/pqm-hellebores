@@ -47,7 +47,6 @@ void print_csv_row(cJSON *json) {
 
 int main() {
     char line[4096];
-    int line_count = 0;
     // Skip first two lines
     for (int i = 0; i < 2; ++i) if (!fgets(line, sizeof(line), stdin)) return 1;
     // Third line: print header and first row

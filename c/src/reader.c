@@ -20,9 +20,9 @@
 
 #ifdef _WIN32
 const char *find_serial_device() {
-    static char port[16];
+    static char port[32];
     for (int i = 1; i <= 8; ++i) {
-        sprintf(port, "COM%d", i);
+        sprintf(port, "COM%2d", i);
         HANDLE h = CreateFileA(port, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
         if (h != INVALID_HANDLE_VALUE) {
             CloseHandle(h);
@@ -39,7 +39,7 @@ const char *find_serial_device() {
     if (!d) return NULL;
     while ((entry = readdir(d)) != NULL) {
         if (strncmp(entry->d_name, "ttyUSB", 6) == 0) {
-            snprintf(port, sizeof(port), "/dev/%s", entry->d_name);
+            sprintf(port, "/dev/%.16s", entry->d_name);
             closedir(d);
             return port;
         }
@@ -105,8 +105,10 @@ int main() {
     tty.c_iflag = 0;
     tty.c_oflag = 0;
     tty.c_lflag = 0;
-    tty.c_cc[VMIN]  = BLOCK_SIZE;
-    tty.c_cc[VTIME] = 5;
+    // Minimum number of bytes before firing an event, or VTIME * 0.1 seconds
+    // if fewer bytes remaining
+    tty.c_cc[VMIN]  = 128;
+    tty.c_cc[VTIME] = 2;
     tcsetattr(fd, TCSANOW, &tty);
     uint8_t bs[BLOCK_SIZE];
     int retries = 5;

@@ -219,7 +219,8 @@ void signal_handler(int signum) {
     if (settings.callback_fn) settings.callback_fn();
 }
 
-int main() {
+
+int setup() {
     set_callback_fn(&settings, default_callback);
     if (load_settings(&settings) != 0) {
         fprintf(stderr, "Failed to load settings\n");

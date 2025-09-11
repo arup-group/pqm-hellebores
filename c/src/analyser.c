@@ -107,8 +107,10 @@ int main() {
         double *leakage = &data[0][4];
         double rms_v = rms(voltages, cache_size);
         double rms_i = rms(currents, cache_size);
+        double rms_leakage = rms(leakage, cache_size);
         double max_v = max_abs(voltages, cache_size);
         double max_i = max_abs(currents, cache_size);
+        double max_leakage = max_abs(leakage, cache_size);
         double mean_p = 0.0;
         for (int i = 0; i < cache_size; ++i) mean_p += powers[i];
         mean_p /= cache_size;
@@ -117,8 +119,8 @@ int main() {
         harmonic_magnitudes(voltages, cache_size, sample_rate, harmonics_v, 51);
         harmonic_magnitudes(currents, cache_size, sample_rate, harmonics_i, 51);
         // Output (minimal JSON)
-        printf("{\"rms_voltage\":%.3f,\"rms_current\":%.5f,\"max_abs_voltage\":%.3f,\"max_abs_current\":%.5f,\"mean_power\":%.3f,\"voltage_h1\":%.3f,\"current_h1\":%.5f}\n",
-            rms_v, rms_i, max_v, max_i, mean_p, harmonics_v[1], harmonics_i[1]);
+        printf("{\"rms_voltage\":%.3f,\"rms_current\":%.5f,\"rms_leakage\":%.5f,\"max_abs_voltage\":%.3f,\"max_abs_current\":%.5f,\"max_abs_leakage\":%.5f,\"mean_power\":%.3f,\"voltage_h1\":%.3f,\"current_h1\":%.5f}\n",
+            rms_v, rms_i, rms_leakage, max_v, max_i, max_leakage, mean_p, harmonics_v[1], harmonics_i[1]);
         fflush(stdout);
     }
     return 0;

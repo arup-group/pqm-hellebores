@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include "kiss_fftr.h"
+#include "kissfft/kiss_fftr.h"
 
 #define N_SAMPLES 7812
 #define SAMPLES_PER_SECOND 7812.5

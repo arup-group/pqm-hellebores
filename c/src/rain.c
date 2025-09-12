@@ -16,18 +16,18 @@
 #define SETTINGS_PATH2 "../../configuration/settings.json"
 
 // Constants from constants.py
-const double HARDWARE_SCALE_FACTORS[4] = { 4.07e-07, 2.44e-05, 0.00122, 0.0489 };
-const double AMPLITUDES[4] = { 0.000100, 0.4, 0.4, 230.0 };
-const double NOISE_AMPLITUDES[4] = { 0.05, 0.05, 0.05, 0.0 };
-const double FREQUENCY = 50.2;
-const double TPF = 2 * M_PI * FREQUENCY;
+const float HARDWARE_SCALE_FACTORS[4] = { 4.07e-07, 2.44e-05, 0.00122, 0.0489 };
+const float AMPLITUDES[4] = { 0.000100, 0.4, 0.4, 230.0 };
+const float NOISE_AMPLITUDES[4] = { 0.05, 0.05, 0.05, 0.0 };
+const float FREQUENCY = 50.2;
+const float TPF = 2 * M_PI * FREQUENCY;
 
-double SIGNAL[4];
-double NOISE[4];
+float SIGNAL[4];
+float NOISE[4];
 
 // Settings struct
 struct Settings {
-    double interval; // ms per sample
+    float interval; // ms per sample
 };
 
 // Read settings.json and extract interval
@@ -53,18 +53,18 @@ int read_settings(struct Settings *st) {
         cJSON_Delete(json);
         return -3;
     }
-    st->interval = 1000.0 / sample_rate->valuedouble;
+    st->interval = (float) 1000.0 / sample_rate->valuedouble;
     cJSON_Delete(json);
     return 0;
 }
 
 // Generate one sample per channel
-void get_sample(double t, uint16_t *out) {
-    double wt = TPF * t / 1000.0;
-    out[0] = (uint16_t)(SIGNAL[0] * sin(wt) + NOISE[0] * ((double)rand()/RAND_MAX - 0.5));
-    out[1] = (uint16_t)(SIGNAL[1] * sin(wt) + NOISE[1] * ((double)rand()/RAND_MAX - 0.5));
-    out[2] = (uint16_t)(SIGNAL[2] * sin(wt) + NOISE[2] * ((double)rand()/RAND_MAX - 0.5));
-    out[3] = (uint16_t)(SIGNAL[3] * sin(wt) + NOISE[2] * ((double)rand()/RAND_MAX - 0.5));
+void get_sample(float t, uint16_t *out) {
+    float wt = TPF * t / 1000.0;
+    out[0] = (uint16_t)(SIGNAL[0] * sin(wt) + NOISE[0] * ((float)rand()/RAND_MAX - 0.5));
+    out[1] = (uint16_t)(SIGNAL[1] * sin(wt) + NOISE[1] * ((float)rand()/RAND_MAX - 0.5));
+    out[2] = (uint16_t)(SIGNAL[2] * sin(wt) + NOISE[2] * ((float)rand()/RAND_MAX - 0.5));
+    out[3] = (uint16_t)(SIGNAL[3] * sin(wt) + NOISE[2] * ((float)rand()/RAND_MAX - 0.5));
 }
 
 int main() {
@@ -83,7 +83,7 @@ int main() {
     int c = 0;
     while (1) {
         clock_gettime(CLOCK_MONOTONIC, &ts_now);
-        double elapsed = (ts_now.tv_sec - ts_start.tv_sec) * 1000.0 + (ts_now.tv_nsec - ts_start.tv_nsec) / 1e6;
+        float elapsed = (ts_now.tv_sec - ts_start.tv_sec) * 1000.0 + (ts_now.tv_nsec - ts_start.tv_nsec) / 1e6;
         int n = (int)(elapsed / st.interval) - c;
         for (int i = 0; i < n; ++i) {
             uint16_t out[4];

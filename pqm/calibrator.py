@@ -6,6 +6,7 @@ import os
 import math
 import json
 import re
+import select
 
 # local
 from constants import *
@@ -44,6 +45,7 @@ class WIP:
             with open(WIP_FILE, 'w') as f:
                 f.write(json.dumps({'offsets':self.offsets, 'gains':self.gains,
                     'skew_times':self.skew_times}))
+                f.write('\n')
             print(f"calibrator.py: work-in-progress file {WIP_FILE} written.")
         except:
             print(f"calibrator.py, WIP.write(): Couldn't write "
@@ -59,14 +61,6 @@ class WIP:
         except:
             print(f"calibrator.py: no work-in-progress found.")
         return status
-
-    def inc(self, channel):
-        # keep the setting truncated to 3dp
-        self.gains[channel] = (round(self.gains[channel] * 1000) + 1) / 1000.0
-
-    def dec(self, channel):
-        # keep the setting truncated to 3dp
-        self.gains[channel] = (round(self.gains[channel] * 1000) - 1) / 1000.0
 
     def set(self, channel, text):
         try:
@@ -89,6 +83,15 @@ def is_raspberry_pi():
 def resolve_path(path, file):
     file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), path, file)
     return os.path.abspath(file_path)
+
+
+def get_reading_from_multimeter_pipe(fd):
+    f = os.fdopen(fd)
+    # only read data if there is something waiting
+    if select.select( [f], [], [], 0)[0] != []:
+        return f.readline()
+    else:
+        return None
 
 
 def get_lines_from_reader(number_of_lines):
@@ -231,26 +234,23 @@ Select option, or 'q' to quit:
 
 def offset_calibration(wip):
     # offset report
+    input(f'Offsets O[0-3] = {wip.offsets}. Press Enter to start.')
     samples = lines_to_samples(get_lines_from_reader(ONE_MINUTE_OF_SAMPLES))
-    offsets = samples_to_offsets(samples)
-    print(f'Calculated O[0-3] = {offsets}')
+    wip.offsets = samples_to_offsets(samples)
+    print(f' New calculated offsets O[0-3] = {wip.offsets}')
 
 def gain_calibration(wip, channel):
+    input(f'O{channel} = {wip.offsets[channel]}, G{channel} = {wip.gains[channel]}. Press Enter to start.')
     while 1:
-        choice = input("Enter a new gain, 'i' to increment, 'd' to decrement, 'q' to quit, or nothing to repeat. ")
-        if choice == 'q':
-            break
-        elif choice == 'i':
-            wip.inc(channel)
-        elif choice == 'd':
-            wip.dec(channel)
-        elif re.match(r'^[0-9]+\.[0-9]*$', choice):
-            wip.set(channel, choice)
         print(f'O{channel} = {wip.offsets[channel]}, G{channel} = {wip.gains[channel]}: ', end='')
         samples = lines_to_samples(get_lines_from_reader(TEN_SECONDS_OF_SAMPLES))
         rmses = samples_to_rms(wip, samples)
         print(f' Adjusted reading = {rmses[channel]:5g}')
-
+        choice = input(f"Enter a new value for G{channel} (empty to repeat) or 'q' to quit. ")
+        if choice == 'q':
+            break
+        elif re.match(r'^[0-9]+\.[0-9]*$', choice):
+            wip.set(channel, choice)
 
 def voltage_calibration(wip):
     gain_calibration(wip, 3)
@@ -273,7 +273,7 @@ def main():
                               current_earthleakage_calibration ]
     calibration_functions[index](wip)
     wip.write()
-    print("When you are done with calibrating, copy the values in calibrator_wip.json to "
+    print("When you are done with calibrating, transfer the values in calibrator_wip.json to "
           "configuration/calibrations.json and commit to repository.")
 
 if __name__ == '__main__':

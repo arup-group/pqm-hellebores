@@ -4,7 +4,7 @@ import sys
 import os
 import signal
 import json
-import psutil
+# import psutil     # imported locally inside the get_program_pids() function
 import time
 import glob
 import math
@@ -203,6 +203,10 @@ class Settings():
     def get_program_pids(self, other_programs):
         """Uses a function in the psutil module to find the PIDs of the other program. The
         try/except block catches permission errors that we see on macOS only at present."""
+        # import psutil module locally because it is only used here and requires a pip install.
+        # Shadowing the import inside a function enables the rest of the program to be used in
+        # a git hook without the .venv being activated.
+        import psutil
         pids = {}
         if other_programs != []:
             for p in psutil.process_iter():

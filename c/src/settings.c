@@ -74,12 +74,14 @@ int load_settings(struct Settings *st) {
         long len = ftell(f);
         fseek(f, 0, SEEK_SET);
         data = malloc(len + 1);
-        fread(data, 1, len, f);
+        // check if the whole file was read
+        if (fread(data, 1, len, f) != len) return -1;
         data[len] = '\0';
         fclose(f);
     }
     json = cJSON_Parse(data);
     free(data);
+    // check for JSON parsing errors
     if (!json) return -1;
     // Parse fields (minimal, for brevity)
     st->analysis_max_min_reset = cJSON_GetObjectItem(json, "analysis_max_min_reset")->valuedouble;

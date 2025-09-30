@@ -3,7 +3,7 @@ SOURCES = reader.c rain.c scaler.c framer.c analysis_to_csv.c fft_example.c anal
 PROGRAMS := $(patsubst %.c, $(OUTPUT_DIR)/%, $(SOURCES))
 OBJECTS= settings.o
 LIBRARIES= kissfft
-CFLAGS= -g -Wall -Wno-unused-result -O3
+CFLAGS= -g -Wall -O3
 LDLIBS= -lcjson -lm
 CC=gcc
 

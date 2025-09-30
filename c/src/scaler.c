@@ -21,7 +21,7 @@ const float HARDWARE_SCALE_FACTORS[4] = { 4.07e-07, 2.44e-05, 0.00122, 0.0489 };
 
 // Settings struct
 struct Settings {
-    float interval;
+    double interval;
     char current_sensor[16];
     float cal_offsets[4];
     float cal_gains[4];
@@ -147,7 +147,7 @@ int main(int argc, char *argv[]) {
         float current = scaled[current_channel];
         float power = voltage * current;
         float leakage_current = scaled[0];
-        float t = settings.interval * i;
+        double t = settings.interval * i;
         printf("%12.4f %10.3f %10.5f %10.3f %12.7f\n", t, voltage, current, power, leakage_current);
         i++;
     }

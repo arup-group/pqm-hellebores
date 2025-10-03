@@ -9,56 +9,28 @@
 #include <signal.h>
 #include <unistd.h>
 #include "cjson/cJSON.h"
+#include "settings.h"
 
 #define SETTINGS_PATH "../configuration/settings.json"
 #define DEFAULT_SETTINGS_JSON "{\"analysis_max_min_reset\": 0,\"analysis_accumulators_reset\": 0,\"sample_rate\": 7812.5,\"time_axis_divisions\": 10,\"time_axis_pre_trigger_divisions\": 5,\"vertical_axis_divisions\": 8,\"horizontal_pixels_per_division\": 70,\"vertical_pixels_per_division\": 60,\"time_display_ranges\": [1,2,4,10,20,40,100],\"time_display_index\": 3,\"voltage_display_ranges\": [50,100,200,500],\"voltage_display_index\": 3,\"voltage_display_status\": true,\"current_sensor\": \"full\",\"current_display_ranges\": [0.001,0.002,0.005,0.01,0.02,0.05,0.1,0.2,0.5,1.0,2.0,5.0],\"current_display_index\": 10,\"current_display_status\": true,\"power_display_ranges\": [0.1,0.2,0.5,1.0,2.0,5.0,10.0,20.0,50.0,100.0,200.0,500.0,1000.0],\"power_display_index\": 11,\"power_display_status\": false,\"earth_leakage_current_display_ranges\": [0.0001,0.0002,0.0005,0.001,0.002],\"earth_leakage_current_display_index\": 4,\"earth_leakage_current_display_status\": false,\"trigger_slope\": \"rising\",\"inrush_trigger_level\": 0.2,\"trigger_position\": 5,\"trigger_mode\": \"sync\",\"run_mode\": \"running\"}"
 
-struct Settings {
-    double analysis_max_min_reset;
-    double analysis_accumulators_reset;
-    double sample_rate;
-    int time_axis_divisions;
-    int time_axis_pre_trigger_divisions;
-    int vertical_axis_divisions;
-    int horizontal_pixels_per_division;
-    int vertical_pixels_per_division;
-    double time_display_ranges[7];
-    int time_display_index;
-    double voltage_display_ranges[4];
-    int voltage_display_index;
-    int voltage_display_status;
-    char current_sensor[16];
-    double current_display_ranges[12];
-    int current_display_index;
-    int current_display_status;
-    double power_display_ranges[13];
-    int power_display_index;
-    int power_display_status;
-    double earth_leakage_current_display_ranges[5];
-    int earth_leakage_current_display_index;
-    int earth_leakage_current_display_status;
-    char trigger_slope[16];
-    double inrush_trigger_level;
-    int trigger_position;
-    char trigger_mode[16];
-    char run_mode[16];
-    // Derived settings
-    double interval;
-    // Callback
-    void (*callback_fn)(void);
-};
-
+// see settings.h for definition of this structure
 struct Settings settings;
 
 void set_derived_settings(struct Settings *st) {
     st->interval = 1000.0 / st->sample_rate;
+    if (strcmp(st->current_sensor, "low") == 0) {
+        st->current_channel = 1;
+    } else {
+        st->current_channel = 2;
+    }
 }
 
 void default_callback() {
     printf("Callback: settings updated\n");
 }
 
-void set_callback_fn(struct Settings *st, void (*fn)(void)) {
+void set_callback_fn(struct Settings *st, void (*fn) (void)) {
     st->callback_fn = fn;
 }
 
@@ -154,7 +126,7 @@ char *stringify_array_of_ints(const int int_array[], int int_array_length) {
 }
 
 
-void show_settings(const struct Settings *st) {
+void show_settings(struct Settings *st) {
     printf("Settings:\n");
     printf("  other_programs                          : %s\n", "[don't know yet]");
 //    printf("  identity: %s\n", st->identity);
@@ -223,14 +195,31 @@ void signal_handler(int signum) {
 
 
 int setup() {
-    set_callback_fn(&settings, default_callback);
+    strncpy(settings.current_sensor, "low", 16);
+    set_callback_fn(&settings, &default_callback);
     if (load_settings(&settings) != 0) {
         fprintf(stderr, "Failed to load settings\n");
         return 1;
     }
+    set_derived_settings(&settings);
     show_settings(&settings);
     // Setup signal handler for SIGUSR1
     signal(SIGUSR1, signal_handler);
+    return 0;
+}
+
+
+// Normally settings.c provides library functions to programs to load settings.
+// With SETTINGS_HAS_MAIN set in the environment, then it will be compiled as
+// an executable.
+
+#ifdef SETTINGS_HAS_MAIN
+    #define MAIN_FUNCTION main
+#endif
+
+int MAIN_FUNCTION() {
+    int status = setup();
+    if (status != 0) return status;
     printf("Send SIGUSR1 to this process to reload settings and call callback.\n");
     while (1) {
         pause(); // Wait for signal

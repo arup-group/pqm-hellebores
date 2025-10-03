@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <math.h>
 #include "cjson/cJSON.h"
+#include "settings.h"
 
 #define DELAY_LINE_LENGTH 64
 #define SETTINGS_PATH "../configuration/settings.json"
@@ -19,41 +20,9 @@
 // Constants from constants.py
 const float HARDWARE_SCALE_FACTORS[4] = { 4.07e-07, 2.44e-05, 0.00122, 0.0489 };
 
-// Settings struct
-struct Settings {
-    double interval;
-    char current_sensor[16];
-    float cal_offsets[4];
-    float cal_gains[4];
-    float cal_skew_times[4];
-};
+// settings struct from settings.c
+extern struct Settings settings;
 
-struct Settings settings;
-int current_channel = 2;
-
-void set_current_channel() {
-    if (strcmp(settings.current_sensor, "low") == 0) {
-        current_channel = 1;
-    } else {
-        current_channel = 2;
-    }
-}
-
-void default_callback() {
-    set_current_channel();
-    printf("Callback: settings updated, current_channel=%d\n", current_channel);
-}
-
-void set_callback_fn(void (*fn)(void));
-void (*callback_fn)(void) = default_callback;
-
-void signal_handler(int signum) {
-    printf("Signal received: %d\n", signum);
-    // Reload settings (simulate)
-    // In a full implementation, reload from file
-    set_current_channel();
-    if (callback_fn) callback_fn();
-}
 
 int from_twos_complement_hex(const char *w) {
     int v = (int)strtol(w, NULL, 16);
@@ -86,24 +55,20 @@ void scale_readings(int *cs, float *offsets, float *gains, float *out) {
     }
 }
 
-void set_callback_fn(void (*fn)(void)) {
-    callback_fn = fn;
-}
-
 int main(int argc, char *argv[]) {
-    // Setup signal handler for SIGUSR1
-    signal(SIGUSR1, signal_handler);
-    set_callback_fn(default_callback);
-
-    // Simulate loading settings
-    settings.interval = 0.128;
+    // read in settings
+    int status = setup();
+    if (status != 0) return status;
+    set_derived_settings(&settings);
+    // *********
+    // temporary setup until we implement calibration reading in settings.c
     strcpy(settings.current_sensor, "full");
     for (int i = 0; i < 4; ++i) {
         settings.cal_offsets[i] = 0.0;
         settings.cal_gains[i] = 1.0;
         settings.cal_skew_times[i] = 0.0;
     }
-    set_current_channel();
+    // *********
 
     int run_calibrated = 1;
     if (argc == 2 && strcmp(argv[1], "--uncalibrated") == 0) {
@@ -144,7 +109,7 @@ int main(int argc, char *argv[]) {
         }
         scale_readings(corrected, offsets, gains, scaled);
         float voltage = scaled[3];
-        float current = scaled[current_channel];
+        float current = scaled[settings.current_channel];
         float power = voltage * current;
         float leakage_current = scaled[0];
         double t = settings.interval * i;

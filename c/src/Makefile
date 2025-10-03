@@ -1,7 +1,7 @@
 OUTPUT_DIR=../bin
-SOURCES = reader.c rain.c scaler.c framer.c analysis_to_csv.c fft_example.c analyser.c
-PROGRAMS := $(patsubst %.c, $(OUTPUT_DIR)/%, $(SOURCES))
+SOURCES = reader.c rain.c scaler.c framer.c analysis_to_csv.c fft_example.c analyser.c settings.c
 OBJECTS= settings.o
+PROGRAMS := $(patsubst %.c, $(OUTPUT_DIR)/%, $(SOURCES))
 LIBRARIES= kissfft
 CFLAGS= -g -Wall -O3
 LDLIBS= -lcjson -lm
@@ -17,11 +17,14 @@ $(OBJECTS): %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Add settings.o to the linking once the source functions are more developed
-$(OUTPUT_DIR)/fft_example $(OUTPUT_DIR)/analyser: $(OUTPUT_DIR)/%: %.c | $(OUTPUT_DIR)
-	$(CC) $(CFLAGS) $< $(LDLIBS) -lkissfft-float -o $@
+$(OUTPUT_DIR)/fft_example $(OUTPUT_DIR)/analyser: $(OUTPUT_DIR)/%: %.c settings.o | $(OUTPUT_DIR)
+	$(CC) $(CFLAGS) $< settings.o $(LDLIBS) -lkissfft-float -o $@
 
-$(OUTPUT_DIR)/%: %.c | $(OUTPUT_DIR)
-	$(CC) $(CFLAGS) $< $(LDLIBS) -o $@
+$(OUTPUT_DIR)/settings: settings.c | $(OUTPUT_DIR)
+	$(CC) -DSETTINGS_HAS_MAIN $(CFLAGS) $< $(LDLIBS) -o $@
+
+$(OUTPUT_DIR)/%: %.c settings.o | $(OUTPUT_DIR)
+	$(CC) $(CFLAGS) $< settings.o $(LDLIBS) -o $@
 
 # Shadow the implicit rule for all .c files, to do nothing for targets that
 # don't match the defined patterns.

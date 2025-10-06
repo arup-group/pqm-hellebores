@@ -15,23 +15,11 @@
 #define DEFAULT_SETTINGS_JSON "{\"analysis_max_min_reset\": 0,\"analysis_accumulators_reset\": 0,\"sample_rate\": 7812.5,\"time_axis_divisions\": 10,\"time_axis_pre_trigger_divisions\": 5,\"vertical_axis_divisions\": 8,\"horizontal_pixels_per_division\": 70,\"vertical_pixels_per_division\": 60,\"time_display_ranges\": [1,2,4,10,20,40,100],\"time_display_index\": 3,\"voltage_display_ranges\": [50,100,200,500],\"voltage_display_index\": 3,\"voltage_display_status\": true,\"current_sensor\": \"full\",\"current_display_ranges\": [0.001,0.002,0.005,0.01,0.02,0.05,0.1,0.2,0.5,1.0,2.0,5.0],\"current_display_index\": 10,\"current_display_status\": true,\"power_display_ranges\": [0.1,0.2,0.5,1.0,2.0,5.0,10.0,20.0,50.0,100.0,200.0,500.0,1000.0],\"power_display_index\": 11,\"power_display_status\": false,\"earth_leakage_current_display_ranges\": [0.0001,0.0002,0.0005,0.001,0.002],\"earth_leakage_current_display_index\": 4,\"earth_leakage_current_display_status\": false,\"trigger_slope\": \"rising\",\"inrush_trigger_level\": 0.2,\"trigger_position\": 5,\"trigger_mode\": \"sync\",\"run_mode\": \"running\"}"
 
 // see settings.h for definition of this structure
-struct Settings settings;
-
-void set_derived_settings(struct Settings *st) {
-    st->interval = 1000.0 / st->sample_rate;
-    if (strcmp(st->current_sensor, "low") == 0) {
-        st->current_channel = 1;
-    } else {
-        st->current_channel = 2;
-    }
-}
+struct Settings _settings;
+int error_status = 0;
 
 void default_callback() {
     printf("Callback: settings updated\n");
-}
-
-void set_callback_fn(struct Settings *st, void (*fn) (void)) {
-    st->callback_fn = fn;
 }
 
 int load_settings(struct Settings *st) {
@@ -90,7 +78,15 @@ int load_settings(struct Settings *st) {
     strcpy(st->trigger_mode, cJSON_GetObjectItem(json, "trigger_mode")->valuestring);
     strcpy(st->run_mode, cJSON_GetObjectItem(json, "run_mode")->valuestring);
     cJSON_Delete(json);
-    set_derived_settings(st);
+    // *********
+    // temporary setup until we implement calibration reading
+    strcpy(st->current_sensor, "full");
+    for (int i = 0; i < 4; ++i) {
+        st->cal_offsets[i] = 0.0;
+        st->cal_gains[i] = 1.0;
+        st->cal_skew_times[i] = 0.0;
+    }
+    // *********
     return 0;
 }
 
@@ -102,6 +98,22 @@ char *stringify_array_of_doubles(const double *double_array, int double_array_le
     ch++;
     for (int i = 0; i < double_array_length; i++) {
         snprintf(value_as_string, 16, "%.5g", double_array[i]);
+        snprintf(array_as_string + ch, 128 - ch, "%s, ", value_as_string);
+        ch = ch + strlen(value_as_string) + 2;
+    }
+    // overwrites final comma and space with a close bracket
+    snprintf(array_as_string + ch - 2, 2, "]");
+    return array_as_string;
+}
+
+char *stringify_array_of_floats(const float *float_array, int float_array_length) {
+    static char array_as_string[128];
+    char value_as_string[16];
+    size_t ch = 0;
+    snprintf(array_as_string + ch, 2, "[");
+    ch++;
+    for (int i = 0; i < float_array_length; i++) {
+        snprintf(value_as_string, 16, "%.5g", float_array[i]);
         snprintf(array_as_string + ch, 128 - ch, "%s, ", value_as_string);
         ch = ch + strlen(value_as_string) + 2;
     }
@@ -129,10 +141,10 @@ char *stringify_array_of_ints(const int int_array[], int int_array_length) {
 void show_settings(struct Settings *st) {
     printf("Settings:\n");
     printf("  other_programs                          : %s\n", "[don't know yet]");
-//    printf("  identity: %s\n", st->identity);
-//    printf("  cal_offsets: %s\n", stringify_array_of_ints(st->cal_offsets));
-//    printf("  cal_gains: %s\n", stringify_array_of_ints(st->cal_gains);
-//    printf("  cal_skew_times: %s\n", stringify_array_of_doubles(st->cal_skew_times));
+    printf("  identity                                : %s\n", "[don't know yet]");
+    printf("  cal_offsets: %s\n", stringify_array_of_floats(st->cal_offsets, 4));
+    printf("  cal_gains: %s\n", stringify_array_of_floats(st->cal_gains, 4));
+    printf("  cal_skew_times: %s\n", stringify_array_of_floats(st->cal_skew_times, 4));
     printf("  settings_file                           : %s\n", "don't know");
     printf("  sample_rate                             : %.2f\n", st->sample_rate);
     printf("  time_axis_divisions                     : %d\n", st->time_axis_divisions);
@@ -174,8 +186,6 @@ void show_settings(struct Settings *st) {
   earth_leakage_current_display_status    : False
   trigger_slope                           : rising
   inrush_trigger_level                    : 0.2
-  trigger_position                        : 5
-  trigger_mode                            : sync
   run_mode                                : running
   interval                                : 0.128
   time_axis_per_division                  : 10
@@ -189,25 +199,38 @@ void show_settings(struct Settings *st) {
 
 void signal_handler(int signum) {
     printf("Signal received: %d\n", signum);
-    load_settings(&settings);
-    if (settings.callback_fn) settings.callback_fn();
+    load_settings(&_settings);
+    settings_set_derived_settings(&_settings);
+    if (_settings.callback_fn) _settings.callback_fn();
 }
 
-
-int setup() {
-    strncpy(settings.current_sensor, "low", 16);
-    set_callback_fn(&settings, &default_callback);
-    if (load_settings(&settings) != 0) {
+// Public functions here
+struct Settings *settings_setup() {
+    strncpy(_settings.current_sensor, "low", 16);
+    settings_set_callback_fn(&_settings, &default_callback);
+    if (load_settings(&_settings) != 0) {
         fprintf(stderr, "Failed to load settings\n");
-        return 1;
+        error_status = 1;
     }
-    set_derived_settings(&settings);
-    show_settings(&settings);
+    settings_set_derived_settings(&_settings);
+    show_settings(&_settings);
     // Setup signal handler for SIGUSR1
     signal(SIGUSR1, signal_handler);
-    return 0;
+    return &_settings;
 }
 
+void settings_set_callback_fn(struct Settings *st, void (*fn) (void)) {
+    st->callback_fn = fn;
+}
+
+void settings_set_derived_settings(struct Settings *st) {
+    st->interval = 1000.0 / st->sample_rate;
+    if (strcmp(st->current_sensor, "low") == 0) {
+        st->current_channel = 1;
+    } else {
+        st->current_channel = 2;
+    }
+}
 
 // Normally settings.c provides library functions to programs to load settings.
 // With SETTINGS_HAS_MAIN set in the environment, then it will be compiled as
@@ -218,11 +241,11 @@ int setup() {
 #endif
 
 int MAIN_FUNCTION() {
-    int status = setup();
-    if (status != 0) return status;
+    settings_setup();
+    if (error_status != 0) return error_status;
     printf("Send SIGUSR1 to this process to reload settings and call callback.\n");
     while (1) {
         pause(); // Wait for signal
     }
-    return 0;
+    return error_status;
 }

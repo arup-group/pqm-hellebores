@@ -1,5 +1,8 @@
 // settings.h: C translation of settings.py
 
+#ifndef settings__h
+#define settings__h
+
 struct Settings {
     double analysis_max_min_reset;
     double analysis_accumulators_reset;
@@ -39,20 +42,11 @@ struct Settings {
     void (*callback_fn) (void);
 };
 
-void set_derived_settings(struct Settings *st);
 
-void default_callback();
+struct Settings *settings_setup();
 
-void set_callback_fn(struct Settings *st, void (*fn) (void));
+void settings_set_callback_fn(struct Settings *st, void (*fn) (void));
 
-int load_settings(struct Settings *st);
+void settings_set_derived_settings(struct Settings *st);
 
-char *stringify_array_of_doubles(const double *double_array, int double_array_length);
-
-char *stringify_array_of_ints(const int int_array[], int int_array_length);
-
-void show_settings(struct Settings *st);
-
-void signal_handler(int signum);
-
-int setup();
+#endif

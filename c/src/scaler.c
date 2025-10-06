@@ -20,9 +20,6 @@
 // Constants from constants.py
 const float HARDWARE_SCALE_FACTORS[4] = { 4.07e-07, 2.44e-05, 0.00122, 0.0489 };
 
-// settings struct from settings.c
-extern struct Settings settings;
-
 
 int from_twos_complement_hex(const char *w) {
     int v = (int)strtol(w, NULL, 16);
@@ -37,11 +34,11 @@ void uncalibrated_constants(float *offsets, float *gains, int *delays) {
     }
 }
 
-void calibrated_constants(float *offsets, float *gains, int *delays) {
+void calibrated_constants(struct Settings* st, float *offsets, float *gains, int *delays) {
     for (int i = 0; i < 4; ++i) {
-        offsets[i] = settings.cal_offsets[i];
-        gains[i] = HARDWARE_SCALE_FACTORS[i] * settings.cal_gains[i];
-        delays[i] = (int)(-1 - settings.cal_skew_times[i] / settings.interval);
+        offsets[i] = st->cal_offsets[i];
+        gains[i] = HARDWARE_SCALE_FACTORS[i] * st->cal_gains[i];
+        delays[i] = (int)(-1 - st->cal_skew_times[i] / st->interval);
         if (delays[i] < -(DELAY_LINE_LENGTH-1) || delays[i] > -1) {
             uncalibrated_constants(offsets, gains, delays);
             return;
@@ -56,19 +53,10 @@ void scale_readings(int *cs, float *offsets, float *gains, float *out) {
 }
 
 int main(int argc, char *argv[]) {
+
     // read in settings
-    int status = setup();
-    if (status != 0) return status;
-    set_derived_settings(&settings);
-    // *********
-    // temporary setup until we implement calibration reading in settings.c
-    strcpy(settings.current_sensor, "full");
-    for (int i = 0; i < 4; ++i) {
-        settings.cal_offsets[i] = 0.0;
-        settings.cal_gains[i] = 1.0;
-        settings.cal_skew_times[i] = 0.0;
-    }
-    // *********
+    struct Settings *st = settings_setup();
+    settings_set_derived_settings(st);
 
     int run_calibrated = 1;
     if (argc == 2 && strcmp(argv[1], "--uncalibrated") == 0) {
@@ -80,7 +68,7 @@ int main(int argc, char *argv[]) {
     float offsets[4], gains[4];
     int delays[4];
     if (run_calibrated) {
-        calibrated_constants(offsets, gains, delays);
+        calibrated_constants(st, offsets, gains, delays);
     } else {
         uncalibrated_constants(offsets, gains, delays);
     }
@@ -109,12 +97,11 @@ int main(int argc, char *argv[]) {
         }
         scale_readings(corrected, offsets, gains, scaled);
         float voltage = scaled[3];
-        float current = scaled[settings.current_channel];
+        float current = scaled[st->current_channel];
         float power = voltage * current;
         float leakage_current = scaled[0];
-        double t = settings.interval * i;
+        double t = st->interval * i;
         printf("%12.4f %10.3f %10.5f %10.3f %12.7f\n", t, voltage, current, power, leakage_current);
         i++;
     }
-    return 0;
 }

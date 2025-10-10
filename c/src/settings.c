@@ -213,7 +213,6 @@ struct Settings *settings_setup() {
         error_status = 1;
     }
     settings_set_derived_settings(&_settings);
-    show_settings(&_settings);
     // Setup signal handler for SIGUSR1
     signal(SIGUSR1, signal_handler);
     return &_settings;
@@ -240,8 +239,9 @@ void settings_set_derived_settings(struct Settings *st) {
     #define MAIN_FUNCTION main
 #endif
 
-int MAIN_FUNCTION() {
+int MAIN_FUNCTION(int argc, char *argv[]) {
     settings_setup();
+    show_settings(&_settings);
     if (error_status != 0) return error_status;
     printf("Send SIGUSR1 to this process to reload settings and call callback.\n");
     while (1) {

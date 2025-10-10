@@ -34,7 +34,7 @@ void get_sample(double t, uint16_t *out) {
     out[0] = (uint16_t) SIGNAL[0] * (sin(wt) + NOISE[0] * ((float) rand()/RAND_MAX - 0.5));
     out[1] = (uint16_t) SIGNAL[1] * (sin(wt) + NOISE[1] * ((float) rand()/RAND_MAX - 0.5));
     out[2] = (uint16_t) SIGNAL[2] * (sin(wt) + NOISE[2] * ((float) rand()/RAND_MAX - 0.5));
-    out[3] = (uint16_t) SIGNAL[3] * (sin(wt) + NOISE[2] * ((float) rand()/RAND_MAX - 0.5));
+    out[3] = (uint16_t) SIGNAL[3] * (sin(wt) + NOISE[3] * ((float) rand()/RAND_MAX - 0.5));
 }
 
 

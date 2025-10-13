@@ -48,4 +48,4 @@ $(OUTPUT_DIR):
 .PHONY: clean
 
 clean:
-	rm *.o ../bin/* ./kissfft/*.o ./cJSON/*.o
+	rm -f *.o ../bin/* ./kissfft/*.o ./cjson/*.o

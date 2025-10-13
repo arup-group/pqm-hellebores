@@ -140,24 +140,39 @@ char *stringify_array_of_ints(const int int_array[], int int_array_length) {
 
 void show_settings(struct Settings *st) {
     printf("Settings:\n");
-    printf("  other_programs                          : %s\n", "[don't know yet]");
-    printf("  identity                                : %s\n", "[don't know yet]");
-    printf("  cal_offsets: %s\n", stringify_array_of_floats(st->cal_offsets, 4));
-    printf("  cal_gains: %s\n", stringify_array_of_floats(st->cal_gains, 4));
-    printf("  cal_skew_times: %s\n", stringify_array_of_floats(st->cal_skew_times, 4));
-    printf("  settings_file                           : %s\n", "don't know");
-    printf("  sample_rate                             : %.2f\n", st->sample_rate);
-    printf("  time_axis_divisions                     : %d\n", st->time_axis_divisions);
-    printf("  time_axis_pre_trigger_divisions         : %d\n", st->time_axis_pre_trigger_divisions);
-    printf("  vertical_axis_divisions                 : %d\n", st->vertical_axis_divisions);
-    printf("  horizontal_pixels_per_division          : %d\n", st->horizontal_pixels_per_division);
-    printf("  vertical_pixels_per_division            : %d\n", st->vertical_pixels_per_division);
-    printf("  time_display_ranges                     : %s\n", stringify_array_of_doubles(st->time_display_ranges, 7));
+    printf("  other_programs                          : %s\n", "don't know yet");
+    printf("  reload_on_signal                        : %s\n", "don't know yet");
+    printf("  identity                                : %s\n", "don't know yet");
+    printf("  cal_offsets                             : %s\n", stringify_array_of_floats(st->cal_offsets, 4));
+    printf("  cal_gains                               : %s\n", stringify_array_of_floats(st->cal_gains, 4));
+    printf("  cal_skew_times                          : %s\n", stringify_array_of_floats(st->cal_skew_times, 4));
+    printf("  settings_file                           : %s\n", "don't know yet");
+    printf("  analysis_max_min_reset                  : %s\n", "don't know yet");
+    printf("  analysis_accumulators_reset             : %s\n", "don't know yet");
     printf("  time_display_index                      : %d\n", st->time_display_index);
     printf("  voltage_display_ranges                  : %s\n", stringify_array_of_doubles(st->voltage_display_ranges, 4));
     printf("  voltage_display_index                   : %d\n", st->voltage_display_index);
+    printf("  voltage_display_status                  : %s\n", "don't know yet");
+    printf("  current_sensor                          : %s\n", "don't know yet");
     printf("  current_display_ranges                  : %s\n", stringify_array_of_doubles(st->current_display_ranges, 12));
     printf("  current_display_index                   : %d\n", st->current_display_index);
+    printf("  current_display_status                  : %s\n", "don't know yet");
+    printf("  power_display_ranges                    : %s\n", stringify_array_of_doubles(st->power_display_ranges, 12));
+    printf("  power_display_index                     : %d\n", st->power_display_index);
+    printf("  power_display_status                    : %s\n", "don't know yet");
+    printf("  earth_leakage_current_display_ranges    : %s\n", stringify_array_of_doubles(st->current_display_ranges, 12));
+    printf("  earth_leakage_current_display_index     : %d\n", st->current_display_index);
+    printf("  earth_leakage_current_display_status    : %s\n", "don't know yet");
+    printf("  trigger_slope                           : %s\n", "don't know yet");
+    printf("  inrush_trigger_level                    : %s\n", "don't know yet");
+    printf("  run_mode                                : %s\n", "don't know yet");
+    printf("  interval                                : %.3f\n", st->interval);
+    printf("  time_axis_per_division                  : %.0f\n", st->time_axis_per_division);
+    printf("  voltage_axis_per_division               : %.0f\n", st->voltage_axis_per_division);
+    printf("  current_axis_per_division               : %.1f\n", st->current_axis_per_division);
+    printf("  power_axis_per_division                 : %.1f\n", st->power_axis_per_division);
+    printf("  earth_leakage_current_axis_per_division : %.3f\n", st->earth_leakage_current_axis_per_division);
+    printf("  callback_fn                             : %s\n", "don't know yet");
 }
 
 /*
@@ -224,12 +239,18 @@ void settings_set_callback_fn(struct Settings *st, void (*fn) (void)) {
 
 void settings_set_derived_settings(struct Settings *st) {
     st->interval = 1000.0 / st->sample_rate;
+    st->time_axis_per_division = st->time_display_ranges[st->time_display_index];
+    st->voltage_axis_per_division = st->voltage_display_ranges[st->voltage_display_index];
+    st->current_axis_per_division = st->current_display_ranges[st->current_display_index];
+    st->power_axis_per_division = st->power_display_ranges[st->power_display_index];
+    st->earth_leakage_current_axis_per_division = st->earth_leakage_current_display_ranges[st->earth_leakage_current_display_index];
     if (strcmp(st->current_sensor, "low") == 0) {
         st->current_channel = 1;
     } else {
         st->current_channel = 2;
     }
 }
+
 
 // Normally settings.c provides library functions to programs to load settings.
 // With SETTINGS_HAS_MAIN set in the environment, then it will be compiled as

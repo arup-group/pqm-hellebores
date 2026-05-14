@@ -20,7 +20,7 @@ DISCARD_SAMPLES           = 5000
 READER                    = 'reader.py'
 READER_TEST               = 'rain_chooser.py'    # use this for testing
 WIP_FILE                  = 'calibrator_wip.json'
-
+MULTIMETER_PIPE_FILE      = '/run/shm/pqm-hellebores/multimeter_pipe_file'
 
 
 class WIP:
@@ -40,11 +40,13 @@ class WIP:
         self.identity = st.identity
         self.read()
 
+    def calibration_dictionary(self):
+        return {f'{self.identity}':{'offsets':self.offsets, 'gains':self.gains, 'skew_times':self.skew_times}}
+
     def write(self):
         try:
             with open(WIP_FILE, 'w') as f:
-                f.write(json.dumps({'offsets':self.offsets, 'gains':self.gains,
-                    'skew_times':self.skew_times}))
+                f.write(json.dumps(self.calibration_dictionary()))
                 f.write('\n')
             print(f"calibrator.py: work-in-progress file {WIP_FILE} written.")
         except:
@@ -52,14 +54,19 @@ class WIP:
                 f"to cache file {WIP_FILE}.", file=sys.stderr)
 
     def read(self):
-        status = False
         try:
             with open(WIP_FILE, 'r') as f:
                 wip_file = json.loads(f.read())
-                self.offsets, self.gains, self.skew_times = wip_file.values()
+                # the first and only key should be the identity
+                self.identity = list(wip_file.keys())[0]
+                # then the values are keyed on the identity
+                self.offsets = wip_file[self.identity]['offsets']
+                self.gains = wip_file[self.identity]['gains']
+                self.skew_times = wip_file[self.identity]['skew_times']
             status = True
         except:
             print(f"calibrator.py: no work-in-progress found.")
+            status = False
         return status
 
     def set(self, channel, text):
@@ -85,13 +92,18 @@ def resolve_path(path, file):
     return os.path.abspath(file_path)
 
 
-def get_reading_from_multimeter_pipe(fd):
-    f = os.fdopen(fd)
-    # only read data if there is something waiting
-    if select.select( [f], [], [], 0)[0] != []:
-        return f.readline()
-    else:
-        return None
+def get_average_reading_from_multimeter(multimeter_pipe_file):
+    """Using a given pipe file, return all the readings in it as a list of strings."""
+    try:
+        with open(multimeter_pipe_file, 'r') as f:
+            multimeter_readings = []
+            # only read if there is some data waiting, don't block
+            while select.select([f], [], [], 0)[0] != []:
+                multimeter_readings.append(float(f.readline()))
+        average_multimeter_reading = sum(multimeter_readings) / len(multimeter_readings)
+    except (FileNotFoundError, IOError, ValueError):
+        average_multimeter_reading = None
+    return average_multimeter_reading
 
 
 def get_lines_from_reader(number_of_lines):
@@ -243,9 +255,26 @@ def gain_calibration(wip, channel):
     input(f'O{channel} = {wip.offsets[channel]}, G{channel} = {wip.gains[channel]}. Press Enter to start.')
     while 1:
         print(f'O{channel} = {wip.offsets[channel]}, G{channel} = {wip.gains[channel]}: ', end='')
+        # discard any readings that may be present in the multimeter pipe
+        get_average_reading_from_multimeter(MULTIMETER_PIPE_FILE)
+        # retrieve a block of readings from the PQM reader
         samples = lines_to_samples(get_lines_from_reader(TEN_SECONDS_OF_SAMPLES))
         rmses = samples_to_rms(wip, samples)
-        print(f' Adjusted reading = {rmses[channel]:5g}')
+        print(f' Adjusted reading = {rmses[channel]:5g}', end='')
+        # if there is a multimeter pipe, get the average reading over the same period and display it
+        # for comparison
+        average_multimeter_reading = get_average_reading_from_multimeter(MULTIMETER_PIPE_FILE)
+        if average_multimeter_reading != None:
+            error = (rmses[channel] - average_multimeter_reading) / average_multimeter_reading * 100
+            print(f', multimeter reading = {average_multimeter_reading}', end='')
+            if error > 0.05:
+                print(f', {error}%, adjust 👇')
+            elif error < -0.05:
+                print(f', {error}%, adjust 👆')
+            else:
+                print(', {error}% ✋')
+        else:
+            print('')
         choice = input(f"Enter a new value for G{channel} (empty to repeat) or 'q' to quit. ")
         if choice == 'q':
             break
@@ -273,7 +302,8 @@ def main():
                               current_earthleakage_calibration ]
     calibration_functions[index](wip)
     wip.write()
-    print("When you are done with calibrating, transfer the values in calibrator_wip.json to "
+    print(wip.calibration_dictionary())
+    print("When you are done with calibrating, transfer the values to "
           "configuration/calibrations.json and commit to repository.")
 
 if __name__ == '__main__':

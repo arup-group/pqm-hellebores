@@ -30,16 +30,16 @@ def reset_fluke_meter(ser):
 def read_fluke_display(ser):
     global last_good_reading
     ser.write(b'val1?\n')
-    line1 = ser.readline() # echo of command
-    line2 = ser.readline() # actual value
-    line3 = ser.readline() # prompt =>
     try:
+        line1 = ser.readline() # echo of command
+        line2 = ser.readline() # actual value
         reading = float(line2)
-        last_good_reading = reading
+        last_good_reading = reading # update last good reading
+        line3 = ser.readline() # prompt =>
     except ValueError:
         # the meter probably wasn't ready, so we got empty strings
         # wait then read three times to resynchronise with the meter
-        time.sleep(3)
+        time.sleep(1)
         ser.readline()
         ser.readline()
         ser.readline()

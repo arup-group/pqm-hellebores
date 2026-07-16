@@ -14,8 +14,10 @@ fi
 
 # Repository options. If one repository is not available, provides option
 # to switch to an alternative.
-REPO_1="git@github.com:arup-group/pqm-hellebores.git"
-REPO_2="git@github.com:adam4521/pqm-hellebores.git"
+REPO_1_ssh="git@github.com:arup-group/pqm-hellebores.git"
+REPO_1_https="https://github.com/arup-group/pqm-hellebores.git"
+REPO_2_ssh="git@github.com:adam4521/pqm-hellebores.git"
+REPO_2_https="https://github.com/adam4521/pqm-hellebores.git"
 
 # Now get other configuration information from local system
 IDENTITY="$(cat $SOFTWARE_PATH/configuration/identity 2>/dev/null)"
@@ -110,10 +112,14 @@ is not available, you can try to 'switch remote'..." \
             fi
             exec "$0";;
         "Switch remote")
-            if [[ "$GIT_REMOTE" == "$REPO_1" ]]; then
-                git remote set-url origin "$REPO_2"
-            elif [[ "$GIT_REMOTE" == "$REPO_2" ]]; then
-                git remote set-url origin "$REPO_1"
+            if [[ "$GIT_REMOTE" == "$REPO_1_ssh" ]]; then
+                git remote set-url origin "$REPO_2_ssh"
+            elif [[ "$GIT_REMOTE" == "$REPO_2_ssh" ]]; then
+                git remote set-url origin "$REPO_1_ssh"
+            elif [[ "$GIT_REMOTE" == "$REPO_1_https" ]]; then
+                git remote set-url origin "$REPO_2_https"
+            elif [[ "$GIT_REMOTE" == "$REPO_2_https" ]]; then
+                git remote set-url origin "$REPO_1_https"
             fi
             exec "$0";;
     esac

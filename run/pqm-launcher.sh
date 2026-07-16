@@ -125,7 +125,7 @@ result=$(zenity --info \
                 --title "Launcher: Power Quality Meter" \
                 --text "$information" \
                 --ok-label "START" \
-                --extra-button "Software update" \
+                --extra-button "Software update..." \
                 --extra-button "Pico update" \
                 --extra-button "Shutdown")
 
@@ -152,7 +152,7 @@ case "$result" in
         exec "$0";;
     "EXIT")
         echo "Exiting launcher.";;
-    "Software update")
+    "Software update...")
         software_update;;
     "Pico update")
         pico_update;;

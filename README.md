@@ -98,7 +98,7 @@ Dependencies sometimes change with OS updates. See notes file for potential addi
 **Pico setup**
 
 Using Thonny:
-
+It's best to switch Thonny into 'regular mode' via the UI at the top right. It may also be necessary, via the options (General tab), to use Tk file dialogs rather than zenity.
 Open `./pico/main.py` and save it to the root folder of the microcontroller.
 Open `./pico/stream.py` and save it to the root folder of the microcontroller.
 

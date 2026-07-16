@@ -14,10 +14,10 @@ fi
 
 # Repository options. If one repository is not available, provides option
 # to switch to an alternative.
-REPO_1_ssh="git@github.com:arup-group/pqm-hellebores.git"
-REPO_1_https="https://github.com/arup-group/pqm-hellebores.git"
-REPO_2_ssh="git@github.com:adam4521/pqm-hellebores.git"
-REPO_2_https="https://github.com/adam4521/pqm-hellebores.git"
+REPO_1_ssh='git@github.com:arup-group/pqm-hellebores.git'
+REPO_1_https='https://github.com/arup-group/pqm-hellebores.git'
+REPO_2_ssh='git@github.com:adam4521/pqm-hellebores.git'
+REPO_2_https='https://github.com/adam4521/pqm-hellebores.git'
 
 # Now get other configuration information from local system
 IDENTITY="$(cat $SOFTWARE_PATH/configuration/identity 2>/dev/null)"

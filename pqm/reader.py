@@ -9,7 +9,7 @@
 #                                |_|    |___/ 
 # 
 # Read incoming binary block from stdin and write out in hexadecimal text format
-# Incremental index number then one sample for each channel, per line
+# One sample for each channel, per line
 
 import sys
 import serial
@@ -34,14 +34,32 @@ def find_serial_device():
     return port_name
  
 
+def connect(port_name):
+    '''Connects to serial port with re-try and backoff in case other services are
+    trying to probe the port.'''
+    sleeping = [ 0.2, 0.3, 0.5, 1.0, 2.0 ]
+    this_try = 0
+    # try to connect five times
+    while this_try < 5:
+        ser = serial.Serial(port_name)
+        if ser.is_open:
+            print(f"reader.py, main(): Connected.", file=sys.stderr)
+            # discard anything hanging around in the hardware buffer
+            ser.reset_input_buffer()
+            return ser
+        time.sleep(sleeping[this_try])
+        this_try = this_try + 1
+    print(f"reader.py, main(): Failed to connect to serial port.", file=sys.stderr)
+    raise serial.SerialException
+
+
 def read_and_print(ser):
     '''Reads binary data from serial port, and prints as hexadecimal text to stdout.
-    Sometimes (rarely) there is a serial read error. This can be caused by the getty
-    terminal process trying to read/write the serial port. We allow up to 5 successive
-    re-tries before quitting.'''
+    Sometimes (rarely) there is a serial read error.'''
     bs = bytearray(BLOCK_SIZE)
     retries = 5
-    while retries > 0:    
+    this_try = 0
+    while this_try < retries:
         try:
             # read exactly BLOCKSIZE bytes into bytearray buffer
             ser.readinto(bs)
@@ -55,8 +73,9 @@ def read_and_print(ser):
             print('reader.py, read_and_print(): The data was not correct or complete.', file=sys.stderr)
         except (IOError, OSError):
             print('reader.py, read_and_print(): Failed to read from serial port.', file=sys.stderr)
-            retries = retries - 1
+            retries = retries + 1
     print('reader.py, read_and_print(): Read error was persistent, exiting loop.', file=sys.stderr)
+    raise serial.SerialException
 
 
 def main():
@@ -65,17 +84,16 @@ def main():
     port_name = find_serial_device()
     if port_name:
         try:
-            ser = serial.Serial(port_name)
-            # discard anything hanging around in the hardware buffer
-            ser.reset_input_buffer()
-            print(f"reader.py, main(): Connected.", file=sys.stderr)
+            ser = connect(port_name)
             read_and_print(ser)
         except:
-            print(f"reader.py, main(): No connection, exiting.", file=sys.stderr)
+            print(f"reader.py, main(): serial comms error, exiting.", file=sys.stderr)
         finally:
             # make sure we have closed the port if it was opened
             if 'ser' in locals():
                 ser.close()
+    else:
+        print("reader.py, main(): Couldn't find a suitable serial port, exiting.", file=sys.stderr)
 
 
 if __name__ == '__main__':

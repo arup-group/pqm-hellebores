@@ -12,6 +12,7 @@
 # One sample for each channel, per line
 
 import sys
+import errno
 import serial
 import serial.tools.list_ports
 
@@ -38,10 +39,11 @@ def connect(port_name):
     '''Connects to serial port with re-try and backoff in case other services are
     trying to probe the port.'''
     sleeping = [ 0.2, 0.3, 0.5, 1.0, 2.0 ]
+    MAX_TRIES = 5
     this_try = 0
     # try to connect five times
-    while this_try < 5:
-        ser = serial.Serial(port_name)
+    while this_try < MAX_TRIES:
+        ser = serial.Serial(port_name, timeout=None)
         if ser.is_open:
             print(f"reader.py, main(): Connected.", file=sys.stderr)
             # discard anything hanging around in the hardware buffer
@@ -57,9 +59,7 @@ def read_and_print(ser):
     '''Reads binary data from serial port, and prints as hexadecimal text to stdout.
     Sometimes (rarely) there is a serial read error.'''
     bs = bytearray(BLOCK_SIZE)
-    retries = 5
-    this_try = 0
-    while this_try < retries:
+    while True:
         try:
             # read exactly BLOCKSIZE bytes into bytearray buffer
             ser.readinto(bs)
@@ -67,15 +67,18 @@ def read_and_print(ser):
             hexstr = bs.hex()
             for i in range(0, BLOCK_SIZE*2, 16):
                 print(f'{hexstr[i:i+4]} {hexstr[i+4:i+8]} {hexstr[i+8:i+12]} {hexstr[i+12:i+16]}')
-            retries = 5
 
         except ValueError:
             print('reader.py, read_and_print(): The data was not correct or complete.', file=sys.stderr)
-        except (IOError, OSError):
+        except OSError as e:
+            if e.errno == errno.EINTR:
+                # continue silently if the blocking read was interrupted by an OS signal
+                continue
+            else:
+                raise serial.SerialException
+        except IOError:
             print('reader.py, read_and_print(): Failed to read from serial port.', file=sys.stderr)
-            retries = retries + 1
-    print('reader.py, read_and_print(): Read error was persistent, exiting loop.', file=sys.stderr)
-    raise serial.SerialException
+            raise serial.SerialException
 
 
 def main():

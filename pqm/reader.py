@@ -75,10 +75,10 @@ def read_and_print(ser):
                 # a blocking read
                 continue
             else:
-                print('reader.py, read_and_print(): OSError during attempt to read from serial port.', file=sys.stderr)
+                print(f'reader.py, read_and_print(): OSError "{e}" during attempt to read from serial port.', file=sys.stderr)
                 raise serial.SerialException
-        except IOError:
-            print('reader.py, read_and_print(): IOError during attempt to read from serial port.', file=sys.stderr)
+        except IOError as e:
+            print(f'reader.py, read_and_print(): IOError "{e}" during attempt to read from serial port.', file=sys.stderr)
             raise serial.SerialException
 
 
@@ -91,7 +91,7 @@ def main():
             ser = connect(port_name)
             read_and_print(ser)
         except:
-            print(f"reader.py, main(): serial comms error, exiting.", file=sys.stderr)
+            print("reader.py, main(): serial comms error, exiting.", file=sys.stderr)
         finally:
             # make sure we have closed the port if it was opened
             if 'ser' in locals():

@@ -108,8 +108,8 @@ def main():
     try:
         # The loop is so we can attempt automatic retry for certain error states.
         while True:
-            if (port_name = find_serial_device()) \
-                    and (ser = connect(port_nane)) \
+            if (port_name := find_serial_device()) \
+                    and (ser := connect(port_nane)) \
                     and verify(ser):
                 # read_and_print() will continue indefinitely if there are no errors
                 read_and_print(ser)

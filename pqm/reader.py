@@ -22,17 +22,17 @@ BLOCK_SIZE = BUFFER_SIZE * 8
  
 def find_serial_device():
     '''determines the serial port that the Pico is connected to. On Ubuntu/Raspberry
-    Pi, serial ports are in the form '/dev/ttyUSBx' where x is an integer 0-7.
+    Pi, serial ports are in the form '/dev/ttyACMx' where x is an integer 0-7.
     On Windows, serial ports are in the form 'COMx' where x is an integer 1-8'''
     ports = serial.tools.list_ports.comports()
-    port_name = None
     for port in ports:
         description = port.description
         if 'board in fs mode' in description.lower() or 'serial' in description.lower():
             print(f'{time.ctime()} reader.py, find_serial_device(): Found {port.description}.', file=sys.stderr)
-            port_name = port.device
-            break
-    return port_name
+            # port.device contains the name of the port
+            return port.device
+    print(f"{time.ctime()} reader.py, main(): Couldn't find a suitable serial port.", file=sys.stderr)
+    return None
  
 
 def connect(port_name):
@@ -91,7 +91,7 @@ def read_and_print(ser):
                 pass
             elif e.errno == errno.EPIPE:
                 # if there is a broken pipe error, bump the exception out to caller
-                print(f'{time.ctime()} reader.py, read_and_print(): broken pipe exception, we need to quit.', file=sys.stderr)
+                print(f'{time.ctime()} reader.py, read_and_print(): Broken pipe exception, we need to quit.', file=sys.stderr)
                 raise e
             else:
                 print(f'{time.ctime()} reader.py, read_and_print(): OSError "{e}" during attempt to read from serial port.', file=sys.stderr)
@@ -105,26 +105,22 @@ def read_and_print(ser):
 def main():
     '''This program needs the Pico to have been set into streaming mode by the 
     pico_control.py program first.'''
-    port_name = find_serial_device()
-    if not port_name:
-        print(f"{time.ctime()} reader.py, main(): Couldn't find a suitable serial port, exiting.", file=sys.stderr)
-        sys.exit(0)
-
     try:
         # The loop is so we can attempt automatic retry for certain error states.
-        # We have a good port_name at this point, let's try to connect.
         while True:
-            ser = connect(port_name)
-            if ser and verify(ser):
+            if (port_name = find_serial_device()) \
+                    and (ser = connect(port_nane)) \
+                    and verify(ser):
                 # read_and_print() will continue indefinitely if there are no errors
                 read_and_print(ser)
-                # something went wrong, close the port before looping round.
+                # something went wrong, so we close the port before looping round.
                 ser.close()
             else:
+                # if any of the predicates return None or False, we quit
                 break
 
     except:
-        # catch broken pipe and other exceptions here, so that we can clean up
+        # we also catch broken pipe and other exceptions here, so that we can clean up
         pass
 
     finally:
@@ -133,7 +129,6 @@ def main():
         if 'ser' in locals():
             ser.close()
         print(f'{time.ctime()} reader.py, main(): Exiting after encountering errors.', file=sys.stderr)
-        sys.exit(1)
 
 
 if __name__ == '__main__':

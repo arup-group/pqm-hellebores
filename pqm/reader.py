@@ -81,12 +81,12 @@ def read_and_print(ser):
                 pass
             else:
                 print(f'reader.py, read_and_print(): OSError "{e}" during attempt to read from serial port.', file=sys.stderr)
-                time.sleep(sleeping[this_try)]
+                time.sleep(sleeping[this_try])
                 this_try = this_try + 1
 
         except IOError as e:
             print(f'reader.py, read_and_print(): IOError "{e}" during attempt to read from serial port.', file=sys.stderr)
-            time.sleep(sleeping[this_try)]
+            time.sleep(sleeping[this_try])
             this_try = this_try + 1
 
     # if we fall out of the loop, raise an exception

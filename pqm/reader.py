@@ -13,12 +13,12 @@
 
 import sys
 import errno
+import time
 import serial
 import serial.tools.list_ports
 
 BUFFER_SIZE = 128
 BLOCK_SIZE = BUFFER_SIZE * 8
- 
  
 def find_serial_device():
     '''determines the serial port that the Pico is connected to. On Ubuntu/Raspberry
@@ -59,6 +59,7 @@ def read_and_print(ser):
     '''Reads binary data from serial port, and prints as hexadecimal text to stdout.
     Sometimes (rarely) there is a serial read error, so we trap and retry a few times.'''
     sleeping = [ 0.01, 0.03, 0.05, 0.1, 0.5 ]
+    faults = 0
     MAX_TRIES = 5
     this_try = 0
     bs = bytearray(BLOCK_SIZE)
@@ -83,14 +84,16 @@ def read_and_print(ser):
                 print(f'reader.py, read_and_print(): OSError "{e}" during attempt to read from serial port.', file=sys.stderr)
                 time.sleep(sleeping[this_try])
                 this_try = this_try + 1
+                faults = faults + 1
 
         except IOError as e:
             print(f'reader.py, read_and_print(): IOError "{e}" during attempt to read from serial port.', file=sys.stderr)
             time.sleep(sleeping[this_try])
             this_try = this_try + 1
+            faults = faults + 1
 
     # if we fall out of the loop, raise an exception
-    print(f'reader.py, read_and_print(): Retry attempts exceeded, dropping out.', file=sys.stderr)
+    print(f'reader.py, read_and_print(): Retry attempts exceeded, dropping out after {faults} read faults.', file=sys.stderr)
     raise serial.SerialException
 
 

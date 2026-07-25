@@ -111,24 +111,26 @@ def main():
             if (port_name := find_serial_device()) \
                     and (ser := connect(port_name)) \
                     and verify(ser):
-                # read_and_print() will continue indefinitely if there are no errors
+                # read_and_print() will continue indefinitely if there are no errors.
                 read_and_print(ser)
                 # something went wrong, so we close the port before looping round.
-                ser.close()
+                if ser.is_open:
+                    ser.close()
+                time.sleep(1.0)
             else:
-                # if any of the predicates return None or False, we quit
+                # if any of the predicates return None or False, we break out of the loop.
                 break
 
     except:
-        # we also catch broken pipe and other exceptions here, so that we can clean up
+        # we also catch broken pipe and other exceptions here, so that we can clean up.
         pass
 
     finally:
         # There was an error on the way and our reconnection attempts did not work.
         # Make sure we have closed the port if it was opened.
-        if 'ser' in locals():
+        if 'ser' in locals() and ser.is_open:
             ser.close()
-        print(f'{time.ctime()} reader.py, main(): Exiting after encountering errors.', file=sys.stderr)
+        print(f'{time.ctime()} reader.py, main(): Now exiting.', file=sys.stderr)
 
 
 if __name__ == '__main__':

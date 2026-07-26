@@ -39,7 +39,7 @@ SPI_CLOCK_RATE = 6000000
 # diagnostic information. Instead of pushing sample data to stdout, it caches
 # snips of sample data in a dedicated buffer and exits the program after a few
 # cycles to then print it out.
-DEBUG = const(False)
+DEBUG = const(True)
 
 # These adc settings can be adjusted via comms from the Pi via command line
 # arguments
@@ -531,7 +531,7 @@ def streaming_loop_core_1():
 debug_cache = Debug_cache()
 def streaming_loop_core_0():
     '''Prints data from memory to stdout in chunks.'''
-    global debug_cache
+    global debug_cache, cell_mem
 
     def _transfer_buffer_normal(bs):
         pins['buffer_led'].on()
@@ -553,48 +553,31 @@ def streaming_loop_core_0():
     else:
         transfer_buffer = _transfer_buffer_normal
 
-    @micropython.viper
     def latch_test(cell1, cell2):
         # SPI clock synchronisation can fail during a large power disturbance.
         # If this happens, the ADC outputs will latch to the same values
         # on successive SPI reads. So we compare all the readings from two
         # samples to check, and set a RESYNC flag if necessary:
         global flags
-        # each sample reading in the cell occupies 16 bits
-        # these pointer variables are native viper variables to help avoid
-        # expensive bytestring slicing operations in python
-        c1: ptr16 = ptr16(cell1)
-        c2: ptr16 = ptr16(cell2)
-        # compare all the readings to the first one
-        r = c1[0]
-        if (c1[1] == r & c1[2] == r & c1[3] == r
-            & c2[0] == r & c2[1] == r & c2[2] == r & c2[3] == r):
-            # if the individual readings are all the same, set two readings
-            # to different values, to prevent this function re-triggering if
-            # we happen to check the the same cells again before the RESYNC
-            # is completed.
-            c1[0] = 0xffff
-            c1[1] = 0x0000
-            # raise RESYNC flag
+        if cell1 == cell2:
             flags = flags | RESYNC
 
-    p_cell: ptr32 = ptr32(uctypes.addressof(cell_mem))
     # Now transfer buffers in turn and loop...
     while flags & STREAMING:
         # Wait while we fill page 0, then transfer it
-        while (p_cell[0] & PAGE_BITS) == PAGE0:
+        while (cell_mem[0] & PAGE_BITS) == PAGE0:
             continue
         transfer_buffer(p0_mv)
         # Wait while we fill page 1, then transfer it
-        while (p_cell[0] & PAGE_BITS) == PAGE1:
+        while (cell_mem[0] & PAGE_BITS) == PAGE1:
             continue
         transfer_buffer(p1_mv)
         # Wait while we fill page 2, then transfer it
-        while (p_cell[0] & PAGE_BITS) == PAGE2:
+        while (cell_mem[0] & PAGE_BITS) == PAGE2:
             continue
         transfer_buffer(p2_mv)
         # Wait while we fill page 3. then transfer it
-        while (p_cell[0] & PAGE_BITS) == PAGE3:
+        while (cell_mem[0] & PAGE_BITS) == PAGE3:
             continue
         transfer_buffer(p3_mv)
         # Check to see if ADC readouts have latched to a constant value.

@@ -296,26 +296,31 @@ def create_asm_adc_read_handler(cell_addr: int, WRAP_MASK: int):
     b1 = (cell_addr >> 8) & 0xFF
     b0 = cell_addr & 0xFF
 
-    @micropython.asm_thumb
-    def asm_adc_read_handler(r0):
-        # r0 is passed by MicroPython IRQ dispatcher (pin object, unused)
-        # Construct 32-bit RAM address of cell_mem in r1
-        mov(r1, b3)
-        lsl(r1, r1, 8)
-        add(r1, b2)
-        lsl(r1, r1, 8)
-        add(r1, b1)
-        lsl(r1, r1, 8)
-        add(r1, b0)
+    func_code = f"""
+@micropython.asm_thumb
+def asm_adc_read_handler(r0):
+    # r0 is passed by MicroPython IRQ dispatcher (pin object, unused)
+    # Construct 32-bit RAM address of cell_mem in r1
+    mov(r1, {b3})
+    lsl(r1, r1, 8)
+    add(r1, {b2})
+    lsl(r1, r1, 8)
+    add(r1, {b1})
+    lsl(r1, r1, 8)
+    add(r1, {b0})
 
-        # Load cell index, increment, mask with WRAP_MASK, and store back
-        ldr(r2, [r1, 0])
-        add(r2, r2, 1)
-        mov(r3, WRAP_MASK)
-        and_(r2, r3)
-        str(r2, [r1, 0])
+    # Load cell index, increment, mask with WRAP_MASK, and store back
+    ldr(r2, [r1, 0])
+    add(r2, r2, 1)
+    mov(r3, {WRAP_MASK})
+    and_(r2, r3)
+    str(r2, [r1, 0])
+"""
+    local_env = {}
+    exec(func_code, globals(), local_env)
+    return local_env['asm_adc_read_handler']
 
-    return asm_adc_read_handler
+
 
 
 def configure_interrupts(command: str ='enable'):

@@ -96,7 +96,7 @@ ADC_READ = 0x41
 pins: dict                   # pin configuration for the Pico
 spi_adc_interface: object    # object holding SPI interface configuration
 flags: int                   # bit field with flags to control operation
-cell_mem: bytearray = bytearray(4) # 4-byte buffer for current cell index
+cell: int                    # pointer to current cell in the buffer
 acq: bytearray               # underlying storage for the sample buffer
 p0_mv: bytearray             # page 0 of the storage buffer
 p1_mv: bytearray             # page 1 of the storage buffer
@@ -287,45 +287,21 @@ def setup_adc(adc_settings: dict):
 
 
 
-def create_asm_adc_read_handler(cell_addr: int, WRAP_MASK: int):
-    '''Assembly function factory that creates a high-performance inline ARM Thumb
-    interrupt handler on Cortex-M0+. It updates the cell index at cell_addr
-    in constant time (~14 clock cycles).'''
-    b3 = (cell_addr >> 24) & 0xFF
-    b2 = (cell_addr >> 16) & 0xFF
-    b1 = (cell_addr >> 8) & 0xFF
-    b0 = cell_addr & 0xFF
-
-    @micropython.asm_thumb
-    def asm_adc_read_handler(r0):
-        # r0 is passed by MicroPython IRQ dispatcher (pin object, unused)
-        # Construct 32-bit RAM address of cell_mem in r1
-        mov(r1, b3)
-        lsl(r1, r1, 8)
-        add(r1, b2)
-        lsl(r1, r1, 8)
-        add(r1, b1)
-        lsl(r1, r1, 8)
-        add(r1, b0)
-
-        # Load cell index, increment, mask with WRAP_MASK, and store back
-        ldr(r2, [r1, 0])
-        add(r2, r2, 1)
-        mov(r3, WRAP_MASK)
-        and_(r2, r3)
-        str(r2, [r1, 0])
-
-    return asm_adc_read_handler
-
-
 def configure_interrupts(command: str ='enable'):
     '''Two interrupt handlers are set up, one for the DR* pin, for notifying
     Pico that new data is ready for reading from the ADC, and a reset command
     from the Pi, to help with run-time error recovery.'''
 
-    # Create inline Thumb assembly interrupt handler targeting cell_mem RAM address
-    cell_addr = uctypes.addressof(cell_mem)
-    adc_read_handler = create_asm_adc_read_handler(cell_addr, WRAP_MASK)
+    # Interrupt handler for data ready pin (this pin is commanded from the ADC)
+    # Use viper native optimiser to minimise response time.
+    @micropython.viper
+    def adc_read_handler(_):
+        global cell
+        # 'anding' the pointer with a bit mask that has binary '0' in the bit
+        # above the largest buffer pointer makes the buffer pointer circulate
+        # to zero without needing an 'if' conditional: this means the
+        # instruction executes in constant time
+        cell = (int(cell) + 1) & int(WRAP_MASK)
 
     # we need this helper function, because we can't easily assign to global
     # variable within a lambda expression
@@ -480,13 +456,11 @@ def configure_buffer_memory():
 # performance: optimise this function to native code rather than bytecode
 @micropython.viper
 def streaming_loop_core_1():
-    '''Watches for change in cell_mem (incremented by the inline assembly interrupt
+    '''Watches for change in cell variable (incremented by the interrupt
     handler) and reads new data from the ADC into memory. Also watches for
     change in flags variable to enable clean exit or recovery from RESYNC
     condition.'''
-    global flags, cell_mem
-
-    p_cell: ptr32 = ptr32(uctypes.addressof(cell_mem))
+    global flags, cell
 
     # The resync flag may be raised by Core 0 at any time, so we have to
     # allow for it in the outer loop test here by using a bitmask filter
@@ -494,14 +468,14 @@ def streaming_loop_core_1():
     while flags & STREAMING:
         # cell_p is a local cache of the cell variable, so that the inner loop
         # can synchronise to the moment when cell changes value
-        cell_p: int = p_cell[0]
+        cell_p: int = cell
 
         # Inner loop -- speed critical -- we do sampling here, nothing else.
         while flags == STREAMING:
             # Read out from the ADC *immediately* if the cell variable changes
             # value, then repeat.
-            p_cell[0] == cell_p \
-                or spi_adc_interface.readinto(cells_mv[(cell_p := p_cell[0])])
+            cell == cell_p \
+                or spi_adc_interface.readinto(cells_mv[(cell_p := cell)])
 
         # If Core 0 has raised RESYNC flag, we miss a few samples and deal
         # with it here.
@@ -573,23 +547,22 @@ def streaming_loop_core_0():
             # raise RESYNC flag
             flags = flags | RESYNC
 
-    p_cell: ptr32 = ptr32(uctypes.addressof(cell_mem))
     # Now transfer buffers in turn and loop...
     while flags & STREAMING:
         # Wait while we fill page 0, then transfer it
-        while (p_cell[0] & PAGE_BITS) == PAGE0:
+        while (cell & PAGE_BITS) == PAGE0:
             continue
         transfer_buffer(p0_mv)
         # Wait while we fill page 1, then transfer it
-        while (p_cell[0] & PAGE_BITS) == PAGE1:
+        while (cell & PAGE_BITS) == PAGE1:
             continue
         transfer_buffer(p1_mv)
         # Wait while we fill page 2, then transfer it
-        while (p_cell[0] & PAGE_BITS) == PAGE2:
+        while (cell & PAGE_BITS) == PAGE2:
             continue
         transfer_buffer(p2_mv)
         # Wait while we fill page 3. then transfer it
-        while (p_cell[0] & PAGE_BITS) == PAGE3:
+        while (cell & PAGE_BITS) == PAGE3:
             continue
         transfer_buffer(p3_mv)
         # Check to see if ADC readouts have latched to a constant value.
@@ -676,7 +649,7 @@ def cleanup():
     configure_interrupts('disable')
 
 def main():
-    global flags, cell_mem
+    global flags, cell
 
     # We can pass configuration variables into the program from main.py
     # via the sys.argv variable.
@@ -695,10 +668,7 @@ def main():
     try:
         configure_pins()
         flags = STREAMING
-        cell_mem[0] = 0
-        cell_mem[1] = 0
-        cell_mem[2] = 0
-        cell_mem[3] = 0
+        cell = 0
         while flags == STREAMING:
             prepare_to_stream(adc_settings)
             stream()

@@ -290,24 +290,13 @@ def setup_adc(adc_settings: dict):
 def create_asm_adc_read_handler(cell_addr: int, WRAP_MASK: int):
     '''Assembly function factory that creates a high-performance inline ARM Thumb
     interrupt handler on Cortex-M0+. It updates the cell index at cell_addr
-    in constant time (~14 clock cycles).'''
-    b3 = (cell_addr >> 24) & 0xFF
-    b2 = (cell_addr >> 16) & 0xFF
-    b1 = (cell_addr >> 8) & 0xFF
-    b0 = cell_addr & 0xFF
-
+    in constant time (~9 clock cycles).'''
     func_code = f"""
 @micropython.asm_thumb
 def asm_adc_read_handler(r0):
     # r0 is passed by MicroPython IRQ dispatcher (pin object, unused)
-    # Construct 32-bit RAM address of cell_mem in r1
-    mov(r1, {b3})
-    lsl(r1, r1, 8)
-    add(r1, {b2})
-    lsl(r1, r1, 8)
-    add(r1, {b1})
-    lsl(r1, r1, 8)
-    add(r1, {b0})
+    # Load 32-bit RAM address of cell_mem from literal pool in r1
+    ldr(r1, CELL_ADDR_DATA)
 
     # Load cell index, increment, mask with WRAP_MASK, and store back
     ldr(r2, [r1, 0])
@@ -315,6 +304,15 @@ def asm_adc_read_handler(r0):
     mov(r3, {WRAP_MASK})
     and_(r2, r3)
     str(r2, [r1, 0])
+
+    # Branch past embedded literal pool data
+    b(END)
+
+    align(4)
+    label(CELL_ADDR_DATA)
+    data(4, {cell_addr})
+
+    label(END)
 """
     local_env = {}
     exec(func_code, globals(), local_env)

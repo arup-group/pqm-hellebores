@@ -57,25 +57,27 @@ PENULTIMATE_CELL = const(BUFFER_SIZE - 2)
 FINAL_CELL = const(BUFFER_SIZE - 1)
 
 # flags: operation flags used to control program flow on both CPU cores.
-STOP: int        = const(0b0001)       # tells both cores to exit
-RESET: int       = const(0b0010)       # initiate a machine reset
-RESYNC: int      = const(0b0100)       # perform a soft reset on the ADC
-STREAMING: int   = const(0b1000)       # fast ADC streaming using both cores
+STOP:        = const(0b0001)       # tells both cores to exit
+RESET:       = const(0b0010)       # initiate a machine reset
+RESYNC:      = const(0b0100)       # perform a soft reset on the ADC
+STREAMING:   = const(0b1000)       # fast ADC streaming using both cores
 
 # cell:  sample pointer 0 to 255.
 # Bit-and the cell variable with WRAP_MASK after incrementing it, to make the
 # pointer circular. Increment from 255 & WRAP_MASK wraps round to 0.
-WRAP_MASK: int   = const(0b11111111)
+# WARNING: WRAP_MASK must be an integer between 0 and 255 (8-bit immediate).
+# Values > 255 will cause a compilation error in the ARM Cortex-M0+ 'mov' instruction.
+WRAP_MASK    = const(0b11111111)
 
 # The following constants are used to test whether a page boundary has
 # been crossed, and therefore time to output the next page of sample buffer.
 # The cell variable is bit-anded with the PAGE_BITS bit mask and the result
 # checked against PAGEn constants.
-PAGE_BITS: int   = const(0b11000000)   # test page number
-PAGE0: int       = const(0b00000000)   # bit76==00: in range 0-63, ie page 0
-PAGE1: int       = const(0b01000000)   # bit76==01: in range 64-127, ie page 1
-PAGE2: int       = const(0b10000000)   # bit76==10: in range 128-191, ie page 2
-PAGE3: int       = const(0b11000000)   # bit76==11: in range 192-255, ie page 3
+PAGE_BITS:   = const(0b11000000)   # test page number
+PAGE0:       = const(0b00000000)   # bit76==00: in range 0-63, ie page 0
+PAGE1:       = const(0b01000000)   # bit76==01: in range 64-127, ie page 1
+PAGE2:       = const(0b10000000)   # bit76==10: in range 128-191, ie page 2
+PAGE3:       = const(0b11000000)   # bit76==11: in range 192-255, ie page 3
 
 # ADC register addresses
 PHASE = 0x0a
@@ -287,37 +289,35 @@ def setup_adc(adc_settings: dict):
 
 
 
-def create_asm_adc_read_handler(cell_addr: int, WRAP_MASK: int):
-    '''Assembly function factory that creates a high-performance inline ARM Thumb
-    interrupt handler on Cortex-M0+. It updates the cell index at cell_addr
-    in constant time (~9 clock cycles).'''
-    func_code = f"""
+# 1. This is the raw assembly function. It expects the address in r1.
 @micropython.asm_thumb
-def asm_adc_read_handler(r0):
-    # r0 is passed by MicroPython IRQ dispatcher (pin object, unused)
-    # Load 32-bit RAM address of cell_mem from literal pool in r1
-    ldr(r1, CELL_ADDR_DATA)
+def _asm_adc_handler_core(r0, r1):
+    # r0 = pin object (passed by IRQ, unused)
+    # r1 = cell_addr (explicitly passed by our wrapper)
 
-    # Load cell index, increment, mask with WRAP_MASK, and store back
+    # Load current index from cell_addr pointer
     ldr(r2, [r1, 0])
+
+    # Increment the index
     add(r2, r2, 1)
-    mov(r3, {WRAP_MASK})
+
+    # Apply 8-bit WRAP_MASK (e.g., 255)
+    mov(r3, WRAP_MASK)
     and_(r2, r3)
+
+    # Store the wrapped index back into memory
     str(r2, [r1, 0])
 
-    # Branch past embedded literal pool data
-    b(END)
 
-    align(4)
-    label(CELL_ADDR_DATA)
-    data(4, {cell_addr})
+# 2. This factory creates the clean IRQ binding callback
+def create_asm_adc_read_handler(cell_addr: int):
+    """Creates a safe, fully compilable wrapper for the Pico IRQ dispatcher."""
 
-    label(END)
-"""
-    local_env = {}
-    exec(func_code, globals(), local_env)
-    return local_env['asm_adc_read_handler']
+    # We return a lambda/function that locks 'cell_addr' into the core assembly routine
+    def irq_wrapper(pin):
+        _asm_adc_handler_core(pin, cell_addr)
 
+    return irq_wrapper
 
 
 
@@ -328,7 +328,7 @@ def configure_interrupts(command: str ='enable'):
 
     # Create inline Thumb assembly interrupt handler targeting cell_mem RAM address
     cell_addr = uctypes.addressof(cell_mem)
-    adc_read_handler = create_asm_adc_read_handler(cell_addr, WRAP_MASK)
+    adc_read_handler = create_asm_adc_read_handler(cell_addr)
 
     # we need this helper function, because we can't easily assign to global
     # variable within a lambda expression

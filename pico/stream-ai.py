@@ -20,6 +20,7 @@ import gc
 import _thread
 import sys
 import binascii
+import array
 from micropython import const
 
 ########################################################
@@ -57,27 +58,27 @@ PENULTIMATE_CELL = const(BUFFER_SIZE - 2)
 FINAL_CELL = const(BUFFER_SIZE - 1)
 
 # flags: operation flags used to control program flow on both CPU cores.
-STOP:        = const(0b0001)       # tells both cores to exit
-RESET:       = const(0b0010)       # initiate a machine reset
-RESYNC:      = const(0b0100)       # perform a soft reset on the ADC
-STREAMING:   = const(0b1000)       # fast ADC streaming using both cores
+STOP        = const(0b0001)       # tells both cores to exit
+RESET       = const(0b0010)       # initiate a machine reset
+RESYNC      = const(0b0100)       # perform a soft reset on the ADC
+STREAMING   = const(0b1000)       # fast ADC streaming using both cores
 
 # cell:  sample pointer 0 to 255.
 # Bit-and the cell variable with WRAP_MASK after incrementing it, to make the
 # pointer circular. Increment from 255 & WRAP_MASK wraps round to 0.
 # WARNING: WRAP_MASK must be an integer between 0 and 255 (8-bit immediate).
 # Values > 255 will cause a compilation error in the ARM Cortex-M0+ 'mov' instruction.
-WRAP_MASK    = const(0b11111111)
+WRAP_MASK   = const(0b11111111)
 
 # The following constants are used to test whether a page boundary has
 # been crossed, and therefore time to output the next page of sample buffer.
 # The cell variable is bit-anded with the PAGE_BITS bit mask and the result
 # checked against PAGEn constants.
-PAGE_BITS:   = const(0b11000000)   # test page number
-PAGE0:       = const(0b00000000)   # bit76==00: in range 0-63, ie page 0
-PAGE1:       = const(0b01000000)   # bit76==01: in range 64-127, ie page 1
-PAGE2:       = const(0b10000000)   # bit76==10: in range 128-191, ie page 2
-PAGE3:       = const(0b11000000)   # bit76==11: in range 192-255, ie page 3
+PAGE_BITS   = const(0b11000000)   # test page number
+PAGE0       = const(0b00000000)   # bit76==00: in range 0-63, ie page 0
+PAGE1       = const(0b01000000)   # bit76==01: in range 64-127, ie page 1
+PAGE2       = const(0b10000000)   # bit76==10: in range 128-191, ie page 2
+PAGE3       = const(0b11000000)   # bit76==11: in range 192-255, ie page 3
 
 # ADC register addresses
 PHASE = 0x0a
@@ -90,15 +91,23 @@ LOCK_CRC = 0x1f
 ADC_WRITE = 0x40
 ADC_READ = 0x41
 
+# RP2040 SPI0 base address
+SPI0_BASE   = const(0x4003c000)
+
 
 ########################################################
 ######### Global variables
 ########################################################
-# Define the global variables with type hints to assist the optimiser
+# Layout for shared inter-core state structure
+STATE_LAYOUT = {
+    'cell': 0 | uctypes.UINT32,
+    'flags': 4 | uctypes.UINT32,
+}
+
 pins: dict                   # pin configuration for the Pico
 spi_adc_interface: object    # object holding SPI interface configuration
-flags: int                   # bit field with flags to control operation
-cell_mem: bytearray          # 4-byte buffer for current cell index
+state_buf: bytearray         # underlying 8-byte buffer for state struct
+state: object                # uctypes.struct shared state ('cell' and 'flags')
 acq: bytearray               # underlying storage for the sample buffer
 p0_mv: bytearray             # page 0 of the storage buffer
 p1_mv: bytearray             # page 1 of the storage buffer
@@ -309,6 +318,79 @@ def _asm_adc_handler_core(r0, r1):
     str(r2, [r1, 0])
 
 
+@micropython.asm_thumb
+def _asm_streaming_loop_inner(r0, r1, r2):
+    # r0 = state_addr (points to state_buf in RAM: offset 0=cell, offset 4=flags)
+    # r1 = p0_addr (base address of Page 0 in unstriped RAM)
+    # r2 = spi_base (0x4003c000 for SPI0)
+
+    # Load initial cell index into r3
+    ldr(r3, [r0, 0])
+
+    label(LOOP_START)
+
+    # 1. Check if state.flags == STREAMING (flags at offset 4)
+    ldr(r4, [r0, 4])
+    mov(r5, STREAMING)
+    cmp(r4, r5)
+    bne(LOOP_EXIT)
+
+    # 2. Read current state.cell (at offset 0)
+    ldr(r4, [r0, 0])
+
+    # 3. Check if cell index changed
+    cmp(r4, r3)
+    beq(LOOP_START)
+
+    # Cell changed! Update cached cell index: r3 = r4
+    mov(r3, r4)
+
+    # 4. Calculate target RAM address for cell r4:
+    # target_addr = p0_addr + ((cell & 0xC0) << 10) + ((cell & 0x3F) << 3)
+    mov(r5, 0xc0)
+    and_(r5, r4)       # r5 = cell & 0xC0
+    lsl(r5, r5, 10)    # r5 = page_offset = (cell & 0xC0) * 1024
+
+    mov(r6, 0x3f)
+    and_(r6, r4)       # r6 = cell_in_page = cell & 0x3F
+    lsl(r6, r6, 3)     # r6 = cell_offset = cell_in_page * 8
+
+    add(r5, r5, r6)    # r5 = page_offset + cell_offset
+    add(r5, r1, r5)    # r5 = target_addr = p0_addr + page_offset + cell_offset
+
+    # 5. Read 8 bytes from ADC via SPI0 hardware registers into target_addr [r5]
+    # SPI0 SSPDR is at offset 8 ([r2, 8])
+    # SPI0 SSPSR is at offset 12 ([r2, 12])
+    mov(r6, 8)         # byte counter = 8
+
+    label(SPI_BYTE_LOOP)
+    # Write dummy byte 0x00 to SSPDR [r2, 8] to trigger 8 SCK clock pulses
+    mov(r7, 0)
+    str(r7, [r2, 8])
+
+    # Wait until Receive FIFO is not empty (SSPSR bit 2 RNE == 1)
+    label(WAIT_RX)
+    ldr(r7, [r2, 12])  # Load SSPSR
+    mov(r4, 4)         # RNE bit mask (0b0100)
+    and_(r7, r4)
+    beq(WAIT_RX)
+
+    # Read byte from SSPDR [r2, 8]
+    ldr(r7, [r2, 8])
+
+    # Store byte into target RAM address [r5]
+    strb(r7, [r5, 0])
+    add(r5, r5, 1)
+
+    sub(r6, r6, 1)
+    bne(SPI_BYTE_LOOP)
+
+    # Loop back to wait for next sample
+    b(LOOP_START)
+
+    label(LOOP_EXIT)
+
+
 # 2. This factory creates the clean IRQ binding callback
 def create_asm_adc_read_handler(cell_addr: int):
     """Creates a safe, fully compilable wrapper for the Pico IRQ dispatcher."""
@@ -326,15 +408,15 @@ def configure_interrupts(command: str ='enable'):
     Pico that new data is ready for reading from the ADC, and a reset command
     from the Pi, to help with run-time error recovery.'''
 
-    # Create inline Thumb assembly interrupt handler targeting cell_mem RAM address
-    cell_addr = uctypes.addressof(cell_mem)
-    adc_read_handler = create_asm_adc_read_handler(cell_addr)
+    # Create inline Thumb assembly interrupt handler targeting state RAM address
+    state_addr = uctypes.addressof(state_buf)
+    adc_read_handler = create_asm_adc_read_handler(state_addr)
 
     # we need this helper function, because we can't easily assign to global
     # variable within a lambda expression
     def set_flags(required_flags: int):
-        global flags
-        flags = required_flags
+        global state
+        state.flags = required_flags
 
     if command == 'enable':
         # Bind pin transitions to interrupt handlers.
@@ -481,41 +563,32 @@ def configure_buffer_memory():
 ######### STREAMING LOOP FOR CORE 1 STARTS HERE
 ########################################################
 # performance: optimise this function to native code rather than bytecode
-@micropython.viper
 def streaming_loop_core_1():
-    '''Watches for change in cell_mem (incremented by the inline assembly interrupt
+    '''Watches for change in state.cell (incremented by the inline assembly interrupt
     handler) and reads new data from the ADC into memory. Also watches for
-    change in flags variable to enable clean exit or recovery from RESYNC
+    change in state.flags variable to enable clean exit or recovery from RESYNC
     condition.'''
-    global flags, cell_mem
+    global state_buf, p0_mv
 
-    p_cell: ptr32 = ptr32(uctypes.addressof(cell_mem))
+    state_addr = uctypes.addressof(state_buf)
+    p0_addr = uctypes.addressof(p0_mv)
 
     # The resync flag may be raised by Core 0 at any time, so we have to
     # allow for it in the outer loop test here by using a bitmask filter
     start_adc()
-    while flags & STREAMING:
-        # cell_p is a local cache of the cell variable, so that the inner loop
-        # can synchronise to the moment when cell changes value
-        cell_p: int = p_cell[0]
-
-        # Inner loop -- speed critical -- we do sampling here, nothing else.
-        while flags == STREAMING:
-            # Read out from the ADC *immediately* if the cell variable changes
-            # value, then repeat.
-            p_cell[0] == cell_p \
-                or spi_adc_interface.readinto(cells_mv[(cell_p := p_cell[0])])
+    while state.flags & STREAMING:
+        # Inner sampling loop -- high-performance inline assembly
+        _asm_streaming_loop_inner(state_addr, p0_addr, SPI0_BASE)
 
         # If Core 0 has raised RESYNC flag, we miss a few samples and deal
         # with it here.
-        if flags & RESYNC:
+        if state.flags & RESYNC:
             # Tell the ADC to stop and resychronise to the Pico.
             stop_adc()
             soft_reset_adc()
             start_adc()
             # Clear RESYNC flag
-            flags = flags & ~RESYNC
-            # Clear garbage
+            state.flags = state.flags & ~RESYNC
             gc.collect()
 
     if DEBUG:
@@ -529,7 +602,7 @@ def streaming_loop_core_1():
 debug_cache = Debug_cache()
 def streaming_loop_core_0():
     '''Prints data from memory to stdout in chunks.'''
-    global debug_cache, cell_mem
+    global debug_cache, state, state_buf
 
     def _transfer_buffer_normal(bs):
         pins['buffer_led'].on()
@@ -538,11 +611,11 @@ def streaming_loop_core_0():
         pins['buffer_led'].off()
 
     def _transfer_buffer_debug(bs):
-        global flags
+        global state
         pins['buffer_led'].on()
         # saves snips until the debug cache is full
         if not bool(debug_cache.save_snip(bs)):
-            flags = STOP
+            state.flags = STOP
         pins['buffer_led'].off()
 
     # select the transfer function we are going to use from now on
@@ -557,28 +630,30 @@ def streaming_loop_core_0():
         # If this happens, the ADC outputs will latch to the same values
         # on successive SPI reads. So we compare all the readings from two
         # samples to check, and set a RESYNC flag if necessary:
-        global flags
+        FLAGS_IDX: int = 1
+        global state_buf
         p1: ptr32 = ptr32(cell1)
         p2: ptr32 = ptr32(cell2)
         if p1[0] == p2[0] and p1[1] == p2[1]:
-            flags = flags | RESYNC
+            p_state: ptr32 = ptr32(uctypes.addressof(state_buf))
+            p_state[FLAGS_IDX] = p_state[FLAGS_IDX] | int(RESYNC)
 
     # Now transfer buffers in turn and loop...
-    while flags & STREAMING:
+    while state.flags & STREAMING:
         # Wait while we fill page 0, then transfer it
-        while (cell_mem[0] & PAGE_BITS) == PAGE0:
+        while (state.cell & PAGE_BITS) == PAGE0:
             continue
         transfer_buffer(p0_mv)
         # Wait while we fill page 1, then transfer it
-        while (cell_mem[0] & PAGE_BITS) == PAGE1:
+        while (state.cell & PAGE_BITS) == PAGE1:
             continue
         transfer_buffer(p1_mv)
         # Wait while we fill page 2, then transfer it
-        while (cell_mem[0] & PAGE_BITS) == PAGE2:
+        while (state.cell & PAGE_BITS) == PAGE2:
             continue
         transfer_buffer(p2_mv)
         # Wait while we fill page 3. then transfer it
-        while (cell_mem[0] & PAGE_BITS) == PAGE3:
+        while (state.cell & PAGE_BITS) == PAGE3:
             continue
         transfer_buffer(p3_mv)
         # Check to see if ADC readouts have latched to a constant value.
@@ -665,7 +740,7 @@ def cleanup():
     configure_interrupts('disable')
 
 def main():
-    global flags, cell_mem
+    global state, state_buf
 
     # We can pass configuration variables into the program from main.py
     # via the sys.argv variable.
@@ -683,13 +758,11 @@ def main():
         print(f'stream.py started with parameters {adc_settings}.')
     try:
         configure_pins()
-        flags = STREAMING
-        cell_mem = bytearray(4)
-        cell_mem[0] = 0
-        cell_mem[1] = 0
-        cell_mem[2] = 0
-        cell_mem[3] = 0
-        while flags == STREAMING:
+        state_buf = bytearray(8)
+        state = uctypes.struct(uctypes.addressof(state_buf), STATE_LAYOUT, uctypes.LITTLE_ENDIAN)
+        state.flags = STREAMING
+        state.cell = 0
+        while state.flags == STREAMING:
             prepare_to_stream(adc_settings)
             stream()
             # Inner sampling loops will exit if a rising edge pulse is detected
@@ -700,13 +773,13 @@ def main():
             # sustained for a long enough period, we consider it spurious and
             # we will restart the ADCs and continue streaming, instead of
             # proceeding to reset the machine.
-            if flags & RESET:
+            if state.flags & RESET:
                 # Show the world that we have a RESET situation...
                 pins['pico_led'].high()
                 if not reset_pin_held_high():
                     # If the pin is held high, we'll quit, otherwise we will
                     # return to streaming
-                    flags = STREAMING
+                    state.flags = STREAMING
                     pins['pico_led'].low()
 
     except KeyboardInterrupt:
@@ -714,18 +787,18 @@ def main():
         if DEBUG:
             print('Interrupted.')
         # Stop Core 1.
-        flags = STOP
+        state.flags = STOP
 
     except:
         # Catch other exceptions.
         if DEBUG:
            print('There was an exception.')
-        flags = RESET
+        state.flags = RESET
 
     finally:
         # If we reach here, STOP or RESET flags are raised.
         cleanup()
-        if flags & RESET:
+        if state.flags & RESET:
             if DEBUG:
                 print('Reset flag raised: resetting shortly.')
             # allow the reset pin to clear to normal

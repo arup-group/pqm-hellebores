@@ -20,7 +20,6 @@ import gc
 import _thread
 import sys
 import binascii
-import array
 from micropython import const
 
 ########################################################
@@ -358,15 +357,16 @@ def _asm_streaming_loop_inner(r0, r1, r2):
     add(r5, r5, r6)    # r5 = page_offset + cell_offset
     add(r5, r1, r5)    # r5 = target_addr = p0_addr + page_offset + cell_offset
 
-    # 5. Read 8 bytes from ADC via SPI0 hardware registers into target_addr [r5]
+    # 5. Read 64 bits (4 x 16-bit frames) from ADC via SPI0 hardware registers into target_addr [r5]
     # SPI0 SSPDR is at offset 8 ([r2, 8])
     # SPI0 SSPSR is at offset 12 ([r2, 12])
-    mov(r6, 8)         # byte counter = 8
 
-    label(SPI_BYTE_LOOP)
-    # Write dummy byte 0x00 to SSPDR [r2, 8] to trigger 8 SCK clock pulses
+    # Burst write 4 x 16-bit dummy words (0x0000) to trigger 64 SCK pulses continuously
     mov(r7, 0)
-    str(r7, [r2, 8])
+    str(r7, [r2, 8])   # 16 SCK pulses (Channel 0)
+    str(r7, [r2, 8])   # 16 SCK pulses (Channel 1)
+    str(r7, [r2, 8])   # 16 SCK pulses (Channel 2)
+    str(r7, [r2, 8])   # 16 SCK pulses (Channel 3)
 
     # Wait until Receive FIFO is not empty (SSPSR bit 2 RNE == 1)
     label(WAIT_RX)
@@ -375,15 +375,19 @@ def _asm_streaming_loop_inner(r0, r1, r2):
     and_(r7, r4)
     beq(WAIT_RX)
 
-    # Read byte from SSPDR [r2, 8]
-    ldr(r7, [r2, 8])
+    # Read Channel 0 & Channel 1 (16 bits each) and pack into 32-bit Word 0
+    ldr(r6, [r2, 8])   # Channel 0 (16 bits)
+    ldr(r7, [r2, 8])   # Channel 1 (16 bits)
+    lsl(r7, r7, 16)
+    orr(r7, r6)        # r7 = (Ch 1 << 16) | Ch 0
+    str(r7, [r5, 0])   # Store 32-bit Word 0 to target_addr + 0
 
-    # Store byte into target RAM address [r5]
-    strb(r7, [r5, 0])
-    add(r5, r5, 1)
-
-    sub(r6, r6, 1)
-    bne(SPI_BYTE_LOOP)
+    # Read Channel 2 & Channel 3 (16 bits each) and pack into 32-bit Word 1
+    ldr(r6, [r2, 8])   # Channel 2 (16 bits)
+    ldr(r7, [r2, 8])   # Channel 3 (16 bits)
+    lsl(r7, r7, 16)
+    orr(r7, r6)        # r7 = (Ch 3 << 16) | Ch 2
+    str(r7, [r5, 4])   # Store 32-bit Word 1 to target_addr + 4
 
     # Loop back to wait for next sample
     b(LOOP_START)
@@ -441,9 +445,10 @@ def start_adc():
     if DEBUG:
         print('Starting the ADC...')
     pins['cs_adc'].low()
-    # Start reading from address 0x00. As the SPI clock pumps out data, the
-    # ADC will loop around the four ADC channel registers.
+    # Start reading from address 0x00 using 8-bit command byte
     spi_adc_interface.write(bytes([0x41]))
+    # Dynamically switch RP2040 SPI0 hardware (SSPCR0 bits 3:0) to 16-bit mode (DSS = 15)
+    machine.mem32[SPI0_BASE] = (machine.mem32[SPI0_BASE] & ~0x0f) | 0x0f
 
 
 def stop_adc():
@@ -452,6 +457,8 @@ def stop_adc():
     # interrupts if we want to stop processing completely
     if DEBUG:
         print('Stopping the ADC...')
+    # Switch RP2040 SPI0 hardware back to 8-bit mode (DSS = 7) for register operations
+    machine.mem32[SPI0_BASE] = (machine.mem32[SPI0_BASE] & ~0x0f) | 0x07
     pins['cs_adc'].high()
 
 

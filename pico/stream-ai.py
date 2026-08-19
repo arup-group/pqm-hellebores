@@ -28,6 +28,9 @@ from micropython import const
 # Some constants are defined with the const() compilation hint to optimise
 # performance.
 
+# Some gentle overclocking. Increase CPU speed from default of 133 MHz to 200 MHz
+machine.freq(200000000)
+
 # SPI_CLOCK_RATE is a configurable clock speed for comms on the SPI bus between
 # Pico and ADC. Its setting is independent from the sampling rate, but needs
 # to be fast enough to complete communications in the period between successive
@@ -39,7 +42,7 @@ SPI_CLOCK_RATE = 6000000
 # diagnostic information. Instead of pushing sample data to stdout, it caches
 # snips of sample data in a dedicated buffer and exits the program after a few
 # cycles to then print it out.
-DEBUG = const(True)
+DEBUG = const(False)
 
 # These adc settings can be adjusted via comms from the Pi via command line
 # arguments
@@ -607,62 +610,57 @@ def streaming_loop_core_1():
 ########################################################
 # Debug cache for memorising a few sampling loops
 debug_cache = Debug_cache()
+
+@micropython.viper
+def latch_test(cell1, cell2):
+    # SPI clock synchronisation can fail during a large power disturbance.
+    # If this happens, the ADC outputs will latch to the same values
+    # on successive SPI reads. So we compare all the readings from two
+    # samples to check, and set a RESYNC flag if necessary:
+    FLAGS_IDX: int = 1
+    global state_buf
+    p1: ptr32 = ptr32(cell1)
+    p2: ptr32 = ptr32(cell2)
+    if p1[0] == p2[0] and p1[1] == p2[1]:
+        p_state: ptr32 = ptr32(uctypes.addressof(state_buf))
+        p_state[FLAGS_IDX] = p_state[FLAGS_IDX] | int(RESYNC)
+
 def streaming_loop_core_0():
     '''Prints data from memory to stdout in chunks.'''
     global debug_cache, state, state_buf
 
-    def _transfer_buffer_normal(bs):
-        pins['buffer_led'].on()
-        # write out the selected portion of buffer as raw bytes
-        sys.stdout.buffer.write(bs)
-        pins['buffer_led'].off()
+    # cache function lookups
+    buffer_led_pin_on = pins['buffer_led'].on
+    buffer_led_pin_off = pins['buffer_led'].off
 
     def _transfer_buffer_debug(bs):
         global state
-        pins['buffer_led'].on()
         # saves snips until the debug cache is full
         if not bool(debug_cache.save_snip(bs)):
             state.flags = STOP
-        pins['buffer_led'].off()
 
     # select the transfer function we are going to use from now on
     if DEBUG:
         transfer_buffer = _transfer_buffer_debug
     else:
-        transfer_buffer = _transfer_buffer_normal
-
-    @micropython.viper
-    def latch_test(cell1, cell2):
-        # SPI clock synchronisation can fail during a large power disturbance.
-        # If this happens, the ADC outputs will latch to the same values
-        # on successive SPI reads. So we compare all the readings from two
-        # samples to check, and set a RESYNC flag if necessary:
-        FLAGS_IDX: int = 1
-        global state_buf
-        p1: ptr32 = ptr32(cell1)
-        p2: ptr32 = ptr32(cell2)
-        if p1[0] == p2[0] and p1[1] == p2[1]:
-            p_state: ptr32 = ptr32(uctypes.addressof(state_buf))
-            p_state[FLAGS_IDX] = p_state[FLAGS_IDX] | int(RESYNC)
+        transfer_buffer = sys.stdout.buffer.write
 
     # Now transfer buffers in turn and loop...
     while state.flags & STREAMING:
-        # Wait while we fill page 0, then transfer it
-        while (state.cell & PAGE_BITS) == PAGE0:
+        # Wait while we fill pages 0 and 1, then transfer them both
+        while state.cell < PAGE2:
             continue
+        buffer_led_pin_on()
         transfer_buffer(p0_mv)
-        # Wait while we fill page 1, then transfer it
-        while (state.cell & PAGE_BITS) == PAGE1:
-            continue
         transfer_buffer(p1_mv)
-        # Wait while we fill page 2, then transfer it
-        while (state.cell & PAGE_BITS) == PAGE2:
+        buffer_led_pin_off()
+        # Wait while we fill pages 2 and 3, then transfer them both
+        while state.cell >= PAGE2:
             continue
+        buffer_led_pin_on()
         transfer_buffer(p2_mv)
-        # Wait while we fill page 3. then transfer it
-        while (state.cell & PAGE_BITS) == PAGE3:
-            continue
         transfer_buffer(p3_mv)
+        buffer_led_pin_off()
         # Check to see if ADC readouts have latched to a constant value.
         # This function will raise a flag if necessary and the other CPU
         # core will reset ADC comms.
@@ -673,6 +671,7 @@ def streaming_loop_core_0():
         print('Here are the contents of debug buffer memory:')
         gc.collect()
         print(debug_cache.as_text())
+
 
 
 

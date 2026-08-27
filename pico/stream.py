@@ -39,7 +39,7 @@ SPI_CLOCK_RATE = 6000000
 # diagnostic information. Instead of pushing sample data to stdout, it caches
 # snips of sample data in a dedicated buffer and exits the program after a few
 # cycles to then print it out.
-DEBUG = const(True)
+DEBUG = const(False)
 
 # Flag to activate the asm.thumb code paths. Switching to 'False' allows
 # original micropython implementation to run. NB: micropython maxes out

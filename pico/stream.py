@@ -25,14 +25,12 @@ from micropython import const
 ########################################################
 ######### Configuration constants
 ########################################################
-# Some constants are defined with the const() compilation hint to optimise
-# performance.
 
 # SPI_CLOCK_RATE is a configurable clock speed for comms on the SPI bus between
 # Pico and ADC. Its setting is independent from the sampling rate, but needs
 # to be fast enough to complete communications in the period between successive
 # samples.
-SPI_CLOCK_RATE = 6000000
+SPI_CLOCK_RATE = const(6000000)
 
 # NB set the DEBUG flag to True when testing the code inside the Thonny REPL.
 # This maintains code paths as much as possible, but outputs progress and
@@ -43,7 +41,7 @@ DEBUG = const(False)
 
 # Flag to activate the asm.thumb code paths. Switching to 'False' allows
 # original micropython implementation to run. NB: micropython maxes out
-# at a sample rate of 7.812k, while assembler can run to 31.250k samples/sec.
+# at a sample rate of 15.625k, while assembler can run to 31.250k samples/sec.
 ASM_THUMB = const(True)
 
 # These adc settings can be adjusted via comms from the Pi via command line
@@ -56,6 +54,9 @@ DEFAULT_ADC_SETTINGS = { 'gains':       ['1x', '1x', '1x', '1x'],
 # easily. The buffer size is measured in 'samples' or number of cells.
 # However note the underlying memory size in bytes is BUFFER_SIZE * 8 because
 # we have 4 measurement channels and 2 bytes per channel.
+# NOTE: Hard coded optimisation is included in acquistion inner loop that reflects
+# an exact buffer size of 256 samples, and the unstriped memory layout. Verify
+# the effect om that code if changes are to be made to the buffer size here.
 BUFFER_SIZE             = const(256)
 BUFFER_MEMORY_SIZE      = const(2048)
 PENULTIMATE_CELL        = const(BUFFER_SIZE - 2)
@@ -103,22 +104,22 @@ SPI0_BASE   = const(0x4003c000)
 ########################################################
 ######### Global variables
 ########################################################
-# Layout for shared inter-core state structure
 pins: dict                   # pin configuration for the Pico
 spi_adc_interface: object    # object holding SPI interface configuration
 state: object                # uctypes.struct shared state ('cell' and 'flags')
-state_addr: int              # 32 bit address of state variable
-p0_mv: bytearray             # page 0 of the storage buffer
-p1_mv: bytearray             # page 1 of the storage buffer
-p2_mv: bytearray             # page 2 of the storage buffer
-p3_mv: bytearray             # page 3 of the storage buffer
-cells_mv: tuple              # index to the individual cells of the buffer
+state_addr: int              # 32 bit memory address of the state variable
+p0_mv: bytearray             # page 0 of the storage buffer (64 cells)
+p1_mv: bytearray             # page 1 of the storage buffer (64 cells)
+p2_mv: bytearray             # page 2 of the storage buffer (64 cells)
+p3_mv: bytearray             # page 3 of the storage buffer (64 cells)
+cells_mv: tuple              # tuple containing memoryviews of the individual
+                             # cells of the buffer (one memoryview per cell)
 
 
 ########################################################
 ######### Hardware control functions
 ########################################################
-def configure_cpu_speed(adc_settings):
+def configure_cpu_speed(adc_settings: dict):
     '''This function needs to be called early to allow SPI clock rates to
     be correctly computed.'''
     if adc_settings['sample_rate'] == '31.250k':
@@ -309,6 +310,29 @@ def setup_adc(adc_settings: dict):
     lock_adc_registers()
 
 
+def start_adc():
+    '''Tell the ADC to read out the ADC registers in multiple-read mode. It's
+    necessary for the CS pin to be held low from this point, for the duration
+    of sampling.'''
+    if DEBUG:
+        print('Starting the ADC...')
+    pins['cs_adc'].low()
+    # Start reading from address 0x00 using 8-bit command byte
+    spi_adc_interface.write(bytes([0x41]))
+
+
+def stop_adc():
+    '''Tell the ADC to stop sampling.'''
+    # Note that the DR* pin continues to cycle, so it's necessary to also stop
+    # interrupts if we want to stop processing completely
+    if DEBUG:
+        print('Stopping the ADC...')
+    pins['cs_adc'].high()
+
+
+########################################################
+######### Interrupt configuration and handling functions
+########################################################
 # ARM thumb assembly implementation of _adc_read_handler() python function
 # (see below).
 # 1. This is the raw assembly function. It expects the address of the state
@@ -333,7 +357,7 @@ def _asm_adc_read_handler_core(r0, r1):
 
 
 # 2. This factory creates the clean IRQ binding callback
-def create_asm_adc_read_handler():
+def create_asm_adc_read_handler() -> object:
     '''Creates a compilable wrapper function for the Pico IRQ dispatcher.'''
     # We return a lambda/function that locks 'state_addr' into the core
     # assembly routine via a closure
@@ -344,7 +368,7 @@ def create_asm_adc_read_handler():
 
 
 @micropython.viper
-def _viper_adc_read_handler_core(_, state_addr):
+def _viper_adc_read_handler_core(_, state_addr: int):
     '''Micropython implementation of IRQ callback function'''
     # we use the ptr32 pointer to allow viper optimisation by direct
     # access to the memory holding the cell index.
@@ -356,7 +380,7 @@ def _viper_adc_read_handler_core(_, state_addr):
     p_state[0] = (p_state[0] + 1) & WRAP_MASK
 
 
-def create_viper_adc_read_handler():
+def create_viper_adc_read_handler() -> object:
     '''We make a python closure around the state_addr variable'''
     def _viper_adc_read_handler(_):
         _viper_adc_read_handler_core(_, state_addr)
@@ -402,39 +426,20 @@ def configure_interrupts(command: str ='enable'):
         pins['reset_me'].irq(handler = None)
 
 
-def start_adc():
-    '''Tell the ADC to read out the ADC registers in multiple-read mode. It's
-    necessary for the CS pin to be held low from this point, for the duration
-    of sampling.'''
-    if DEBUG:
-        print('Starting the ADC...')
-    pins['cs_adc'].low()
-    # Start reading from address 0x00 using 8-bit command byte
-    spi_adc_interface.write(bytes([0x41]))
-
-def stop_adc():
-    '''Tell the ADC to stop sampling.'''
-    # Note that the DR* pin continues to cycle, so it's necessary to also stop
-    # interrupts if we want to stop processing completely
-    if DEBUG:
-        print('Stopping the ADC...')
-    pins['cs_adc'].high()
-
-
 
 ########################################################
-######### Buffer and debug memory
+######### Buffer and debug memory configuration
 ########################################################
 class Debug_cache:
 
-    def __init__(self):
+    def __init__(self: object):
         self.cache_pointer = 0
         self.cache = [ bytearray(32) for i in range(16) ]
 
-    def reset(self):
+    def reset(self: object):
         self.cache_pointer = 0
 
-    def save_snip(self, bs: bytearray) -> bool:
+    def save_snip(self: object, bs: bytearray) -> bool:
         if self.cache_pointer <= 15:
             self.cache[self.cache_pointer][:] = bs[:32]
             self.cache_pointer += 1
@@ -442,7 +447,7 @@ class Debug_cache:
         else:
             return False
 
-    def as_text(self) -> str:
+    def as_text(self: object) -> str:
         text_out = ''
         for bs in self.cache:
             # NB 32 bytes become 64 characters.
@@ -451,7 +456,7 @@ class Debug_cache:
         return text_out
 
 
-def get_unstriped_regions(bs: bytearray):
+def get_unstriped_regions(bs: bytearray) -> tuple:
     '''From a given bytearray or memoryview, finds the starting address and
     places some test data in the memory. Then searches for the unstriped
     form of the data across the unstriped memory space. Then computes
@@ -523,6 +528,9 @@ def configure_buffer_memory():
     cells_mv = tuple(cells_list)
 
 
+########################################################
+######### READING LOOP (CORE 1) STARTS HERE
+########################################################
 # 1. Raw assembly function, with base address of state variable and base address of
 # page 0 in as parameters
 @micropython.asm_thumb
@@ -553,6 +561,8 @@ def _asm_streaming_loop_inner_core(r0, r1, r2):
     mov(r3, r4)
 
     # 4. Calculate target RAM address for cell r4:
+    # The fancy bit shifts are to reflect the page starting addresses, which
+    # shift every 64 samples (512 bytes) and the jump per sample (8 bytes)
     # target_addr = p0_addr + ((cell & 0xC0) << 10) + ((cell & 0x3F) << 3)
     mov(r5, 0xc0)
     and_(r5, r4)       # r5 = cell & 0xC0
@@ -605,7 +615,7 @@ def _asm_streaming_loop_inner_core(r0, r1, r2):
 
 # 2. Create a wrapper function that binds in the state_addr
 # value determined at run time
-def create_asm_streaming_loop_inner():
+def create_asm_streaming_loop_inner() -> object:
     '''Make a python closure around the global state_addr value, and add code
     to flip the SPI interface into and out of 16 bit operation.'''
     def _asm_streaming_loop_inner():
@@ -639,7 +649,7 @@ def _viper_streaming_loop_inner_core(state_addr: int):
             or spi_adc_interface.readinto(cells_mv[(cell_p := p_state[0])])
 
 
-def create_viper_streaming_loop_inner():
+def create_viper_streaming_loop_inner() -> object:
     '''Make a python closure around the global state_addr value.'''
     def _viper_streaming_loop_inner():
         _viper_streaming_loop_inner_core(state_addr)
@@ -647,10 +657,6 @@ def create_viper_streaming_loop_inner():
     return _viper_streaming_loop_inner
 
 
-
-########################################################
-######### STREAMING LOOP FOR CORE 1 STARTS HERE
-########################################################
 def streaming_loop_core_1():
     '''Watches for change in state.cell (incremented by the inline assembly interrupt
     handler) and reads new data from the ADC into memory. Also watches for
@@ -685,10 +691,10 @@ def streaming_loop_core_1():
 
 
 ########################################################
-######### STREAMING LOOP FOR CORE 0 STARTS HERE
+######### WRITING LOOP (CORE 0) STARTS HERE
 ########################################################
 @micropython.viper
-def latch_test(state_addr, cell1, cell2):
+def latch_test(state_addr: int, cell1: ptr32, cell2: ptr32):
     # SPI clock synchronisation can fail during a large power disturbance.
     # If this happens, the ADC outputs will latch to the same values
     # on successive SPI reads. So we compare all the readings from two
@@ -696,16 +702,17 @@ def latch_test(state_addr, cell1, cell2):
     # use native viper variables for the cell locations
     # two words (64 bits) contain a sample for all 4 channels
     p_state: ptr32 = ptr32(state_addr)
-    p1: ptr32 = ptr32(cell1)
-    p2: ptr32 = ptr32(cell2)
+    #p1: ptr32 = ptr32(cell1)
+    #p2: ptr32 = ptr32(cell2)
     # check if two successive cells are identical on all channels
-    if p1[0] == p2[0] and p1[1] == p2[1]:
+    if cell1[0] == cell2[0] and cell1[1] == cell2[1]:
         # make successive cells different, in case we happen to check
         # them again before the RESYNC is completed.
-        p1[0] = uint(0xffffffff)
-        p2[0] = uint(0x00000000)
+        cell1[0] = uint(0xffffffff)
+        cell2[0] = uint(0x00000000)
         # raise RESYNC flag
         p_state[1] = p_state[1] | RESYNC
+
 
 def streaming_loop_core_0():
     '''Prints data from memory to stdout in chunks.'''

@@ -45,6 +45,12 @@ def get_command_args():
     return (program_name, args)
 
 
+def soft_reset():
+    '''Pico software is configured to execute a hardware reset from software, if
+    it is running and receives a CTRL-C (SIGINT) \x03 character'''
+    ser.write(b'\x03')
+
+
 def hard_reset():
     '''The Pico software has a hardware interrupt configured to monitor pin 6.
     When a rising edge is detected, the ISR will stop and restart the software.
@@ -71,15 +77,17 @@ def hard_reset():
         # leave the connection with a pull-high via a resistor in the Pi.
     except ModuleNotFoundError:
         print(f'{program_name}, hard_reset(): will only work on PQM hardware.', file=sys.stderr)
+        print(f'Attempting soft_reset() instead.', file=sys.stderr)
+        soft_reset()
     
 
-def send_command(ser, command):
+def send_command(command):
     '''Writes the command to the serial interface'''
     command += '\n'
     ser.write(command.encode('utf-8'))
 
 
-def send_file(ser, filename):
+def send_file(filename):
     '''Writes the contents of a file to the serial interface.'''
     try:
         with open(filename, 'rb') as f:
@@ -89,7 +97,7 @@ def send_file(ser, filename):
         print(f'{program_name}, send_file(): failed to send the contents of {filename}.')
  
 
-def receive_response(ser):
+def receive_response():
     '''Receives response from serial. In case of short pauses, we try reading a
     few times before exiting'''
     wait_attempts = 20
@@ -106,7 +114,7 @@ def receive_response(ser):
 def main():
     '''Reads command line and resets Pico and/or sends a command to the primitive
     server program running on Pico at startup.'''
-    global program_name
+    global program_name, ser
     program_name, args = get_command_args()
     # if hard reset is requested, attempt to reset Pico before checking to
     # see if the serial interface is up/exists 
@@ -120,19 +128,19 @@ def main():
             # in a combined command line
             ser = serial.Serial(port_name)
             if args.ctrl_c:
-                ser.write(b'\x03')
+                soft_reset()
             if args.command:
-                send_command(ser, args.command)
+                send_command(args.command)
             if args.send_file:
-                send_file(ser, args.send_file)
+                send_file(args.send_file)
             if not args.no_response:
-                receive_response(ser)
+                receive_response()
         except OSError:
             print(f'{program_name}, main(): Serial comms error.', file=sys.stderr)
             sys.exit(1)
         finally:
             # make sure we have closed the port if it was opened
-            if 'ser' in locals():
+            if 'ser' in globals():
                 ser.close()
 
 

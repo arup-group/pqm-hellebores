@@ -26,11 +26,6 @@ from micropython import const
 ######### Configuration constants
 ########################################################
 
-# SPI_CLOCK_RATE is a configurable clock speed for comms on the SPI bus between
-# Pico and ADC. Its setting is independent from the sampling rate, but needs
-# to be fast enough to complete communications in the period between successive
-# samples.
-SPI_CLOCK_RATE = const(6000000)
 
 # NB set the DEBUG flag to True when testing the code inside the Thonny REPL.
 # This maintains code paths as much as possible, but outputs progress and
@@ -39,51 +34,41 @@ SPI_CLOCK_RATE = const(6000000)
 # cycles to then print it out.
 DEBUG = const(False)
 
-# Flag to activate the asm.thumb code paths. Switching to 'False' allows
-# original micropython implementation to run. NB: micropython maxes out
-# at a sample rate of 15.625k, while assembler can run to 31.250k samples/sec.
-ASM_THUMB = const(True)
 
-# These adc settings can be adjusted via comms from the Pi via command line
-# arguments. try 7.812k, 15.625k, 31.250k
-DEFAULT_ADC_SETTINGS = { 'gains':       ['1x', '1x', '1x', '1x'],
-                         'sample_rate': '7.812k' }
+# These settings can be adjusted via comms from the Pi via command line
+# arguments.
+# Try sample rates of 7.812k, 15.625k, 31.250k
+# SPI frequency may operate up to 12MHz
+# CPU frequency may operate up to 200MHz
+DEFAULT_CAPTURE_SETTINGS = { 'gains':       ['1x', '1x', '1x', '1x'],
+                             'sample_rate': '7.812k',
+                             'optimisation': 'asm_thumb',
+                             'spi_frequency': 6000000,
+                             'pico_cpu_frequency': 125000000 }
+
 
 # Buffer memory -- number of samples cached in Pico memory.
 # Buffer size is a power of two, to allow divide by two and bit masks to work
 # easily. The buffer size is measured in 'samples' or number of cells.
 # However note the underlying memory size in bytes is BUFFER_SIZE * 8 because
 # we have 4 measurement channels and 2 bytes per channel.
-# NOTE: Hard coded optimisation is included in acquistion inner loop that reflects
-# an exact buffer size of 256 samples, and the unstriped memory layout. Verify
-# the effect om that code if changes are to be made to the buffer size here.
 BUFFER_SIZE             = const(256)
-BUFFER_MEMORY_SIZE      = const(2048)
 PENULTIMATE_CELL        = const(BUFFER_SIZE - 2)
 FINAL_CELL              = const(BUFFER_SIZE - 1)
+# Bit-and the cell variable with WRAP_MASK after incrementing it, to make the
+# pointer circular.
+WRAP_MASK               = const(BUFFER_SIZE - 1)
+# PAGE_BOUNDARY is used for testing transition between first and second pages
+# of buffer memory. The buffer is divided into two to prevent clashes between
+# memory reading and memory writing.
+PAGE_BOUNDARY           = const(BUFFER_SIZE // 2)
+
 
 # flags: operation flags used to control program flow on both CPU cores.
 STOP        = const(0b0001)       # tells both cores to exit
 RESET       = const(0b0010)       # initiate a machine reset
 RESYNC      = const(0b0100)       # perform a soft reset on the ADC
 STREAMING   = const(0b1000)       # fast ADC streaming using both cores
-
-# cell:  sample pointer 0 to 255.
-# Bit-and the cell variable with WRAP_MASK after incrementing it, to make the
-# pointer circular. Increment from 255 & WRAP_MASK wraps round to 0.
-# WARNING: WRAP_MASK must be an integer between 0 and 255 (8-bit immediate).
-# Values > 255 will cause a compilation error in the ARM Cortex-M0+ 'mov' instruction.
-WRAP_MASK   = const(0b11111111)
-
-# The following constants are used to test whether a page boundary has
-# been crossed, and therefore time to output the next page of sample buffer.
-# The cell variable is bit-anded with the PAGE_BITS bit mask and the result
-# checked against PAGEn constants.
-PAGE_BITS   = const(0b11000000)   # test page number
-PAGE0       = const(0b00000000)   # bit76==00: in range 0-63, ie page 0
-PAGE1       = const(0b01000000)   # bit76==01: in range 64-127, ie page 1
-PAGE2       = const(0b10000000)   # bit76==10: in range 128-191, ie page 2
-PAGE3       = const(0b11000000)   # bit76==11: in range 192-255, ie page 3
 
 # ADC register addresses
 PHASE       = const(0x0a)
@@ -100,6 +85,13 @@ ADC_READ    = const(0x41)
 # RP2040 SPI0 base address
 SPI0_BASE   = const(0x4003c000)
 
+# Arrangement of bytes in the state bytearray
+# They are word aligned so that they can be accessed
+# and set atomically from both CPU cores
+STATE_LAYOUT = {
+    'cell': 0 | uctypes.UINT32,
+    'flags': 4 | uctypes.UINT32,
+}
 
 ########################################################
 ######### Global variables
@@ -107,11 +99,12 @@ SPI0_BASE   = const(0x4003c000)
 pins: dict                   # pin configuration for the Pico
 spi_adc_interface: object    # object holding SPI interface configuration
 state: object                # uctypes.struct shared state ('cell' and 'flags')
-state_addr: int              # 32 bit memory address of the state variable
-p0_mv: bytearray             # page 0 of the storage buffer (64 cells)
-p1_mv: bytearray             # page 1 of the storage buffer (64 cells)
-p2_mv: bytearray             # page 2 of the storage buffer (64 cells)
-p3_mv: bytearray             # page 3 of the storage buffer (64 cells)
+                             # which is instantiated inside the state_buf bytearray
+state_buf: bytearray         # backing store for the state variable
+state_addr: int              # 32 bit memory address of state_buf
+acq: bytearray               # backing store for the storage buffer
+p0_mv: memoryview            # page 0 of the storage buffer
+p1_mv: memoryview            # page 1 of the storage buffer
 cells_mv: tuple              # tuple containing memoryviews of the individual
                              # cells of the buffer (one memoryview per cell)
 
@@ -119,17 +112,39 @@ cells_mv: tuple              # tuple containing memoryviews of the individual
 ########################################################
 ######### Hardware control functions
 ########################################################
-def configure_cpu_speed(adc_settings: dict):
+def set_cpu_core_voltage(value):
+    '''Set cpu core voltage, required for enhancing CPU speed.'''
+    # NB, machine default is 1.10V
+    VREG_CTRL = 0x40064000
+    VOLTAGE_LOOKUP = { '1.05': 0x0a, '1.10': 0x0b, '1.15': 0x0c, '1.20': 0x0d }
+
+    # Clear VSEL bits and apply new setting
+    vsel_val = VOLTAGE_LOOKUP[f'{value:.2f}']
+    reg = machine.mem32[VREG_CTRL]
+    reg = (reg & ~0xf0) | ((vsel_val & 0x0f) << 4)
+    machine.mem32[VREG_CTRL] = reg
+
+    # Wait for voltage to stabilise before returning
+    time.sleep(0.01)
+
+
+def configure_cpu_frequency():
     '''This function needs to be called early to allow SPI clock rates to
     be correctly computed.'''
-    if adc_settings['sample_rate'] == '31.250k':
-        # Some CPU overclocking is required at highest sample rate to
-        # achieve USB serial transfer speed needed.
-        # Increase CPU speed from default of 133 MHz to 200 MHz
-        machine.freq(200000000)
-    else:
-        # For all other sample rates, we leave the CPU at default speed.
-        pass
+    MAX_CPU_FREQUENCY = const(200000000)
+    try:
+        required_cpu_frequency = int(capture_settings['pico_cpu_frequency'])
+        # For faster speeds, we need to increase cpu core voltage.
+        if required_cpu_frequency > 133000000:
+            set_cpu_core_voltage(1.15)
+        machine.freq(min(required_cpu_frequency, MAX_CPU_FREQUENCY))
+
+    except:
+        if DEBUG:
+            print(f'There was an exception setting the CPU frequency to '
+                  f'{capture_settings['pico_cpu_frequency']}.')
+            print(f'Defaulting to standard system frequency of 125MHz')
+        machine.freq(125000000)
 
 
 def configure_pins():
@@ -169,9 +184,13 @@ def configure_adc_spi_interface():
     # SDI     ____________----____--____--________
     # SDO     _____-----------____--____--________
     #                      1 1 0 0 1 0 0 1
+    # spi_frequency is a configurable clock speed for comms on the SPI bus between
+    # Pico and ADC. Its setting is independent from the sampling rate, but needs
+    # to be fast enough to complete communication of 8 bytes in the period between
+    # successive samples.
 
     spi_adc_interface = machine.SPI(0,
-                                    baudrate   = SPI_CLOCK_RATE,
+                                    baudrate   = capture_settings['spi_frequency'],
                                     polarity   = 0,
                                     phase      = 0,
                                     bits       = 8,
@@ -237,7 +256,7 @@ def soft_reset_adc():
     lock_adc_registers()
 
 
-def setup_adc(adc_settings: dict):
+def setup_adc():
     '''Setup the MCP3912 ADC. Refer to MCP3912 datasheet for detailed
     description of behaviour of all the settings configured here.'''
     # Unlock registers, so that we can write to them
@@ -257,7 +276,7 @@ def setup_adc(adc_settings: dict):
     G = { '32x':0b101, '16x':0b100, '8x':0b011,
           '4x':0b010, '2x':0b001, '1x':0b000 }
     try:
-        g3, g2, g1, g0 = [ G[k] for k in adc_settings['gains'] ]
+        g3, g2, g1, g0 = [ G[k] for k in capture_settings['gains'] ]
     except KeyError:
         g3, g2, g1, g0 = [ G[k] for k in ['1x', '1x', '1x', '1x'] ]
     gain_bits = (g3 << 9) + (g2 << 6) + (g1 << 3) + g0
@@ -294,7 +313,7 @@ def setup_adc(adc_settings: dict):
     osr_table = { '244':0xe0, '488':0xc0, '976':0xa0, '1.953k':0x80,
                   '3.906k':0x60, '7.812k':0x40, '15.625k':0x20, '31.250k':0x00 }
     try:
-        bs = bytes([0x24, osr_table[adc_settings['sample_rate']], 0x50])
+        bs = bytes([0x24, osr_table[capture_settings['sample_rate']], 0x50])
     except KeyError:
         bs = bytes([0x24, osr_table['7.812k'], 0x50])
     if DEBUG:
@@ -338,22 +357,22 @@ def stop_adc():
 # 1. This is the raw assembly function. It expects the address of the state
 # object memory location in r1.
 @micropython.asm_thumb
-def _asm_adc_read_handler_core(r0, r1):
+def _asm_adc_read_handler_core(r0, r1, r2):
     # r0 = pin object (passed by IRQ, unused)
-    # r1 = state_addr (explicitly passed by our wrapper)
+    # r1 = state_addr (pointer to 32-bit index in RAM)
+    # r2 = wrap_mask (any 32-bit integer passed from Python)
 
-    # Load current index from state_addr pointer (state.cell)
-    ldr(r2, [r1, 0])
+    # Load current 32-bit index from memory
+    ldr(r3, [r1, 0])
 
-    # Increment the index
-    add(r2, r2, 1)
+    # Increment index
+    add(r3, r3, 1)
 
-    # Apply 8-bit WRAP_MASK (e.g., 255)
-    mov(r3, WRAP_MASK)
-    and_(r2, r3)
+    # Apply 32-bit wrap mask
+    and_(r3, r2)
 
-    # Store the wrapped index back into memory
-    str(r2, [r1, 0])
+    # Store updated index back to memory
+    str(r3, [r1, 0])
 
 
 # 2. This factory creates the clean IRQ binding callback
@@ -362,7 +381,7 @@ def create_asm_adc_read_handler() -> object:
     # We return a lambda/function that locks 'state_addr' into the core
     # assembly routine via a closure
     def _asm_adc_read_handler(_):
-        _asm_adc_read_handler_core(_, state_addr)
+        _asm_adc_read_handler_core(_, state_addr, WRAP_MASK)
 
     return _asm_adc_read_handler
 
@@ -393,8 +412,8 @@ def configure_interrupts(command: str ='enable'):
     Pico that new data is ready for reading from the ADC, and a reset command
     from the Pi, to help with run-time error recovery.'''
 
-    # Use the accelerated assembler interrupt handler if ASM_THUMB is True.
-    if ASM_THUMB:
+    # Use the accelerated assembler interrupt handler if asm_thumb is selected.
+    if capture_settings['optimisation'] == 'asm_thumb':
         # Create inline Thumb assembly interrupt handler targeting RAM address
         # of state_buf directly
         adc_read_handler = create_asm_adc_read_handler()
@@ -428,7 +447,7 @@ def configure_interrupts(command: str ='enable'):
 
 
 ########################################################
-######### Buffer and debug memory configuration
+######### Debug memory configuration
 ########################################################
 class Debug_cache:
 
@@ -456,47 +475,30 @@ class Debug_cache:
         return text_out
 
 
-def get_unstriped_regions(bs: bytearray) -> tuple:
-    '''From a given bytearray or memoryview, finds the starting address and
-    places some test data in the memory. Then searches for the unstriped
-    form of the data across the unstriped memory space. Then computes
-    starting addresses for each unstriped region and returns them as
-    memoryview objects.
-    '''
-    length = len(bs)
-    # write some test data into the bytearray
-    test_data = b'abcdefghijklmnopqrstuvwxyz'
-    clear_data = b'\x00' * len(test_data)
-    if len(test_data) > length:
-        print('ERROR: stream.py, get_unstriped_regions() was called with a '
-              'bytearray that was too short.')
-        sys.exit(1)
-    bs[:len(test_data)] = test_data
-    # with the test_data written into memory, adjacent words of the unstriped
-    # memory region will have the following contents.
-    search_data = test_data[0:4] + test_data[16:20]
-    # Figure out base address offset into unstriped memory, searching the
-    # first 64kB of unstriped address space. We want to find the last match of
-    # search data: this avoids a false match on data in the run-time environment.
-    offset = None
-    # Memory allocations are word-aligned (32 bits) so we can step through in
-    # 4 byte increments
-    for i in range(0, 65536-length, 4):
-        if uctypes.bytearray_at(0x21000000 + i, 8) == search_data:
-            offset = i
-    # Quit if we can't find the test data
-    if offset == None:
-        print('ERROR: stream.py, get_unstriped_regions() could not locate '
-              'unstriped memory regions.')
-        sys.exit(1)
-    # clear the test data
-    bs[:len(clear_data)] = clear_data
-    # make bytearray objects that correspond to each page of unstriped memory
-    p0_mv = memoryview(uctypes.bytearray_at(0x21000000 + offset, length // 4))
-    p1_mv = memoryview(uctypes.bytearray_at(0x21010000 + offset, length // 4))
-    p2_mv = memoryview(uctypes.bytearray_at(0x21020000 + offset, length // 4))
-    p3_mv = memoryview(uctypes.bytearray_at(0x21030000 + offset, length // 4))
-    return (p0_mv, p1_mv, p2_mv, p3_mv)
+########################################################
+######### Buffer and state memory configuration
+########################################################
+def get_unstriped_bank_starts(buf: bytearray) -> tuple[int, int, int, int]:
+    '''Maps default striped memory buffer as provided by micropython
+    allocator across to 4x unstriped memory buffers (base addresses provided).'''
+    # NOTE: This simple implementation assumes that the base address of the input
+    # bytearray is 4-word (16 byte) aligned. This has been the case for all
+    # tested firmware, but is not guaranteed. Hence trap is provided. If
+    # implementation needs to handle 1-word (4 byte) alignment then we could
+    # allocate a slightly larger buffer and offset 4 bytes into each stripe.
+    addr = uctypes.addressof(buf)
+    assert addr & 0xf == 0, 'Buffer bytearray is not aligned on SRAM0.'
+
+    striped_offset = addr - 0x20000000
+    # unstriped offset stride is 'divide by 4' compared to the striped offset
+    unstriped_offset = striped_offset >> 2
+
+    return (
+        0x21000000 + unstriped_offset,
+        0x21010000 + unstriped_offset,
+        0x21020000 + unstriped_offset,
+        0x21030000 + unstriped_offset
+    )
 
 
 def configure_buffer_memory():
@@ -507,107 +509,169 @@ def configure_buffer_memory():
     word boundaries. When we are accessing memory from 2 CPU cores, we want to
     avoid accessing the same memory region from both cores simultaneously (one
     access will be delayed by the DMA scheduler).
-    Consequently, we re-map the allocated bytearray into bytearray objects that
-    are in contigous memory regions, using the unstriped memory mapping.
+    Consequently, we re-map the allocated bytearray into memoryview objects that
+    are in contigous memory regions, using the unstriped memory mapping of the
+    underlying bytearray.
     This memory layout means that at a hardware level, reading and writing from
     different pages can occur in the same clock cycle.
+    EXAMPLE:
+    Default striped mapping of a bytearray:
+    W0 W1 W2 W3 (16 bytes)
+    W0 W1 W2 W3 (16 bytes)
+    W0 W1 W2 W3 (16 bytes)
+    W0 W1 W2 W3 (16 bytes)
+    ...
+    Map this to:
+    W0 W0 W0 W0 ... (page 0 contiguous unstriped memory)
+    W1 W1 W1 W1 ... (page 1 contiguous unstriped memory)
+    W2 W2 W2 W2 ... (we don't use page 2)
+    W3 W3 W3 W3 ... (we don't use page 3)
     '''
-    global p0_mv, p1_mv, p2_mv, p3_mv
-    global cells_mv
+    global acq
+    global p0_mv, p1_mv, cells_mv
 
     # 2 bytes per channel, 4 channels
-    acq = bytearray(BUFFER_MEMORY_SIZE)
-    # Create memoryviews for each unstriped region of the buffer (ie four pages).
-    p0_mv, p1_mv, p2_mv, p3_mv = get_unstriped_regions(acq)
-    # Create an array of memoryviews for each storage cell of the buffer.
+    # We allocate 16 bytes per sample, and use only slices of it that
+    # align with specific physical memory banks in the Pico.
+    # Subsequently, we use only stripes 0 and 1 and 'waste' the memory
+    # that lands in stripes 2 and 3.
+
+    # The required page size for 2 pages is BUFFER_SIZE * 8 bytes / 2
+    page_memory_size = BUFFER_SIZE * 8 // 2
+    # We have to allocate total memory across four stripes even though
+    # our intention is to use only memory from two stripes.
+    buffer_memory_size = page_memory_size * 4
+    acq = bytearray(buffer_memory_size)
+
+    # Create memoryviews for two unstriped regions of the buffer.
+    (p0_address, p1_address, _, _) = get_unstriped_bank_starts(acq)
+    p0_acq = uctypes.bytearray_at(p0_address, page_memory_size)
+    p1_acq = uctypes.bytearray_at(p1_address, page_memory_size)
+    p0_mv = memoryview(p0_acq)
+    p1_mv = memoryview(p1_acq)
+
+    # Create an array of memoryviews that are slices of the buffer memoryview.
+    # These point to each individual storage cell of the buffer.
     cells_list =      [ memoryview(p0_mv[i:i+8]) for i in range(0, len(p0_mv), 8) ]
     cells_list.extend([ memoryview(p1_mv[i:i+8]) for i in range(0, len(p1_mv), 8) ])
-    cells_list.extend([ memoryview(p2_mv[i:i+8]) for i in range(0, len(p2_mv), 8) ])
-    cells_list.extend([ memoryview(p3_mv[i:i+8]) for i in range(0, len(p3_mv), 8) ])
+
     # Convert to a tuple for a slight performance gain
     cells_mv = tuple(cells_list)
+
+
+def configure_state_memory():
+    '''State memory contains the cell and flags state variables. We set these up
+    to occupy memory stripes 3 and 4. This avoids them clashing with memory used
+    for sample buffer and reduces the likelihood of bus contention between cores
+    0 and 1 for memory access.'''
+    global state, state_addr, state_buf
+
+    # Instantiate the state variables in memory
+    # A bytearray is used for the backing store so that we can discover its
+    # address and read/write to memory directly from assembler and viper, as
+    # well as via native micropython access via the 'state' object
+    state_buf = bytearray(16)
+
+    # We have a cunning plan. We want to deliberately insert 'cell' in SRAM2
+    # and 'flags' in SRAM3. This ensures that there is no memory bus contention
+    # between state memory access and buffer memory access, which uses unstriped
+    # memory in SRAM0 and SRAM1.
+    # Check we are 4-word (16 byte aligned)
+    state_addr = uctypes.addressof(state_buf)
+    assert state_addr & 0xf == 0, 'State bytearray is not aligned on SRAM0.'
+
+    # Offset starting address that we use in the bytearray to SRAM2.
+    # This is the mechanism we use to ensure memory read/writes to the two state
+    # variables do not interface or block read/writes to the sample buffer.
+    state_addr = state_addr + 8
+    state = uctypes.struct(state_addr, STATE_LAYOUT, uctypes.LITTLE_ENDIAN)
 
 
 ########################################################
 ######### READING LOOP (CORE 1) STARTS HERE
 ########################################################
-# 1. Raw assembly function, with base address of state variable and base address of
-# page 0 in as parameters
+# 1. Raw assembly function, with fixed input parameters which will be set in a wrapper
+# function
 @micropython.asm_thumb
-def _asm_streaming_loop_inner_core(r0, r1, r2):
-    # r0 = state_addr (points to state_buf in RAM: offset 0=cell, offset 4=flags)
-    # r1 = p0_addr (base address of Page 0 in unstriped RAM)
-    # r2 = spi_base (0x4003c000 for SPI0)
-
-    # Load initial cell index into r3
-    ldr(r3, [r0, 0])
+def _asm_streaming_loop_inner_core(r0, r1, r2, r3):
+    # r0 = state_addr  (0=cell, 4=flags)
+    # r1 = p0_addr     (base address of Page 0)
+    # r2 = spi_base    (0x4003c000 for SPI0)
+    # r3 = buffer_size (number of samples)
+    # Cache initial cell index
+    ldr(r7, [r0, 0])
 
     label(LOOP_START)
 
-    # 1. Check if state.flags == STREAMING (flags at offset 4)
+    # 1. Check if state.flags == STREAMING
     ldr(r4, [r0, 4])
-    mov(r5, STREAMING)
-    cmp(r4, r5)
+    mov(r5, STREAMING)     # STREAMING <= 255
+    cmp(r4, r5)            # if we're not STREAMING, we quit
     bne(LOOP_EXIT)
 
-    # 2. Read current state.cell (at offset 0)
-    ldr(r4, [r0, 0])
+    # 2. Read current state.cell
+    ldr(r4, [r0, 0])       # r4 = state.cell
 
     # 3. Check if cell index changed
-    cmp(r4, r3)
-    beq(LOOP_START)
+    cmp(r4, r7)
+    beq(LOOP_START)        # wait until state.cell changes value
 
-    # Cell changed! Update cached cell index: r3 = r4
-    mov(r3, r4)
+    # Cell changed! Update cached cell index: r7 = r4
+    mov(r7, r4)            # r7 = copy of state.cell
 
-    # 4. Calculate target RAM address for cell r4:
-    # The fancy bit shifts are to reflect the page starting addresses, which
-    # shift every 64 samples (512 bytes) and the jump per sample (8 bytes)
-    # target_addr = p0_addr + ((cell & 0xC0) << 10) + ((cell & 0x3F) << 3)
-    mov(r5, 0xc0)
-    and_(r5, r4)       # r5 = cell & 0xC0
-    lsl(r5, r5, 10)    # r5 = page_offset = (cell & 0xC0) * 1024
+    # 4. Target Address Calculation (Dynamic from r3)
+    # 4a. Construct mask: r5 = r3/2 - 1
+    mov(r5, r3)
+    lsr(r5, r5, 1)         # r5 = r5 >> 1 (samples per page)
+    sub(r5, r5, 1)         # r5 = mask (e.g. 0x3F, 0x7F, 0xFF)
 
-    mov(r6, 0x3f)
-    and_(r6, r4)       # r6 = cell_in_page = cell & 0x3F
-    lsl(r6, r6, 3)     # r6 = cell_offset = cell_in_page * 8
+    # 4b. Sample offset within page: (cell & mask) * 8 bytes, into r6
+    mov(r6, r4)
+    and_(r6, r5)           # r6 = sample_in_page = cell & mask
+    lsl(r6, r6, 3)         # r6 = byte_offset_in_page (we stride at 8 bytes per sample)
 
-    add(r5, r5, r6)    # r5 = page_offset + cell_offset
-    add(r5, r1, r5)    # r5 = target_addr = p0_addr + page_offset + cell_offset
+    # 4c. Page offset in unstriped memory map, into r5:
+    mov(r5, r4)            # make a copy of state.cell into r5
+    lsr(r3, r3, 1)         # page size is half the buffer_size
+    and_(r5, r3)           # Sets Z flag if we're on p0...
+    beq(DONE)              # ... and skip ahead
+    mov(r5, 1)             # otherwise set r5 = 1
+    label(DONE)
+    lsl(r3, r3, 1)         # revert r3 back to buffer_size
+    lsl(r5, r5, 16)        # If on p1: r5 = 1 << 16 (0x10000); if on p0: r5 = 0 << 16 (0)
 
-    # 5. Read 64 bits (4 x 16-bit frames) from ADC via SPI0 hardware registers into target_addr [r5]
-    # SPI0 SSPDR is at offset 8 ([r2, 8])
-    # SPI0 SSPSR is at offset 12 ([r2, 12])
+    # 4d. Total target RAM address = p0_addr + page_offset + byte_offset_in_page
+    add(r5, r5, r6)
+    add(r5, r1, r5)        # r5 = target_addr
 
-    # Burst write 4 x 16-bit dummy words (0x0000) to trigger 64 SCK pulses continuously
-    mov(r7, 0)
-    str(r7, [r2, 8])   # 16 SCK pulses (Channel 0)
-    str(r7, [r2, 8])   # 16 SCK pulses (Channel 1)
-    str(r7, [r2, 8])   # 16 SCK pulses (Channel 2)
-    str(r7, [r2, 8])   # 16 SCK pulses (Channel 3)
+    # 5. Burst write 4 x 16-bit dummy words (trigger 64 SCK cycles)
+    mov(r6, 0)
+    str(r6, [r2, 8])       # Ch 0
+    str(r6, [r2, 8])       # Ch 1
+    str(r6, [r2, 8])       # Ch 2
+    str(r6, [r2, 8])       # Ch 3
 
-    # Wait until Receive FIFO is not empty (SSPSR bit 2 RNE == 1)
+    # 6. Wait for SPI Receive FIFO not empty
     label(WAIT_RX)
-    ldr(r7, [r2, 12])  # Load SSPSR
-    mov(r4, 4)         # RNE bit mask (0b0100)
-    and_(r7, r4)
+    ldr(r6, [r2, 12])      # Load SSPSR
+    mov(r4, 4)             # RNE bit mask (0b0100)
+    and_(r6, r4)
     beq(WAIT_RX)
 
-    # Read Channel 0 & Channel 1 (16 bits each) and pack into 32-bit Word 0
-    ldr(r6, [r2, 8])   # Channel 0 (16 bits)
-    ldr(r7, [r2, 8])   # Channel 1 (16 bits)
-    lsl(r7, r7, 16)
-    orr(r7, r6)        # r7 = (Ch 1 << 16) | Ch 0
-    str(r7, [r5, 0])   # Store 32-bit Word 0 to target_addr + 0
+    # 7. Read & pack Channel 0 and 1 -> Word 0
+    ldr(r4, [r2, 8])       # Ch 0
+    ldr(r6, [r2, 8])       # Ch 1
+    lsl(r6, r6, 16)
+    orr(r6, r4)
+    str(r6, [r5, 0])       # Store Word 0 at target_addr + 0
 
-    # Read Channel 2 & Channel 3 (16 bits each) and pack into 32-bit Word 1
-    ldr(r6, [r2, 8])   # Channel 2 (16 bits)
-    ldr(r7, [r2, 8])   # Channel 3 (16 bits)
-    lsl(r7, r7, 16)
-    orr(r7, r6)        # r7 = (Ch 3 << 16) | Ch 2
-    str(r7, [r5, 4])   # Store 32-bit Word 1 to target_addr + 4
+    # 8. Read & pack Channel 2 and 3 -> Word 1
+    ldr(r4, [r2, 8])       # Ch 2
+    ldr(r6, [r2, 8])       # Ch 3
+    lsl(r6, r6, 16)
+    orr(r6, r4)
+    str(r6, [r5, 4])       # Store Word 1 at target_addr + 4
 
-    # Loop back to wait for next sample
     b(LOOP_START)
 
     label(LOOP_EXIT)
@@ -624,7 +688,10 @@ def create_asm_streaming_loop_inner() -> object:
         # to 16-bit mode (DSS = 15) and back to 8-bit mode (DSS = 7) afterwards
         machine.mem32[SPI0_BASE] = (machine.mem32[SPI0_BASE] & ~0x0f) | 0x0f
         p0_addr = uctypes.addressof(p0_mv)
-        _asm_streaming_loop_inner_core(state_addr, p0_addr, SPI0_BASE)
+        # We call the assembler function with these parameters.
+        # When the page turns the routine will flip the storage base address between
+        # pages p0 and p1.
+        _asm_streaming_loop_inner_core(state_addr, p0_addr, SPI0_BASE, BUFFER_SIZE)
         machine.mem32[SPI0_BASE] = (machine.mem32[SPI0_BASE] & ~0x0f) | 0x07
 
     return _asm_streaming_loop_inner
@@ -665,7 +732,7 @@ def streaming_loop_core_1():
     global state
 
     # Choose between assembler and viper optimisations
-    if ASM_THUMB:
+    if capture_settings['optimisation'] == 'asm_thumb':
         streaming_loop_inner = create_asm_streaming_loop_inner()
     else:
         streaming_loop_inner = create_viper_streaming_loop_inner()
@@ -740,18 +807,16 @@ def streaming_loop_core_0():
     # Now transfer buffers in turn and loop...
     while state.flags & STREAMING:
         # Wait while we fill pages 0 and 1, then transfer them both
-        while state.cell < PAGE2:
+        while state.cell < PAGE_BOUNDARY:
             continue
         buffer_led_pin_on()
         transfer_buffer(p0_mv)
-        transfer_buffer(p1_mv)
         buffer_led_pin_off()
         # Wait while we fill pages 2 and 3, then transfer them both
-        while state.cell >= PAGE2:
+        while state.cell >= PAGE_BOUNDARY:
             continue
         buffer_led_pin_on()
-        transfer_buffer(p2_mv)
-        transfer_buffer(p3_mv)
+        transfer_buffer(p1_mv)
         buffer_led_pin_off()
         # Check to see if ADC readouts have latched to a constant value.
         # This function will raise a flag if necessary and the other CPU
@@ -761,8 +826,9 @@ def streaming_loop_core_0():
     if DEBUG:
         print('Streaming_loop_core_0() exited.')
         print('Here are the contents of debug buffer memory:')
-        gc.collect()
         print(debug_cache.as_text())
+
+    gc.collect()
 
 
 ########################################################
@@ -782,25 +848,23 @@ def reset_pin_held_high() -> bool:
     return reset_status
 
 
-def prepare_to_stream(adc_settings: dict):
-    '''Configures all the pre-requisities: pins, SPI interface, ADC settings
-    circular buffer memory, interrupts and garbage collection.'''
+def prepare_to_stream():
+    '''Configures all the pre-requisities: pins, SPI interface, ADC settings,
+    interrupts and garbage collection.'''
 
+    if DEBUG:
+        print('Configuring SPI interface.')
     # SPI library setup
     configure_adc_spi_interface()
 
-    # Buffer memory is set up in various memoryview structures that point to
-    # an underlying bytearray that holds a buffer of ADC samples. These
-    # objects are declared global so that the memory can be reached by both
-    # CPU cores.
-    configure_buffer_memory()
-
     if DEBUG:
-        print('Configuring ADC and interrupts.')
+        print('Configuring ADC.')
     # Push required settings into the ADC.
     hard_reset_adc()
-    setup_adc(adc_settings)
+    setup_adc()
 
+    if DEBUG:
+        print('Configuring interrupts.')
     # ADC is responsible for sample timing. Every sample, it toggles the DR*
     # pin. An interrupt handler on Pico receives this pulse, calling
     # adc_read_handler(), so that the data can be retrieved.
@@ -808,8 +872,11 @@ def prepare_to_stream(adc_settings: dict):
     #             irq          irq          irq
     configure_interrupts()
 
-    # We don't want garbage collection pauses while streaming, so we disable
-    # the automatic GC.
+    if DEBUG:
+        print('Disabling garbage collection.')
+    # We don't want garbage collection pauses while streaming, so we clean up
+    # now and then disable the automatic GC.
+    gc.collect()
     gc.disable()
 
 
@@ -836,42 +903,75 @@ def cleanup():
     configure_interrupts('disable')
 
 
-def main():
-    global state, state_addr
+def try_int(val):
+    try:
+        return int(val)
+    except (ValueError, TypeError):
+        return val
+
+
+def read_arguments():
     # We can pass configuration variables into the program from main.py
     # via the sys.argv variable.
-    # sys.argv = [ 'stream.py', '1x', '1x', '1x', '1x', '7.812k' ]
-    # The variables are loaded into the adc_settings dictionary.
-    # adc_settings = { 'gains':       ['1x', '1x', '1x', '1x'],
-    #                  'sample_rate': '7.812k' }
-    if len(sys.argv) == 6:
-        _, g0, g1, g2, g3, sample_rate = sys.argv
-        adc_settings = { 'gains': [g0, g1, g2, g3],
-                         'sample_rate': sample_rate }
-    else:
-        adc_settings = DEFAULT_ADC_SETTINGS
-    if DEBUG:
-        print(f'stream.py started with parameters {adc_settings}.')
+    # sys.argv = [ 'stream.py', '1x', '1x', '1x', '1x', '7.812k', 'asm_thumb', '6000000', '125000000' ]
+    # The variables are loaded into the capture_settings dictionary.
+    # capture_settings = { 'gains':       ['1x', '1x', '1x', '1x'],
+    #                      'sample_rate': '7.812k',
+    #                      'optimisation': 'asm_thumb',
+    #                      'spi_frequency': 6000000,
+    #                      'cpu_frequency': 125000000 }
+    argv = sys.argv
+    capture_settings = DEFAULT_CAPTURE_SETTINGS
+    capture_settings_keys = [ 'gains', 'sample_rate', 'optimisation', 'spi_frequency', 'pico_cpu_frequency' ]
+    # brutal parser requires optional arguments to be provided in specific order
     try:
+        if len(argv) >= 1:
+            # dispose of first entry (program name)
+            argv.pop(0)
+        # read the gains and any other arguments provided
+        if len(argv) >= 4:
+            capture_settings[capture_settings_keys.pop(0)] = argv[:4]
+            argv = argv[4:]
+            # deal with remaining arguments one by one
+            # if an argument can be expressed as an integer, it should be stored as one
+            while len(argv) >= 1:
+                capture_settings[capture_settings_keys.pop(0)] = try_int(argv.pop(0))
+    except:
+        if DEBUG:
+            print(f'There was an exception reading arguments {sys.argv}')
+    if DEBUG:
+        print(f'stream.py started with parameters {capture_settings}.')
+    return capture_settings
+
+
+def main():
+    global state, capture_settings
+    try:
+        # Adjust settings for command line arguments
+        capture_settings = read_arguments()
+
         # Setup microcontroller hardware
-        configure_cpu_speed(adc_settings)
+        configure_cpu_frequency()
         configure_pins()
+
         # Instantiate the state variables in memory
         # A bytearray is used for the backing store so that we can discover its
-        # address and read/write to memory directly from assembler, as well as
-        # via native micropython access via the 'state' object
-        STATE_LAYOUT = {
-            'cell': 0 | uctypes.UINT32,
-            'flags': 4 | uctypes.UINT32,
-        }
-        state_buf = bytearray(8)
-        state_addr = uctypes.addressof(state_buf)
-        state = uctypes.struct(state_addr, STATE_LAYOUT, uctypes.LITTLE_ENDIAN)
-        # Initialise the state elements (cell and flags)
-        state.cell = 0
-        state.flags = STREAMING
+        # address and read/write to memory directly from assembler and viper, as
+        # well as via native micropython access via the 'state' object
+        configure_state_memory()
+        # Now initialise the state elements (cell and flags)
+        state.cell = 0            # always lands in SRAM2
+        state.flags = STREAMING   # always lands in SRAM3
+
+        # Buffer memory is set up in various memoryview structures that point to
+        # an underlying bytearray that holds a buffer of ADC samples. These
+        # objects are declared global so that the memory can be reached by both
+        # CPU cores.
+        configure_buffer_memory()
+
+        # Loop while flags indicate that we are in STREAMING mode
         while state.flags == STREAMING:
-            prepare_to_stream(adc_settings)
+            prepare_to_stream()
             stream()
             # Inner sampling loops will exit if a rising edge pulse is detected
             # on the 'reset_me' pin. This is to make it possible to restart the
@@ -893,23 +993,31 @@ def main():
         # Catch CTRL-C here.
         if DEBUG:
             print('Interrupted.')
-        # Stop Core 1.
-        state.flags = STOP
+            # Stop Core 1.
+            state.flags = STOP
+        else:
+            # If we're not debugging, soft reboot the machine
+            state.flags = RESET
 
     except Exception as e:
         # Catch other exceptions.
         if DEBUG:
            err_type = type(e)
            print(f'There was an exception of type {err_type}.')
-        state.flags = RESET
+           state.flags = STOP
+        else:
+           state.flags = RESET
 
     finally:
         # If we reach here, STOP or RESET flags are raised.
         cleanup()
+        if DEBUG:
+            print(f'Stopping with state.flags = {state.flags}, '
+                  f'state.cell = {state.cell}.')
         if state.flags & RESET:
             if DEBUG:
-                print('Reset flag raised: resetting Pico shortly.')
-            # allow the reset pin to clear to normal
+                print('The RESET flag was raised: resetting Pico shortly.')
+            # allow time for the hardware reset pin to clear to normal
             time.sleep(1)
             pins['pico_led'].low()
             machine.reset()

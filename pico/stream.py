@@ -50,7 +50,7 @@ DEBUG = const(True)
 # and increase the cpu clock speed from 125MHz to 160Mhz.
 DEFAULT_CAPTURE_SETTINGS = { 'gains':       ['1x', '1x', '1x', '1x'],
                              'sample_rate': '7.812k',
-                             'optimisation': 'asm_thumb',
+                             'optimisation': 'viper',
                              'spi_frequency': 6000000,
                              'pico_cpu_frequency': 125000000 }
 
@@ -78,7 +78,7 @@ RESET       = const(0b0010)       # initiate a machine reset
 RESYNC      = const(0b0100)       # perform a soft reset on the ADC
 STREAMING   = const(0b1000)       # fast ADC streaming using both cores
 
-# ADC register addresses
+# ADC register addresses on the MCP3912
 PHASE       = const(0x0a)
 GAIN        = const(0x0b)
 STATUSCOM   = const(0x0c)
@@ -90,7 +90,8 @@ LOCK_CRC    = const(0x1f)
 ADC_WRITE   = const(0x40)
 ADC_READ    = const(0x41)
 
-# RP2040 hardware related constants
+# RP2040 hardware constants
+# Base address for the SPI interface that communicates with MCP3912 ADC
 SPI0_BASE   = const(0x4003c000)
 # Constants required to set up and detect edge transitions on the data request
 # (DR*) pin
@@ -172,8 +173,9 @@ def configure_cpu_frequency():
 def configure_dr_pin_edge_detection():
     '''This enables an edge latching feature on GPIO4 specifically (DR*). It means
     that we will definitely catch the data ready pulse, even if it is short in
-    length. However, after we pick it up we have to clear the latch each time.'''
-    # Enable hardware edge detection on GPIO 4
+    length. However, after we pick it up we have to clear the latch each time
+    by using the W1C instruction.'''
+    # Enable hardware edge detection on GPIO 4 via the interrupt register
     machine.mem32[PROC1_INTE0] |= FALL_EDGE_GPIO4
 
     # Clear any stale latched edge (W1C)
@@ -475,7 +477,7 @@ def configure_buffer_memory():
     This memory layout means that at a hardware level, reading and writing from
     different pages can occur in the same clock cycle.
     EXAMPLE:
-    Default striped mapping of a bytearray:
+    Default striped mapping of a bytearray at 4 bytes per word:
     W0 W1 W2 W3 (16 bytes)
     W0 W1 W2 W3 (16 bytes)
     W0 W1 W2 W3 (16 bytes)
@@ -521,9 +523,8 @@ def configure_buffer_memory():
 
 def configure_state_memory():
     '''State memory contains the cell and flags state variables. We set these up
-    to occupy memory stripes 3 and 4. This avoids them clashing with memory used
-    for sample buffer and reduces the likelihood of bus contention between cores
-    0 and 1 for memory access.'''
+    to occupy memory stripes 3 and 4. This reduces the incidence of memory access
+    stalls when cores 0 and 1 are accessing memory simultaneously.'''
     global state, state_addr, state_buf
 
     # Instantiate the state variables in memory
@@ -541,8 +542,8 @@ def configure_state_memory():
     assert state_addr & 0xf == 0, 'State bytearray is not aligned on SRAM0.'
 
     # Offset starting address that we use in the bytearray to SRAM2.
-    # This is the mechanism we use to ensure memory read/writes to the two state
-    # variables do not interface or block read/writes to the sample buffer.
+    # This is the mechanism we use to ensure memory read/writes to the state
+    # variables do not block read/writes to each other or to the sample buffer.
     state_addr = state_addr + 8
     state = uctypes.struct(state_addr, STATE_LAYOUT, uctypes.LITTLE_ENDIAN)
 
@@ -562,7 +563,7 @@ def _asm_streaming_loop_inner_core(r0, r1, r2):
     # Allocate r3 to hold the cell index, for the life of the function
     ldr(r3, [r0, 0])
 
-    # In use: r0, r1, r2, r3 and we do not clobber them at any point
+    # In use: r0-r3 are always in use and we do not clobber them at any point
 
     # Off we go
     label(MAIN_LOOP_START)
@@ -669,11 +670,10 @@ def _asm_streaming_loop_inner_core(r0, r1, r2):
     label(MAIN_LOOP_EXIT)
 
 
-# 2. Create a wrapper function that binds in the state_addr
-# value determined at run time
+# 2. Create a wrapper function that binds in the state_addr and p0_addr
+# values determined at run time
 def _asm_streaming_loop_inner():
-    '''Adds some code to flip the SPI interface into and out of 16 bit operation,
-    around the assembly routine.'''
+    '''Passes some parameters into the core assembly function.'''
     CONSTANTS = array.array('I', [
         INTR0,            # Offset 0 (0 bytes)
         FALL_EDGE_GPIO4,  # Offset 1 (4 bytes)
@@ -685,41 +685,30 @@ def _asm_streaming_loop_inner():
     _asm_streaming_loop_inner_core(state_addr, p0_addr, CONSTANTS)
 
 
-def wait_for_falling_edge_hw():
-    # Spin tightly until the hardware latches the edge
-    while not (machine.mem32[INTR0] & FALL_EDGE_GPIO4):
-        pass
-    # Acknowledge / clear the event
-    machine.mem32[INTR0] = FALL_EDGE_GPIO4
-
-
-# NOT USED YET
 @micropython.viper
-def _viper_streaming_loop_inner_core(state_addr: int):
+def _viper_streaming_loop_inner():
     '''This is a pure micropython SPI read loop optimised as much as we can
     without driving the SPI bus directly.'''
+    # Set up some fast viper variables
     p_state: ptr32 = ptr32(state_addr)
-    # cell_p is a local cache of the cell variable, so that the inner loop
-    # can synchronise to the moment when cell changes value
-    cell_p: int = p_state[0]
-
-    # Inner loop -- speed critical -- we do sampling here, nothing else.
-    while p_state[1] == STREAMING:
-        # Read out from the ADC *immediately* if the cell parameter changes
-        # value, then repeat. Unfortunately we can't further optimise
-        # the lookup cost of cells_mv, because 'readinto' requires a
-        # micropython object and not a plain starting address
-        p_state[0] == cell_p \
-            or spi_adc_interface.readinto(cells_mv[(cell_p := p_state[0])])
-
-
-# NOT USED YET
-def create_viper_streaming_loop_inner() -> object:
-    '''Make a python closure around the global state_addr value.'''
-    def _viper_streaming_loop_inner():
-        _viper_streaming_loop_inner_core(state_addr)
-
-    return _viper_streaming_loop_inner
+        # p_state[0] = cell index
+        # p_state[1] = flags
+    wrap_mask: uint = BUFFER_SIZE - 1
+    # Now loop around the DR* trigger and SPI interface
+    while True:
+        while True:
+            # Exit the function entirely if we're not STREAMING
+            if not (p_state[1] & STREAMING):
+                return
+            # Break out of the loop when the DR* pin fires
+            if int(machine.mem32[INTR0]) & FALL_EDGE_GPIO4:
+                break
+        # Clear the DR* latch
+        machine.mem32[INTR0] = FALL_EDGE_GPIO4
+        # Read the data
+        spi_adc_interface.readinto(cells_mv[p_state[0]])
+        # Increment the cell index, wrapping at BUFFER_SIZE
+        p_state[0] = (p_state[0] + 1) & wrap_mask
 
 
 def streaming_loop_core_1():
@@ -733,8 +722,7 @@ def streaming_loop_core_1():
     if capture_settings['optimisation'] == 'asm_thumb':
         streaming_loop_inner = _asm_streaming_loop_inner
     else:
-        pass
-        # streaming_loop_inner = _viper_streaming_loop_inner
+        streaming_loop_inner = _viper_streaming_loop_inner
 
     # The RESYNC flag may be raised by Core 0 at any time, so we have to
     # allow for it in the outer loop test here by using a bitmask filter

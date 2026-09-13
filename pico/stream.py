@@ -33,7 +33,7 @@ from micropython import const
 # diagnostic information. Instead of pushing sample data to stdout, it caches
 # snips of sample data in a dedicated buffer and exits the program after a few
 # cycles to then print it out.
-DEBUG = const(True)
+DEBUG = const(False)
 
 
 # These settings can be adjusted via comms from the Pi via command line
@@ -50,7 +50,7 @@ DEBUG = const(True)
 # and increase the cpu clock speed from 125MHz to 160Mhz.
 DEFAULT_CAPTURE_SETTINGS = { 'gains':       ['1x', '1x', '1x', '1x'],
                              'sample_rate': '7.812k',
-                             'optimisation': 'viper',
+                             'optimisation': 'asm_thumb',
                              'spi_frequency': 6000000,
                              'pico_cpu_frequency': 125000000 }
 

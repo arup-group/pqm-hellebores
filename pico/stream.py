@@ -546,8 +546,9 @@ update program to work with this firmware.'
 ########################################################
 # 1. Assembly function, with fixed input parameters which will be set in a wrapper
 # function
+# NB The asm_thumb code emitter does not support type hints.
 @micropython.asm_thumb
-def _asm_streaming_loop_inner_core(r0, r1, r2) -> None:
+def _asm_streaming_loop_inner_core(r0, r1, r2):
     # This core streaming loop implements a spin loop that continuously checks
     # the flags state variable and the DR* pin for action. When the DR* fires, it
     # then calculates the target memory location for the current cell index and
@@ -594,7 +595,7 @@ def _asm_streaming_loop_inner_core(r0, r1, r2) -> None:
 
     # 3b. Sample offset within page: r5 = byte_offset_in_page
     sub(r4, r7, 1)         # r4 = last cell of page 0, used as a page mask
-    mov(r5, r3)            # r5 = copy of cell index
+    mov(r5, r3)            # r5 = copy of current cell index
     and_(r5, r4)           # r5 = index_within_page = cell & mask
     lsl(r5, r5, 3)         # r5 = byte_offset_in_page (we stride at 8 bytes per sample)
 
@@ -635,7 +636,7 @@ def _asm_streaming_loop_inner_core(r0, r1, r2) -> None:
 
     # In use: r0-r3, r4=target_addr, r5=SPI0_BASE
 
-    # 6. Read 8 bytes and store to memory
+    # 6. Read 8 bytes out of the receive FIFO and store to memory
     ldr(r6, [r5, 8])       # Ch 0, MSB earth leakage current
     strb(r6, [r4, 0])
     ldr(r6, [r5, 8])       # Ch 0, LSB earth leakage current
@@ -678,13 +679,15 @@ def _asm_streaming_loop_inner() -> None:
         SPI0_BASE,        # Offset +8 bytes
         BUFFER_SIZE       # Offset +12 bytes
     ])
-    # Inner sampling loop -- inline assembly
     p0_addr = uctypes.addressof(p0_mv)
+    # Inner sampling loop -- inline assembly
     _asm_streaming_loop_inner_core(state_addr, p0_addr, CONSTANTS)
 
 
+# NB The viper code emitter does not like the 'None' return type, hence omitted
+# in the type hints
 @micropython.viper
-def _viper_streaming_loop_inner_core(cells_mv: tuple, spi_read_function: object) -> None:
+def _viper_streaming_loop_inner_core(cells_mv: object, spi_read_function: object):
     '''This is a pure micropython SPI read loop optimised as much as we can
     without driving the SPI bus directly.'''
     # Set up some fast viper variables, so we don't have to subsequently
@@ -787,6 +790,8 @@ def make_latch_test(cell1: memoryview, cell2: memoryview) -> object:
     return _latch_test
 
 
+# NB @micropython.native decorator doesn't work here because it somehow masks
+# incoming CTRL-C KeyboardInterrupt
 def streaming_loop_core_0():
     '''Prints data from memory to stdout in chunks.'''
     # Make a latch check function that quickly checks the last two cells
@@ -817,7 +822,7 @@ def streaming_loop_core_0():
     PAGE_BOUNDARY = const(BUFFER_SIZE // 2)
     # Now transfer half-buffers in turn and loop...
     # Note that in DEBUG mode, transfer_buffer can pull us out of STREAMING
-    # mode, so we check that flag after writing the buffer.
+    # mode, so we check that flag each time we finish writing the buffer.
     while True:
         # Wait while we fill page 0, then transfer it
         while state.cell < PAGE_BOUNDARY:

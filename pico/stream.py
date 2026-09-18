@@ -121,7 +121,7 @@ cells_mv: tuple              # tuple containing memoryviews of the individual
 ########################################################
 ######### Hardware control functions
 ########################################################
-def set_cpu_core_voltage(value):
+def set_cpu_core_voltage(value) -> None:
     '''Set cpu core voltage, required for enhancing CPU speed.'''
     # NB, machine default is 1.10V
     VREG_CTRL = 0x40064000
@@ -140,7 +140,7 @@ def set_cpu_core_voltage(value):
     time.sleep(0.01)
 
 
-def configure_cpu_frequency():
+def configure_cpu_frequency() -> None:
     '''This function needs to be called early to allow SPI clock rates to
     be correctly computed. Pico supports speeds up to 200MHz.'''
     MAX_CPU_FREQUENCY = const(200000000)
@@ -159,7 +159,7 @@ def configure_cpu_frequency():
         machine.freq(125000000)
 
 
-def configure_dr_pin_edge_detection():
+def configure_dr_pin_edge_detection() -> None:
     '''This enables an edge latching feature on GPIO4 specifically (DR*). It means
     that we will definitely catch the data ready pulse, even if it is short in
     length. However, after we pick it up we have to clear the latch each time
@@ -171,7 +171,7 @@ def configure_dr_pin_edge_detection():
     machine.mem32[INTR0] = FALL_EDGE_GPIO4
 
 
-def configure_pins():
+def configure_pins() -> None:
     '''Pico pin setup, referenced by a global variable 'pins'. Pins labelled *
     are active low. We initialise with the RESET* and CS* pins high, since we
     don't want them to operate until needed.'''
@@ -190,7 +190,7 @@ def configure_pins():
     }
 
 
-def configure_adc_spi_interface():
+def configure_adc_spi_interface() -> None:
     '''Sets up the Pico SPI interface using selected hardware pins. This will be
     used to communicate with the ADC.'''
     global spi_adc_interface
@@ -224,7 +224,7 @@ def configure_adc_spi_interface():
                                     miso       = pins['sdo_adc'])
 
 
-def set_adc_register(reg: int, bs: bytes):
+def set_adc_register(reg: int, bs: bytes) -> None:
     '''Write, and in DEBUG mode verify, values into selected register of the
     ADC.'''
     if DEBUG:
@@ -250,27 +250,27 @@ def get_adc_register(reg: int, n: int) -> bytes:
     return obs
 
 
-def lock_adc_registers():
+def lock_adc_registers() -> None:
     '''Lock all writable register values apart from LOCK_CRC, to increase
     resilence to electrical noise.'''
     if DEBUG:
         print('Locking registers.')
     set_adc_register(LOCK_CRC, bytes([0x00]))
 
-def unlock_adc_registers():
+def unlock_adc_registers() -> None:
     '''Unlock registers for writing.'''
     if DEBUG:
         print('Unlocking registers.')
     set_adc_register(LOCK_CRC, bytes([0x0a]))
 
 
-def hard_reset_adc():
+def hard_reset_adc() -> None:
     '''Cycles the hardware reset pin of the ADC.'''
     pins['reset_adc'].low()
     pins['reset_adc'].high()
 
 
-def soft_reset_adc():
+def soft_reset_adc() -> None:
     '''ADC codes can latch in the ADC output if spurious clock pulses are
     received and new values can't be loaded. Assigning to the PHASE
     register resets the ADCs to allow them to resume operation
@@ -280,7 +280,7 @@ def soft_reset_adc():
     lock_adc_registers()
 
 
-def setup_adc():
+def setup_adc() -> None:
     '''Setup the MCP3912 ADC. Refer to MCP3912 datasheet for detailed
     description of behaviour of all the settings configured here.'''
     # Unlock registers, so that we can write to them
@@ -354,7 +354,7 @@ def setup_adc():
     lock_adc_registers()
 
 
-def start_adc():
+def start_adc() -> None:
     '''Tell the ADC to read out the ADC registers in multiple-read mode. It's
     necessary for the CS pin to be held low from this point, for the duration
     of sampling.'''
@@ -365,7 +365,7 @@ def start_adc():
     spi_adc_interface.write(bytes([0x41]))
 
 
-def stop_adc():
+def stop_adc() -> None:
     '''Tell the ADC to stop sampling.'''
     # Note that the DR* pin continues to cycle, so it's necessary to also stop
     # interrupts if we want to stop processing completely
@@ -377,7 +377,7 @@ def stop_adc():
 ########################################################
 ######### Hardware interrupt configuration
 ########################################################
-def configure_hardware_interrupt(command: str ='enable'):
+def configure_hardware_interrupt(command: str ='enable') -> None:
     # we need this auxiliary function, because we can't easily assign to
     # a global variable within a lambda expression
     def reset():
@@ -402,11 +402,11 @@ def configure_hardware_interrupt(command: str ='enable'):
 ########################################################
 class Debug_cache:
 
-    def __init__(self: object):
+    def __init__(self: object) -> None:
         self.cache_pointer = 0
         self.cache = [ bytearray(32) for i in range(16) ]
 
-    def reset(self: object):
+    def reset(self: object) -> None:
         self.cache_pointer = 0
 
     def save_snip(self: object, bs: bytearray) -> bool:
@@ -438,7 +438,8 @@ def get_unstriped_bank_starts(buf: bytearray) -> tuple[int, int, int, int]:
     # implementation needs to handle 1-word (4 byte) alignment then we could
     # allocate a slightly larger buffer and offset 4 bytes into each stripe.
     addr = uctypes.addressof(buf)
-    assert addr & 0xf == 0, 'Buffer bytearray is not aligned on SRAM0.'
+    assert addr & 0xf == 0, 'Buffer bytearray is not aligned on SRAM0, update \
+program to work with this firmware.'
 
     striped_offset = addr - 0x20000000
     # unstriped offset stride is 'divide by 4' compared to the striped offset
@@ -452,7 +453,7 @@ def get_unstriped_bank_starts(buf: bytearray) -> tuple[int, int, int, int]:
     )
 
 
-def configure_buffer_memory():
+def configure_buffer_memory() -> None:
     '''Buffer memory is allocated for retaining a cache of samples received from
     the ADC. The memory is referenced by various memoryview objects that point
     to different portions of it. By default, buffer memory allocated from global
@@ -503,14 +504,14 @@ def configure_buffer_memory():
 
     # Create an array of memoryviews that are slices of the buffer memoryview.
     # These point to each individual storage cell of the buffer.
-    cells_list =      [ memoryview(p0_mv[i:i+8]) for i in range(0, len(p0_mv), 8) ]
-    cells_list.extend([ memoryview(p1_mv[i:i+8]) for i in range(0, len(p1_mv), 8) ])
+    cells_list =      [ p0_mv[i:i+8] for i in range(0, len(p0_mv), 8) ]
+    cells_list.extend([ p1_mv[i:i+8] for i in range(0, len(p1_mv), 8) ])
 
     # Convert to a tuple for a slight performance gain
     cells_mv = tuple(cells_list)
 
 
-def configure_state_memory():
+def configure_state_memory() -> None:
     '''State memory contains the cell and flags state variables. We set these
     up so that they are located in memory stripes 3 and 4. This reduces the
     incidence of memory access stalls when cores 0 and 1 are accessing memory
@@ -532,7 +533,8 @@ def configure_state_memory():
     # uses unstriped memory positioned in SRAM0 and SRAM1.
     # Check we are 4-word (16 byte aligned)
     state_addr = uctypes.addressof(state_buf)
-    assert state_addr & 0xf == 0, 'State bytearray is not aligned on SRAM0.'
+    assert state_addr & 0xf == 0, 'State bytearray is not aligned on SRAM0, \
+update program to work with this firmware.'
 
     # Offset the starting address that we actually use in the bytearray to SRAM2.
     state_addr = state_addr + 8
@@ -545,7 +547,7 @@ def configure_state_memory():
 # 1. Assembly function, with fixed input parameters which will be set in a wrapper
 # function
 @micropython.asm_thumb
-def _asm_streaming_loop_inner_core(r0, r1, r2):
+def _asm_streaming_loop_inner_core(r0, r1, r2) -> None:
     # This core streaming loop implements a spin loop that continuously checks
     # the flags state variable and the DR* pin for action. When the DR* fires, it
     # then calculates the target memory location for the current cell index and
@@ -668,7 +670,7 @@ def _asm_streaming_loop_inner_core(r0, r1, r2):
 
 # 2. Create a wrapper function that binds in the state_addr and p0_addr
 # values determined at run time
-def _asm_streaming_loop_inner():
+def _asm_streaming_loop_inner() -> None:
     '''Passes some parameters into the core assembly function.'''
     CONSTANTS = array.array('I', [
         INTR0,            # Offset 0 bytes
@@ -682,16 +684,22 @@ def _asm_streaming_loop_inner():
 
 
 @micropython.viper
-def _viper_streaming_loop_inner():
+def _viper_streaming_loop_inner_core(cells_mv: tuple, spi_read_function: object) -> None:
     '''This is a pure micropython SPI read loop optimised as much as we can
     without driving the SPI bus directly.'''
-    # Set up some fast viper variables
+    # Set up some fast viper variables, so we don't have to subsequently
+    # look them up in globals(). The variables passed in as function parameters
+    # must remain as micropython object references, because they are required for
+    # the SPI library call.
     p_state: ptr32 = ptr32(state_addr)
         # p_state[0] = cell index
         # p_state[1] = flags
-    wrap_mask: uint = BUFFER_SIZE - 1
-    # Now loop around the DR* trigger and SPI interface
+    wrap_mask: int = BUFFER_SIZE - 1
+    page_boundary: int = BUFFER_SIZE >> 1
+
+    # Main loop
     while True:
+        # Spin loop, wait for DR*
         while True:
             # Exit the function if we're not STREAMING
             if not (p_state[1] & STREAMING):
@@ -699,15 +707,24 @@ def _viper_streaming_loop_inner():
             # Break out of the loop when the DR* pin fires
             if int(machine.mem32[INTR0]) & FALL_EDGE_GPIO4:
                 break
+
         # Clear the DR* latch
         machine.mem32[INTR0] = FALL_EDGE_GPIO4
+
         # Read the data
-        spi_adc_interface.readinto(cells_mv[p_state[0]])
+        spi_read_function(cells_mv[p_state[0]])
+
         # Increment the cell index, wrapping at BUFFER_SIZE
         p_state[0] = (p_state[0] + 1) & wrap_mask
 
 
-def streaming_loop_core_1():
+def _viper_streaming_loop_inner() -> None:
+    '''Pass in required micropython objects, so that they can be more
+    efficiently referenced by the viper function.'''
+    _viper_streaming_loop_inner_core(cells_mv, spi_adc_interface.readinto)
+ 
+
+def streaming_loop_core_1() -> None:
     '''Watches for change in state.cell (incremented by the inline assembly interrupt
     handler) and reads new data from the ADC into memory. Also watches for
     change in state.flags variable to enable clean exit or recovery from RESYNC
@@ -743,36 +760,43 @@ def streaming_loop_core_1():
 ########################################################
 ######### WRITING LOOP (CORE 0) STARTS HERE
 ########################################################
-@micropython.viper
-def latch_test(state_addr: int, cell1: ptr32, cell2: ptr32):
-    # SPI synchronisation can fail during a large power disturbance.
-    # If this happens, the ADC outputs will latch to the same values
-    # on successive SPI reads. So we compare all the readings from two
-    # samples to verify, and set a RESYNC flag if necessary:
-    # use native viper variables for the cell locations
-    # two words (64 bits) contain one sample for all 4 channels
-    p_state: ptr32 = ptr32(state_addr)
-    # We rely on real AC electrical signals to always be changing:
-    # check if two successive cells are identical on all channels
-    if cell1[0] == cell2[0] and cell1[1] == cell2[1]:
-        # force these successive cells to be different, in case we
-        # happen to check them again before the RESYNC is completed.
-        cell1[0] = uint(0xffffffff)
-        cell2[0] = uint(0x00000000)
-        # raise RESYNC flag
-        p_state[1] = p_state[1] | RESYNC
+def make_latch_test(cell1: memoryview, cell2: memoryview) -> object:
+    '''Bind in the cell memoryviews as a closure to avoid having to
+    look them up on every call, and return a viper function that
+    checks them.'''
+    @micropython.viper
+    def _latch_test() -> bool:
+        '''We rely on real AC electrical signals to always be changing:
+        check if two successive cells are identical on all channels.'''
+        # SPI synchronisation can fail during a large power disturbance.
+        # If this happens, the ADC outputs will latch to the same values
+        # on successive SPI reads. So we compare all the readings from two
+        # samples to verify. Use native viper variables to access the cell
+        # locations. Two words (64 bits) contain one sample for all 4 channels
+        cell1_ptr32 = ptr32(cell1)
+        cell2_ptr32 = ptr32(cell2)
+        if cell1[0] == cell2[0] and cell1[1] == cell2[1]:
+            # force these successive cells to be different, in case we
+            # happen to check them again before they are refreshed.
+            cell1[0] = uint(0xffffffff)
+            cell2[0] = uint(0x00000000)
+            return True
+        else:
+            return False
 
+    return _latch_test    
+    
 
 def streaming_loop_core_0():
     '''Prints data from memory to stdout in chunks.'''
-    # local constants
-    PENULTIMATE_CELL   = const(BUFFER_SIZE - 2)
-    FINAL_CELL         = const(BUFFER_SIZE - 1)
-    PAGE_BOUNDARY      = const(BUFFER_SIZE // 2)
+    # Make a latch check function that quickly checks the last two cells
+    # of the buffer
+    latch_test = make_latch_test(cells_mv[BUFFER_SIZE-2],
+                                 cells_mv[BUFFER_SIZE-1])
 
-    # cache pin function lookups
-    buffer_led_pin_on  = pins['buffer_led'].on
-    buffer_led_pin_off = pins['buffer_led'].off
+    # Also, cache pin function lookups
+    buffer_led_pin_on     = pins['buffer_led'].on
+    buffer_led_pin_off    = pins['buffer_led'].off
 
     if DEBUG:
         # Create a cache for memorising output from a few sampling loops
@@ -790,7 +814,7 @@ def streaming_loop_core_0():
     else:
         transfer_buffer = sys.stdout.buffer.write
 
-
+    PAGE_BOUNDARY = const(BUFFER_SIZE // 2)
     # Now transfer half-buffers in turn and loop...
     # Note that in DEBUG mode, transfer_buffer can pull us out of STREAMING
     # mode, so we check that flag after writing the buffer.
@@ -812,9 +836,11 @@ def streaming_loop_core_0():
         if not state.flags & STREAMING:
             break
         # Check to see if ADC readouts have latched to a constant value.
-        # This function will raise a flag if necessary and the other CPU
-        # core will reset ADC comms.
-        latch_test(state_addr, cells_mv[FINAL_CELL], cells_mv[PENULTIMATE_CELL])
+        # Raise a flag if readings have latched: the other CPU core will then
+        # reset ADC comms.
+        if latch_test():
+            # raise RESYNC flag
+            state.flags = state.flags | RESYNC
 
     if DEBUG:
         print('Streaming_loop_core_0() exited.')

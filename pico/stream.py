@@ -722,7 +722,7 @@ def _viper_streaming_loop_inner() -> None:
     '''Pass in required micropython objects, so that they can be more
     efficiently referenced by the viper function.'''
     _viper_streaming_loop_inner_core(cells_mv, spi_adc_interface.readinto)
- 
+
 
 def streaming_loop_core_1() -> None:
     '''Watches for change in state.cell (incremented by the inline assembly interrupt
@@ -784,8 +784,8 @@ def make_latch_test(cell1: memoryview, cell2: memoryview) -> object:
         else:
             return False
 
-    return _latch_test    
-    
+    return _latch_test
+
 
 def streaming_loop_core_0():
     '''Prints data from memory to stdout in chunks.'''

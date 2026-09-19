@@ -160,12 +160,23 @@ def process_command(command_string):
 try:
     configure_reset_interrupt('enable')
     print('Control program main.py started on Pico.')
+    reset = False
     while True:
         command_string = read_command()
         process_command(command_string)
+
 except KeyError:
     print('Interrupted.')
+
+except KeyboardInterrupt:
+        # Catch CTRL-C here and reset the machine
+        print('Resetting the machine shortly...')
+        time.sleep(1)
+        reset = True
+
 finally:
     pins['pico_led'].low()
     # leave the reset interrupt enabled, even when returning to the REPL.
     #configure_reset_interrupt('disable')
+    if reset:
+        machine.reset()

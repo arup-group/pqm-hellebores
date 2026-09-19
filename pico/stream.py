@@ -952,10 +952,9 @@ def read_arguments():
             while len(argv) >= 1:
                 capture_settings[capture_settings_keys.pop(0)] = try_int(argv.pop(0))
     except:
-        if DEBUG:
-            print(f'There was an exception reading arguments {sys.argv}')
-    if DEBUG:
-        print(f'stream.py started with parameters {capture_settings}.')
+        print(f'There was an exception reading arguments {sys.argv}')
+
+    print(f'stream.py started with parameters {capture_settings}.')
     return capture_settings
 
 
@@ -987,6 +986,7 @@ def main():
         state.flags = STREAMING   # always lands in SRAM3
 
         # Loop while flags indicate that we are in STREAMING mode
+        print('**** STARTING BINARY STREAM ****')
         while state.flags == STREAMING:
             prepare_to_stream()
             stream()

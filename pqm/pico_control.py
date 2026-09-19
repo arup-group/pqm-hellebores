@@ -29,7 +29,8 @@ def find_serial_device():
             port_name = port.device
             break
     if port_name == None:
-        print(f'Unable to find Pico on available serial ports.', file=sys.stderr)
+        print(f'{time.ctime()}: pico_control.py, find_serial_device(): '
+              f'Unable to find Pico on available serial ports.', file=sys.stderr)
     return port_name
  
 
@@ -45,7 +46,7 @@ def get_command_args():
     return (program_name, args)
 
 
-def soft_reset():
+def soft_reset(ser):
     '''Pico software is configured to execute a hardware reset from software, if
     it is running and receives a CTRL-C (SIGINT) \x03 character'''
     ser.write(b'\x03')
@@ -75,47 +76,50 @@ def hard_reset():
         # have different power supply regulator sources).
         # If we need to release the GPIO, use gp.cleanup() however this will
         # leave the connection with a pull-high via a resistor in the Pi.
+        return True
     except ModuleNotFoundError:
-        print(f'{program_name}, hard_reset(): will only work on PQM hardware.', file=sys.stderr)
-        print(f'Attempting soft_reset() instead.', file=sys.stderr)
-        soft_reset()
+        print(f'{time.ctime()}, pico_control.py, hard_reset(): '
+              f'will only work on PQM hardware.', file=sys.stderr)
+        return False
     
 
-def send_command(command):
+def send_command(ser, command):
     '''Writes the command to the serial interface'''
     command += '\n'
     ser.write(command.encode('utf-8'))
 
 
-def send_file(filename):
+def send_file(ser, filename):
     '''Writes the contents of a file to the serial interface.'''
     try:
         with open(filename, 'rb') as f:
             file_contents = f.read()
         ser.write(file_contents)
     except OSError:
-        print(f'{program_name}, send_file(): failed to send the contents of {filename}.')
+        print(f'{time.ctime()}, pico_control.py, send_file(): '
+              f'failed to send the contents of {filename}.')
  
 
-def receive_response():
+def receive_response(ser):
     '''Receives response from serial. In case of short pauses, we try reading a
     few times before exiting'''
-    wait_attempts = 20
+    wait_attempts = 20            # wait up to 2 seconds for something to arrive
+    response = ''
     while wait_attempts > 0:
-        while ser.in_waiting:
-            # We get rid of Pico style CRLF endings and add system native line-endings
-            response = ser.readline().decode('utf-8').strip('\r\n')
-            print(response)
-            wait_attempts = 20
+        if ser.in_waiting:
+            response += ser.readline().decode('utf-8').strip('\r\n') + '\n'
+            wait_attempts = 10    # wait up to 1 second after we have got something
+            if 'BINARY' in response:
+                break
         time.sleep(0.1)
         wait_attempts -= 1
+    return response
 
 
 def main():
     '''Reads command line and resets Pico and/or sends a command to the primitive
     server program running on Pico at startup.'''
-    global program_name, ser
-    program_name, args = get_command_args()
+    _, args = get_command_args()
     # if hard reset is requested, attempt to reset Pico before checking to
     # see if the serial interface is up/exists 
     if args.hard_reset:
@@ -128,19 +132,21 @@ def main():
             # in a combined command line
             ser = serial.Serial(port_name)
             if args.ctrl_c:
-                soft_reset()
+                soft_reset(ser)
+                time.sleep(2)
             if args.command:
-                send_command(args.command)
+                send_command(ser, args.command)
             if args.send_file:
-                send_file(args.send_file)
+                send_file(ser, args.send_file)
             if not args.no_response:
-                receive_response()
+                print(receive_response(ser))
         except OSError:
-            print(f'{program_name}, main(): Serial comms error.', file=sys.stderr)
+            print(f'{time.ctime()}, pico_control.py, main(): '
+                  f'Serial comms error.', file=sys.stderr)
             sys.exit(1)
         finally:
             # make sure we have closed the port if it was opened
-            if 'ser' in globals():
+            if 'ser' in locals():
                 ser.close()
 
 

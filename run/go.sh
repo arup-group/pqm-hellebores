@@ -30,10 +30,8 @@ export PYGAME_HIDE_SUPPORT_PROMPT=hide
 # Figure out if we are running on real hardware or not
 grep --ignore-case raspberry '/sys/firmware/devicetree/base/model' &> /dev/null
 if [[ $? -eq 0 ]]; then
-    real_hardware=true
     READER="./reader.py"
 else
-    real_hardware=false
     READER="./rain_chooser.py"
 fi
 
@@ -107,12 +105,6 @@ echo "Analysis pipe file   : $ANALYSIS_PIPE"
 # hellebores.py reads both $WAVEFORM_PIPE and $ANALYSIS_PIPE all the time, to keep the
 # pipelines moving.
 ####
-
-# Reset the Pico and start streaming.
-if $real_hardware; then
-    ./pico_control.py --hard_reset
-    ./pico_control.py --command "START stream.py 1x 1x 1x 1x 7.812k" --no_response
-fi
 
 # Plumbing, pipe, pipe, pipe...
 "$READER" \

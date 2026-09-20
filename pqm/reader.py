@@ -23,46 +23,9 @@ BLOCK_SIZE = BUFFER_SIZE * 8
 PICO_STARTUP = 'START stream.py 1x 1x 1x 1x 7.812k'
 
 
-def find_serial_device():
-    '''determines the serial port that the Pico is connected to. On Ubuntu/Raspberry
-    Pi, serial ports are in the form '/dev/ttyACMx' where x is an integer 0-7.
-    On Windows, serial ports are in the form 'COMx' where x is an integer 1-8'''
-    ports = serial.tools.list_ports.comports()
-    for port in ports:
-        description = port.description
-        if 'board in fs mode' in description.lower() or 'serial' in description.lower():
-            print(f'{time.ctime()} reader.py, find_serial_device(): '
-                  f'Found {port.description}.', file=sys.stderr)
-            # port.device contains the name of the port.
-            return port.device
-    print(f'{time.ctime()} reader.py, find_serial_device(): '
-          f"Couldn't find a suitable serial port.", file=sys.stderr)
-    return None
- 
-
-def connect(port_name):
-    '''Connects to serial port with re-try and backoff in case other services are
-    trying to probe the port.'''
-    sleeping = [ 0.2, 0.3, 0.5, 1.0, 2.0 ]
-    MAX_TRIES = 5
-    this_try = 0
-    # try to connect five times
-    while this_try < MAX_TRIES:
-        ser = serial.Serial(port_name, timeout=None)
-        if ser.is_open:
-            print(f'{time.ctime()} reader.py, connect(): '
-                  f'Connected to {port_name}.', file=sys.stderr)
-            return ser
-        time.sleep(sleeping[this_try])
-        this_try = this_try + 1
-    print(f'{time.ctime()} reader.py, connect(): '
-          f'Failed to connect to serial port.', file=sys.stderr)
-    return None
-
-
-def start_streaming(ser):
-    pico_control.send_command(ser, PICO_STARTUP)
-    response = pico_control.receive_response(ser)
+def start_streaming(pico):
+    pico.send_command(PICO_STARTUP)
+    response = pico.receive_response()
     print(response, file=sys.stderr)
     # This string returned from Pico means that initialisation was successful
     if 'BINARY' in response:
@@ -73,16 +36,16 @@ def start_streaming(ser):
         return False
 
 
-def read_and_print(ser):
+def read_and_print(pico):
     '''Reads binary data from serial port, and prints as hexadecimal text to stdout.'''
     bs = bytearray(BLOCK_SIZE)
     # We use a 'None' timeout (blocking read) for efficiency, an exception will be thrown if
     # a serial port error occurs.
-    ser.timeout = None
+    pico.ser.timeout = None
     while True:
         try:
             # Read exactly BLOCKSIZE bytes into bytearray buffer.
-            ser.readinto(bs)
+            pico.ser.readinto(bs)
             # Process data as lines of 8 bytes, or 16 hex characters.
             hexstr = bs.hex()
             for i in range(0, BLOCK_SIZE*2, 16):
@@ -112,34 +75,27 @@ def read_and_print(ser):
 def main():
     '''Connect to Pico, start streaming program and then read out data.'''
     try:
-        # The loop is so we can attempt automatic retry for certain error states.
-        while True:
-            if (port_name := find_serial_device()) \
-                    and (ser := connect(port_name)) \
-                    and start_streaming(ser):
-                # read_and_print() will continue indefinitely if there are no errors.
-                read_and_print(ser)
-                # Something went wrong, so we close the port before looping round.
-                # We have to be wary here, as ser might not be defined or open.
-                if 'ser' in locals() and isinstance(ser, serial.Serial) and ser.is_open:
-                    ser.close()
-                time.sleep(1.0)
-            else:
-                # If any of the predicates return None or False, we break out of the loop.
-                break
+        # Create a pico object to manage the serial interface and Pico
+        pico = pico_control.Pico_control()
+        if pico.find_serial_device() and pico.connect():
+            start_streaming(pico)
+            # read_and_print() will continue indefinitely if there are no errors.
+            read_and_print(pico)
 
-    except:
-        # We also catch broken pipe and other exceptions here, so that we can clean up.
-        pass
+    except Exception as e:
+        # We catch broken pipe and other exceptions here, so that we can clean up.
+        print(f'{time.ctime()}: reader.py, main(): '
+              f'Exception {e} was caught at exit.', file=sys.stderr)
 
     finally:
-        # There was an error on the way and our reconnection attempts did not work.
-        # Make sure we have closed the port if it was opened.
-        if 'ser' in locals() and isinstance(ser, serial.Serial) and ser.is_open:
-            pico_control.soft_reset(ser)
-            ser.close()
+        # Attempt to reset the Pico
+        if pico.ser:
+            pico.soft_reset()
         else:
-            pico_control.hard_reset()
+            pico.hard_reset()
+        # The reset commands will close the port, but we check just in case.
+        if pico.ser.is_open:
+            pico.disconnect()
         print(f'{time.ctime()} reader.py, main(): Now exiting.', file=sys.stderr)
 
 

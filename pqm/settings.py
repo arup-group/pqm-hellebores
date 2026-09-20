@@ -63,6 +63,7 @@ class Settings():
         self.analysis_max_min_reset                    = js['analysis_max_min_reset']
         self.analysis_accumulators_reset               = js['analysis_accumulators_reset']
         self.sample_rate                               = js['sample_rate']
+        self.pico_start_string                         = js['pico_start_string']
         self.time_axis_divisions                       = js['time_axis_divisions']
         self.time_axis_pre_trigger_divisions           = js['time_axis_pre_trigger_divisions']
         self.vertical_axis_divisions                   = js['vertical_axis_divisions']
@@ -97,6 +98,7 @@ class Settings():
         js['analysis_max_min_reset']                   = self.analysis_max_min_reset
         js['analysis_accumulators_reset']              = self.analysis_accumulators_reset
         js['sample_rate']                              = self.sample_rate
+        js['pico_start_string']                        = self.pico_start_string
         js['time_axis_divisions']                      = self.time_axis_divisions
         js['time_axis_pre_trigger_divisions']          = self.time_axis_pre_trigger_divisions
         js['vertical_axis_divisions']                  = self.vertical_axis_divisions
@@ -280,6 +282,7 @@ default_settings = '''
     "analysis_max_min_reset": 0,
     "analysis_accumulators_reset": 0,
     "sample_rate": 7812.5,
+    "pico_start_string": "START stream.py 1x 1x 1x 1x 7.812k asm_thumb",
     "time_axis_divisions": 10,
     "time_axis_pre_trigger_divisions": 5,
     "vertical_axis_divisions": 8,

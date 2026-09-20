@@ -16,15 +16,17 @@ import errno
 import time
 import serial
 import serial.tools.list_ports
-import pico_control
+from pico_control import Pico_control
+from settings import Settings
+
 
 BUFFER_SIZE = 128
 BLOCK_SIZE = BUFFER_SIZE * 8
 PICO_STARTUP = 'START stream.py 1x 1x 1x 1x 7.812k'
 
 
-def start_streaming(pico):
-    pico.send_command(PICO_STARTUP)
+def start_streaming(pico, pico_start_string):
+    pico.send_command(pico_start_string)
     response = pico.receive_response()
     print(response, file=sys.stderr)
     # This string returned from Pico means that initialisation was successful
@@ -76,9 +78,15 @@ def main():
     '''Connect to Pico, start streaming program and then read out data.'''
     try:
         # Create a pico object to manage the serial interface and Pico
-        pico = pico_control.Pico_control()
+        pico = Pico_control()
+        # Get pico start string from settings
+        st = Settings()
+        if st.pico_start_string:
+            pico_start_string = st.pico_start_string
+        else:
+            pico_start_string = "START stream.py"
         if pico.find_serial_device() and pico.connect():
-            start_streaming(pico)
+            start_streaming(pico, pico_start_string)
             # read_and_print() will continue indefinitely if there are no errors.
             read_and_print(pico)
 
@@ -89,12 +97,12 @@ def main():
 
     finally:
         # Attempt to reset the Pico
-        if pico.ser:
+        if pico.ser and pico.ser.is_open:
             pico.soft_reset()
         else:
             pico.hard_reset()
-        # The reset commands will close the port, but we check just in case.
-        if pico.ser.is_open:
+        # The reset operation will close the port, but we check just in case.
+        if pico.ser and pico.ser.is_open:
             pico.disconnect()
         print(f'{time.ctime()} reader.py, main(): Now exiting.', file=sys.stderr)
 

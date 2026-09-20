@@ -141,7 +141,8 @@ def process_command(command_string):
         try:
             with open(filename) as f:
                 file_contents = f.read()
-            command_status = file_contents
+            print(file_contents, end='')
+            command_status = ''
         except:
             command_status = f'Failed to read {filename}'
     elif command == 'MACHINE' and len(arguments) == 0:
@@ -153,7 +154,8 @@ def process_command(command_string):
         machine.bootloader()
     else:
         command_status = f'Error: failed to parse {words}.'
-    print(command_status)
+    if command_status != '':
+        print(command_status)
 
    
 # Run from here

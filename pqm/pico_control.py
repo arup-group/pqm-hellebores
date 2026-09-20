@@ -190,10 +190,10 @@ class Pico_control:
         try:
             while wait_attempts > 0:
                 if self.ser.in_waiting:
-                    _response = self.ser.readline().decode('utf-8').strip('\r\n') + '\n'
+                    _response = self.ser.readline().decode('utf-8').strip('\r\n')
                     wait_attempts = 10    # wait up to 1 second after we have got something
-                    response += _response
-                    if _response == '**** STARTING BINARY STREAM ****\n':
+                    response += _response + '\n'
+                    if _response == '**** STARTING BINARY STREAM ****':
                         break
                 else:
                     time.sleep(0.1)
@@ -242,7 +242,7 @@ def main():
             if args.send_file:
                 pico.send_file(args.send_file)
             if not args.no_response:
-                print(pico.receive_response())
+                print(pico.receive_response(), end='')
         except OSError:
             print(f'{time.ctime()}, pico_control.py, main(): '
                   f'Serial comms error.', file=sys.stderr)

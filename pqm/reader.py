@@ -22,7 +22,6 @@ from settings import Settings
 
 BUFFER_SIZE = 128
 BLOCK_SIZE = BUFFER_SIZE * 8
-PICO_STARTUP = 'START stream.py 1x 1x 1x 1x 7.812k'
 
 
 def start_streaming(pico, pico_start_string):

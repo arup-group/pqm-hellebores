@@ -93,7 +93,7 @@ class Pico_control:
 
         finally:
             if connection_success:
-                print(f'{time.ctime()} pico_control.py, Pico_Control:connect(): '
+                print(f'{time.ctime()} pico_control.py, Pico_control:connect(): '
                       f'Connected to {self.port_name}.', file=sys.stderr)
                 return True
             else:
@@ -228,12 +228,10 @@ def main():
     if args.hard_reset:
         pico.hard_reset()
         time.sleep(2)
-    pico.find_serial_device()
-    if pico.port_name:
+    if pico.find_serial_device() and pico.connect():
         try:
             # this order of processing allows 'SAVE' command to precede file transfer
             # in a combined command line
-            pico.connect()
             if args.ctrl_c:
                 pico.soft_reset()
                 time.sleep(2)
@@ -245,12 +243,14 @@ def main():
                 print(pico.receive_response(), end='')
         except OSError:
             print(f'{time.ctime()}, pico_control.py, main(): '
-                  f'Serial comms error.', file=sys.stderr)
-            sys.exit(1)
+                  f'Error processing {args}.', file=sys.stderr)
         finally:
             # make sure we have closed the port if it was opened
-            if 'pico' in locals():
-                pico.disconnect()
+            pico.disconnect()
+    else:
+        print(f'{time.ctime()}, pico_control.py, main(): '
+              f'Could not find or connect to Pico.', file=sys.stderr)
+
 
 
 if __name__ == '__main__':

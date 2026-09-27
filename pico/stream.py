@@ -28,7 +28,6 @@ from micropython import const
 ######### Configuration constants
 ########################################################
 
-
 # NB set the DEBUG flag to True when testing the code inside the Thonny REPL.
 # This maintains code paths as much as possible, but outputs progress and
 # diagnostic information. Instead of pushing sample data to stdout, it caches
@@ -55,7 +54,6 @@ DEFAULT_CAPTURE_SETTINGS = { 'gains':       ['1x', '1x', '1x', '1x'],
                              'spi_frequency': 6000000,
                              'pico_cpu_frequency': 125000000 }
 
-
 # Buffer memory -- number of samples cached in Pico memory.
 # Buffer size is a power of two, to allow divide by two and bit masks to work
 # easily. The buffer size is measured in 'samples' or number of cells.
@@ -69,19 +67,10 @@ RESET           = const(0b0010)       # initiate a machine reset
 RESYNC          = const(0b0100)       # perform a soft reset on the ADC
 STREAMING       = const(0b1000)       # fast ADC streaming using both cores
 
-# ADC register addresses on the MCP3912
-PHASE           = const(0x0a)
-GAIN            = const(0x0b)
-STATUSCOM       = const(0x0c)
-CONFIG0         = const(0x0d)
-CONFIG1         = const(0x0e)
-LOCK_CRC        = const(0x1f)
-
-# ADC commands
-ADC_WRITE       = const(0x40)
-ADC_READ        = const(0x41)
-
-# RP2040 hardware constants
+########################################################
+######### RP2040 hardware constants used in
+######### Core 1 reader optimisation
+########################################################
 # Base address for the SPI interface that communicates with MCP3912 ADC
 SPI0_BASE       = const(0x4003c000)
 # Constants required to detect and hold edge transitions on the data request
@@ -105,8 +94,6 @@ STATE_LAYOUT = {
 ########################################################
 ######### Global variables
 ########################################################
-pico: object
-adc: object
 state: object                # uctypes.struct shared state ('cell' and 'flags')
                              # which is instantiated inside the state_buf bytearray
 state_buf: bytearray         # backing store for the state variable
@@ -125,9 +112,16 @@ class Pico_hardware:
     VREG_CTRL = const(0x40064000)
     VOLTAGE_LOOKUP = { '1.05': 0x0a, '1.10': 0x0b, '1.15': 0x0c, '1.20': 0x0d }
     MAX_CPU_FREQUENCY = const(200000000)
+    # Used by others...
+    # self.spi_adc
+    # self.pins
+    # self.interrupt
 
-    def __init__(self: object) -> None:
-        pass
+    def __init__(self: object, capture_settings: dict) -> None:
+        self.set_cpu_frequency(capture_settings['pico_cpu_frequency'])
+        self.configure_pins()
+        self.enable_reset_interrupt()
+
 
     def set_cpu_core_voltage(self: object, value: float) -> None:
         '''Set cpu core voltage, required for enhancing CPU speed.'''
@@ -160,18 +154,6 @@ class Pico_hardware:
             machine.freq(125000000)
 
 
-    def configure_dr_pin_edge_detection(self: object) -> None:
-        '''This enables an edge latching feature on GPIO4 specifically (DR*). It means
-        that we will definitely catch the data ready pulse, even if it is short in
-        length. However, after we pick it up we have to clear the latch each time
-        by using the W1C instruction.'''
-        # Enable hardware edge detection on GPIO 4 via the interrupt register
-        machine.mem32[PROC1_INTE0] |= FALL_EDGE_GPIO4
-
-        # Clear any stale latched edge (W1C)
-        machine.mem32[INTR0] = FALL_EDGE_GPIO4
-
-
     def configure_pins(self: object) -> None:
         '''Pico pin setup, referenced by a global variable 'pins'. Pins labelled *
         are active low. We initialise with the RESET* and CS* pins high, since we
@@ -190,7 +172,62 @@ class Pico_hardware:
         }
 
 
-    def configure_spi_adc_interface(self: object) -> None:
+    def reset_pin_held_high() -> bool:
+        '''This function supports recovery from some transient disturbances that
+        can cause the inner sampling loops to exit. The function confirms that the
+        reset_me pin of the Pico is sustained in a high state for a long enough
+        period that we can rely on it being a genuine reset command.'''
+        reset_status = True
+        for i in range(3):
+            # check that the reset pin is holding high
+            if self.pins['reset_me'].value() == 0:
+                reset_status = False
+            time.sleep(0.01)
+        return reset_status
+
+
+    def enable_reset_interrupt(self: object) -> None:
+        # we need this helper function, because we can't easily assign to
+        # a global variable within a lambda expression
+        def reset():
+            global state
+            state.flags = RESET
+
+        # Bind pin transition to interrupt handler.
+        # We use hard interrupt for the RESET pin so that the reset works even
+        # within a blocking function (eg serial write).
+        self.pins['reset_me'].irq(trigger = Pin.IRQ_RISING,
+                           handler = reset, hard=True)
+
+
+    def disable_reset_interrupt(self: object) -> None:
+        self.pins['reset_me'].irq(handler = None)
+
+
+########################################################
+######### MCP3912 (ADC) control functions
+########################################################
+class ADC_hardware:
+    # ADC register addresses on the MCP3912
+    PHASE           = const(0x0a)
+    GAIN            = const(0x0b)
+    STATUSCOM       = const(0x0c)
+    CONFIG0         = const(0x0d)
+    CONFIG1         = const(0x0e)
+    LOCK_CRC        = const(0x1f)
+    # ADC commands
+    ADC_WRITE       = const(0x40)
+    ADC_READ        = const(0x41)
+
+
+    def __init__(self: object, capture_settings: dict, pins: object) -> None:
+        # Retain a reference to pico pins and spi_adc interface function
+        self.pins = pins
+        self.capture_settings = capture_settings
+        self.configure_spi_adc_interface(capture_settings['spi_frequency'])
+
+
+    def configure_spi_adc_interface(self: object, spi_freq: int) -> None:
         '''Sets up the Pico SPI interface using selected hardware pins. This will be
         used to communicate with the ADC.'''
         # The SPI interface is set up in mode 0, with non-inverted clock polarity.
@@ -211,9 +248,8 @@ class Pico_hardware:
         # Pico and ADC. Its setting is independent from the sampling rate, but needs
         # to be fast enough to complete communication of 8 bytes in the period between
         # successive samples.
-
         self.spi_adc = machine.SPI(0,
-                            baudrate   = capture_settings['spi_frequency'],
+                            baudrate   = spi_freq,
                             polarity   = 0,
                             phase      = 0,
                             bits       = 8,
@@ -221,35 +257,6 @@ class Pico_hardware:
                             sck        = self.pins['sck_adc'],
                             mosi       = self.pins['sdi_adc'],
                             miso       = self.pins['sdo_adc'])
-
-
-    def interrupt(self: object, command: str) -> None:
-        # we need this auxiliary function, because we can't easily assign to
-        # a global variable within a lambda expression
-        def reset():
-            global state
-            state.flags = RESET
-
-        if command == 'enable RESET':
-            # Bind pin transition to interrupt handler.
-            # We use hard interrupt for the RESET pin so that the reset works even
-            # within a blocking function (eg serial write).
-            self.pins['reset_me'].irq(trigger = Pin.IRQ_RISING,
-                               handler = reset, hard=True)
-
-        elif command == 'disable RESET':
-            self.pins['reset_me'].irq(handler = None)
-
-
-########################################################
-######### MCP3912 (ADC) control functions
-########################################################
-class ADC_hardware:
-
-    def __init__(self: object, pico: object) -> None:
-        # Retain a reference to pico pins and spi_adc interface function
-        self.pins = pico.pins
-        self.spi_adc = pico.spi_adc
 
 
     def set(self: object, reg: int, bs: bytes) -> None:
@@ -318,8 +325,8 @@ class ADC_hardware:
         G = { '32x':0b101, '16x':0b100, '8x':0b011,
               '4x':0b010, '2x':0b001, '1x':0b000 }
         try:
-            g3, g2, g1, g0 = [ G[k] for k in capture_settings['gains'] ]
-        except KeyError:
+            g3, g2, g1, g0 = [ G[k] for k in self.capture_settings['gains'] ]
+        except:
             g3, g2, g1, g0 = [ G[k] for k in ['1x', '1x', '1x', '1x'] ]
         gain_bits = (g3 << 9) + (g2 << 6) + (g1 << 3) + g0
         bs = bytes([0x00, gain_bits >> 8, gain_bits & 0b11111111])
@@ -351,7 +358,7 @@ class ADC_hardware:
         osr_table = { '244':0xe0, '488':0xc0, '976':0xa0, '1.953k':0x80,
                       '3.906k':0x60, '7.812k':0x40, '15.625k':0x20, '31.250k':0x00 }
         try:
-            bs = bytes([0x24, osr_table[capture_settings['sample_rate']], 0x50])
+            bs = bytes([0x24, osr_table[self.capture_settings['sample_rate']], 0x50])
         except KeyError:
             bs = bytes([0x24, osr_table['7.812k'], 0x50])
         self.set(CONFIG0, bs)
@@ -653,7 +660,7 @@ def _asm_streaming_loop_inner_core(r0, r1, r2):
 
 # 2. Create a wrapper function that binds in the state_addr and p0_addr
 # values determined at run time
-def _asm_streaming_loop_inner() -> None:
+def _asm_streaming_loop_inner(spi_adc: object) -> None:
     '''Passes some parameters into the core assembly function.'''
     CONSTANTS = array.array('I', [
         INTR0,            # Offset 0 bytes
@@ -706,34 +713,42 @@ def _viper_streaming_loop_inner_core(cells_mv: object, spi_read_function: object
         p_state[0] = (p_state[0] + 1) & wrap_mask
 
 
-def _viper_streaming_loop_inner() -> None:
+def _viper_streaming_loop_inner(spi_adc: object) -> None:
     '''Pass in required micropython objects, so that they can be more
     efficiently referenced by the viper function.'''
-    _viper_streaming_loop_inner_core(cells_mv, pico.spi_adc.readinto)
+    _viper_streaming_loop_inner_core(cells_mv, spi_adc.readinto)
 
 
 ########################################################
 ######### CORE 1 READING LOOP: calling function
 ########################################################
-def streaming_loop_core_1() -> None:
+def streaming_loop_core_1(optimiser: str, adc: object) -> None:
     '''Watches for change in state.cell (incremented by the inline assembly interrupt
     handler) and reads new data from the ADC into memory. Also watches for
     change in state.flags variable to enable clean exit or recovery from RESYNC
     condition.'''
-    global state, adc
+    global state
+
+    # Enable hardware edge detection on GPIO 4 via the interrupt register
+    machine.mem32[PROC1_INTE0] |= FALL_EDGE_GPIO4
+    # Clear any stale latched edge (W1C)
+    machine.mem32[INTR0] = FALL_EDGE_GPIO4
 
     # Choose between assembler and viper optimisations
-    if capture_settings['optimisation'] == 'asm_thumb':
+    if optimiser == 'asm_thumb':
         streaming_loop_inner = _asm_streaming_loop_inner
-    else:
+    elif optimiser == 'viper':
         streaming_loop_inner = _viper_streaming_loop_inner
+    else:
+        raise ValueError('Invalid optimiser parameter in streaming_loop_core_1()')
+
 
     # The RESYNC flag may be raised by Core 0 at any time, so we have to
     # allow for it in the outer loop test here by using a bitmask filter.
     while state.flags & STREAMING:
         adc.lock()
         adc.start()
-        streaming_loop_inner()
+        streaming_loop_inner(adc.spi_adc)
         # If Core 0 has raised RESYNC flag, we miss a few samples and deal
         # with it here.
         if state.flags & RESYNC:
@@ -781,16 +796,12 @@ def make_latch_test(cell1: memoryview, cell2: memoryview) -> object:
 
 # NB @micropython.native decorator doesn't work here because it somehow masks
 # incoming CTRL-C KeyboardInterrupt
-def streaming_loop_core_0():
+def streaming_loop_core_0(buffer_led: object):
     '''Prints data from memory to stdout in chunks.'''
     # Make a latch check function that quickly checks the last two cells
     # of the buffer
     latch_test = make_latch_test(cells_mv[BUFFER_SIZE-2],
                                  cells_mv[BUFFER_SIZE-1])
-
-    # Also, cache pin function lookups
-    buffer_led_pin_on  = pico.pins['buffer_led'].on
-    buffer_led_pin_off = pico.pins['buffer_led'].off
 
     if DEBUG:
         # Create a cache for memorising output from a few sampling loops
@@ -816,17 +827,17 @@ def streaming_loop_core_0():
         # Wait while we fill page 0, then transfer it
         while state.cell < PAGE_BOUNDARY:
             continue
-        buffer_led_pin_on()
+        buffer_led.on()
         transfer_buffer(p0_mv)
-        buffer_led_pin_off()
+        buffer_led.off()
         if not state.flags & STREAMING:
             break
         # Wait while we fill page 1, then transfer it
         while state.cell >= PAGE_BOUNDARY:
             continue
-        buffer_led_pin_on()
+        buffer_led.on()
         transfer_buffer(p1_mv)
-        buffer_led_pin_off()
+        buffer_led.off()
         if not state.flags & STREAMING:
             break
         # Check to see if ADC readouts have latched to a constant value.
@@ -846,29 +857,19 @@ def streaming_loop_core_0():
 ########################################################
 ######### High level functions to support main()
 ########################################################
-def reset_pin_held_high() -> bool:
-    '''This function supports recovery from some transient disturbances that
-    can cause the inner sampling loops to exit. The function confirms that the
-    reset_me pin of the Pico is sustained in a high state for a long enough
-    period that we can rely on it being a genuine reset command.'''
-    reset_status = True
-    for i in range(3):
-        # check that the reset pin is holding high
-        if pico.pins['reset_me'].value() == 0:
-            reset_status = False
-        time.sleep(0.01)
-    return reset_status
-
-
-def stream() -> None:
+def stream(capture_settings: dict, pico: object, adc: object) -> None:
     '''Start the streaming loops on the two CPU cores, both accessing
     the same buffer memory. Core 1 captures samples from the ADC, triggered
     by the DR* pin. Core 0 prints blocks of samples from the capture buffer
     in two pages.'''
+    optimiser = capture_settings['optimisation']
+    buffer_led = pico.pins['buffer_led']
+
+    # Start the two threads
     if DEBUG:
         print('Starting streaming loops on both cores.')
-    _thread.start_new_thread(streaming_loop_core_1, ())
-    streaming_loop_core_0()
+    _thread.start_new_thread(streaming_loop_core_1, (optimiser, adc))
+    streaming_loop_core_0(buffer_led)
     # runs forever, unless:
     #     CTRL-C:             KeyboardInterrupt exception raised.
     #     reset_me pin:       RESET flag raised.
@@ -915,20 +916,14 @@ def read_arguments():
 
 
 def main():
-    global state, pico, adc, capture_settings
+    global state
     try:
         # Adjust settings for command line arguments
         capture_settings = read_arguments()
 
         # Create Pico and MCP3912 control objects
-        pico = Pico_hardware()
-        pico.set_cpu_frequency(capture_settings['pico_cpu_frequency'])
-        pico.configure_pins()
-        pico.configure_spi_adc_interface()
-        pico.configure_dr_pin_edge_detection()
-        pico.interrupt('enable RESET')
-        adc = ADC_hardware(pico)
-
+        pico = Pico_hardware(capture_settings)
+        adc = ADC_hardware(capture_settings, pico.pins)
         # Buffer memory is set up in various memoryview structures that point to
         # an underlying bytearray that holds a buffer of ADC samples. These
         # objects are declared global so that the memory can be reached by both
@@ -957,7 +952,8 @@ def main():
             # Clear garbage from memory
             gc.collect()
             # Begin streaming
-            stream()
+            # Capture settings and SPI object are required for core 1 read functions
+            stream(capture_settings, pico, adc)
             # Inner sampling loops will exit if a rising edge pulse is detected
             # on the 'reset_me' pin. This is to make it possible to restart the
             # Pico via software, toggling this pin. However, this outer loop
@@ -968,11 +964,11 @@ def main():
             # proceeding to reset the machine.
             if state.flags & RESET:
                 # Show the world that we have a RESET situation...
-                pins['pico_led'].high()
+                pico.pins['pico_led'].high()
                 # If the pin is not held high, we will return to streaming
-                if not reset_pin_held_high():
+                if not pico.reset_pin_held_high():
                     state.flags = STREAMING
-                    pins['pico_led'].low()
+                    pico.pins['pico_led'].low()
 
     except KeyboardInterrupt:
         # Catch CTRL-C here.
@@ -1005,7 +1001,7 @@ def main():
         elif state.flags & STOP:
             # Put everything back to normal, ready for REPL.
             adc.stop()
-            pico.interrupt('disable RESET')
+            pico.disable_reset_interrupt()
             gc.enable()
             print(f'The STOP flag was raised: state.flags = {state.flags}, '
                   f'state.cell = {state.cell}.')

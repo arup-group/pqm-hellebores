@@ -534,7 +534,7 @@ def configure_state_memory() -> None:
     # uses unstriped memory positioned only in SRAM0 and SRAM1.
     # Check we are 4-word (16 byte aligned)
     state_addr = uctypes.addressof(state_buf)
-    assert addr & 0xf == 0, 'State bytearray is not aligned to start on SRAM0, \
+    assert state_addr & 0xf == 0, 'State bytearray is not aligned to start on SRAM0, \
 update program to work with this firmware.'
 
     # Offset the starting address that we actually use in the bytearray to SRAM2.
@@ -1003,7 +1003,7 @@ def main():
 
     except Exception as e:
         # Catch other types of exception.
-        print(f'Exiting with exception {e}.')
+        print(f'Exiting with exception "{e}".')
         if DEBUG:
            state.flags = STOP
         else:

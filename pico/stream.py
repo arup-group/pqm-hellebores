@@ -112,15 +112,16 @@ class Pico_hardware:
     VREG_CTRL = const(0x40064000)
     VOLTAGE_LOOKUP = { '1.05': 0x0a, '1.10': 0x0b, '1.15': 0x0c, '1.20': 0x0d }
     MAX_CPU_FREQUENCY = const(200000000)
-    # Used by others...
-    # self.spi_adc
-    # self.pins
-    # self.interrupt
+
 
     def __init__(self: object, capture_settings: dict) -> None:
-        self.set_cpu_frequency(capture_settings['pico_cpu_frequency'])
-        self.configure_pins()
-        self.enable_reset_interrupt()
+        try:
+            self.set_cpu_frequency(capture_settings['pico_cpu_frequency'])
+            self.configure_pins()
+            self.enable_reset_interrupt()
+
+        except Exception as e:
+            raise Exception(f'Exception "{e}" while initialising Pico object.')
 
 
     def set_cpu_core_voltage(self: object, value: float) -> None:
@@ -129,8 +130,10 @@ class Pico_hardware:
         # Clear VSEL bits and apply new setting
         try:
             vsel_val = VOLTAGE_LOOKUP[f'{value:.2f}']
+
         except KeyError:
             vsel_val = VOLTAGE_LOOKUP['1.10']
+
         reg = machine.mem32[VREG_CTRL]
         reg = (reg & ~0xf0) | ((vsel_val & 0x0f) << 4)
         machine.mem32[VREG_CTRL] = reg
@@ -149,13 +152,13 @@ class Pico_hardware:
             machine.freq(min(freq, MAX_CPU_FREQUENCY))
 
         except:
-            print(f'There was an exception setting the CPU frequency to {freq}.')
+            print(f'There was an exception {e} setting the CPU frequency to {freq}.')
             print(f'Defaulting to standard system frequency of 125MHz')
             machine.freq(125000000)
 
 
     def configure_pins(self: object) -> None:
-        '''Pico pin setup, referenced by a global variable 'pins'. Pins labelled *
+        '''Pico pin setup, referenced by an instance variable 'pins'. Pins labelled *
         are active low. We initialise with the RESET* and CS* pins high, since we
         don't want them to operate until needed.'''
         self.pins = {
@@ -187,7 +190,7 @@ class Pico_hardware:
 
 
     def enable_reset_interrupt(self: object) -> None:
-        # we need this helper function, because we can't easily assign to
+        # We need this helper function, because we can't easily assign to
         # a global variable within a lambda expression
         def reset():
             global state
@@ -221,10 +224,14 @@ class ADC_hardware:
 
 
     def __init__(self: object, capture_settings: dict, pins: object) -> None:
-        # Retain a reference to pico pins and spi_adc interface function
-        self.pins = pins
-        self.capture_settings = capture_settings
-        self.configure_spi_adc_interface(capture_settings['spi_frequency'])
+        try:
+            # Retain a reference to pico pins and spi_adc interface function
+            self.pins = pins
+            self.capture_settings = capture_settings
+            self.configure_spi_adc_interface(capture_settings['spi_frequency'])
+
+        except Exception as e:
+            raise Exception(f'Exception "{e}" while initialising ADC object.')
 
 
     def configure_spi_adc_interface(self: object, spi_freq: int) -> None:
@@ -326,8 +333,10 @@ class ADC_hardware:
               '4x':0b010, '2x':0b001, '1x':0b000 }
         try:
             g3, g2, g1, g0 = [ G[k] for k in self.capture_settings['gains'] ]
+
         except:
             g3, g2, g1, g0 = [ G[k] for k in ['1x', '1x', '1x', '1x'] ]
+
         gain_bits = (g3 << 9) + (g2 << 6) + (g1 << 3) + g0
         bs = bytes([0x00, gain_bits >> 8, gain_bits & 0b11111111])
         self.set(GAIN, bs)
@@ -359,8 +368,10 @@ class ADC_hardware:
                       '3.906k':0x60, '7.812k':0x40, '15.625k':0x20, '31.250k':0x00 }
         try:
             bs = bytes([0x24, osr_table[self.capture_settings['sample_rate']], 0x50])
+
         except KeyError:
             bs = bytes([0x24, osr_table['7.812k'], 0x50])
+
         self.set(CONFIG0, bs)
 
         # Set the configuration register CONFIG1 at 0x0e
@@ -375,8 +386,8 @@ class ADC_hardware:
         necessary for the CS pin to be held low from this point, for the duration
         of sampling.'''
         self.pins['cs_adc'].low()
-        # Start reading from address 0x00 using 8-bit command byte
-        self.spi_adc.write(bytes([0x41]))
+        # Initiate reading from address 0x00 using ADC_READ command byte
+        self.spi_adc.write(bytes([ADC_READ]))
 
 
     def stop(self: object) -> None:
@@ -423,12 +434,13 @@ def get_unstriped_bank_starts(buf: bytearray) -> tuple[int, int, int, int]:
     allocator across to 4x unstriped memory buffers (base addresses provided).'''
     # NOTE: This simple implementation assumes that the base address of the input
     # bytearray is 4-word (16 byte) aligned. This has been the case for all
-    # tested firmware, but is not guaranteed. Hence trap is provided. If
+    # tested firmware, but is not guaranteed, hence trap is provided. If
     # implementation needs to handle 1-word (4 byte) alignment then we could
-    # allocate a slightly larger buffer and offset 4 bytes into each stripe.
+    # allocate a slightly larger buffer and offset the corresponding distance
+    # into each stripe.
     addr = uctypes.addressof(buf)
-    assert addr & 0xf == 0, 'Buffer bytearray is not aligned on SRAM0, update \
-program to work with this firmware.'
+    assert addr & 0xf == 0, 'Buffer bytearray is not aligned to start on SRAM0, \
+update program to work with this firmware.'
 
     striped_offset = addr - 0x20000000
     # unstriped offset stride is 'divide by 4' compared to the striped offset
@@ -508,7 +520,7 @@ def configure_state_memory() -> None:
     # NOTE: state_buf is globalised. While we don't need to access this object
     # directly again, we have to persist it in globals to prevent the underlying
     # backing store from being garbage collected
-    global state, state_addr, state_buf
+    global state, state_buf, state_addr
 
     # Instantiate the backing store for the state object
     # A bytearray is used for the backing store so that we can discover its
@@ -519,10 +531,10 @@ def configure_state_memory() -> None:
     # We have a cunning plan. We want to deliberately insert 'cell' in SRAM2
     # and 'flags' in SRAM3 memory regions. This ensures that there is no memory
     # bus contention between state memory access and buffer memory access, which
-    # uses unstriped memory positioned in SRAM0 and SRAM1.
+    # uses unstriped memory positioned only in SRAM0 and SRAM1.
     # Check we are 4-word (16 byte aligned)
     state_addr = uctypes.addressof(state_buf)
-    assert state_addr & 0xf == 0, 'State bytearray is not aligned on SRAM0, \
+    assert addr & 0xf == 0, 'State bytearray is not aligned to start on SRAM0, \
 update program to work with this firmware.'
 
     # Offset the starting address that we actually use in the bytearray to SRAM2.
@@ -729,39 +741,42 @@ def streaming_loop_core_1(optimiser: str, adc: object) -> None:
     condition.'''
     global state
 
-    # Enable hardware edge detection on GPIO 4 via the interrupt register
-    machine.mem32[PROC1_INTE0] |= FALL_EDGE_GPIO4
-    # Clear any stale latched edge (W1C)
-    machine.mem32[INTR0] = FALL_EDGE_GPIO4
+    try:
+        # Enable hardware edge detection on GPIO 4 via the interrupt register
+        machine.mem32[PROC1_INTE0] |= FALL_EDGE_GPIO4
+        # Clear any stale latched edge (W1C)
+        machine.mem32[INTR0] = FALL_EDGE_GPIO4
 
-    # Choose between assembler and viper optimisations
-    if optimiser == 'asm_thumb':
-        streaming_loop_inner = _asm_streaming_loop_inner
-    elif optimiser == 'viper':
-        streaming_loop_inner = _viper_streaming_loop_inner
-    else:
-        raise ValueError('Invalid optimiser parameter in streaming_loop_core_1()')
+        # Choose between assembler and viper optimisations
+        if optimiser == 'asm_thumb':
+            streaming_loop_inner = _asm_streaming_loop_inner
+        elif optimiser == 'viper':
+            streaming_loop_inner = _viper_streaming_loop_inner
+        else:
+            raise ValueError('Invalid optimiser parameter in streaming_loop_core_1()')
 
+        # The RESYNC flag may be raised by Core 0 at any time, so we have to
+        # allow for it in the outer loop test here by using a bitmask filter.
+        while state.flags & STREAMING:
+            adc.lock()
+            adc.start()
+            streaming_loop_inner(adc.spi_adc)
+            # If Core 0 has raised RESYNC flag, we miss a few samples and deal
+            # with it here.
+            if state.flags & RESYNC:
+                # Tell the ADC to stop and reset
+                adc.stop()
+                adc.unlock()
+                adc.soft_reset()
+                # Clear RESYNC flag, clear garbage and then attempt to resume streaming
+                state.flags = state.flags & ~RESYNC
+                gc.collect()
 
-    # The RESYNC flag may be raised by Core 0 at any time, so we have to
-    # allow for it in the outer loop test here by using a bitmask filter.
-    while state.flags & STREAMING:
-        adc.lock()
-        adc.start()
-        streaming_loop_inner(adc.spi_adc)
-        # If Core 0 has raised RESYNC flag, we miss a few samples and deal
-        # with it here.
-        if state.flags & RESYNC:
-            # Tell the ADC to stop and reset
-            adc.stop()
-            adc.unlock()
-            adc.soft_reset()
-            # Clear RESYNC flag, clear garbage and then attempt to resume streaming
-            state.flags = state.flags & ~RESYNC
-            gc.collect()
+    except Exception as e:
+        raise Exception(f'Exception "{e}" within streaming_loop_core_1().')
 
     if DEBUG:
-        print('Streaming_loop_core_1() exited.')
+        print('streaming_loop_core_1() exited.')
 
 
 ########################################################
@@ -798,60 +813,64 @@ def make_latch_test(cell1: memoryview, cell2: memoryview) -> object:
 # incoming CTRL-C KeyboardInterrupt
 def streaming_loop_core_0(buffer_led: object):
     '''Prints data from memory to stdout in chunks.'''
-    # Make a latch check function that quickly checks the last two cells
-    # of the buffer
-    latch_test = make_latch_test(cells_mv[BUFFER_SIZE-2],
+    try:
+        # Make a latch check function that quickly checks the last two cells
+        # of the buffer
+        latch_test = make_latch_test(cells_mv[BUFFER_SIZE-2],
                                  cells_mv[BUFFER_SIZE-1])
 
-    if DEBUG:
-        # Create a cache for memorising output from a few sampling loops
-        debug_cache = Debug_cache()
+        if DEBUG:
+            # Create a cache for memorising output from a few sampling loops
+            debug_cache = Debug_cache()
 
-    def _transfer_buffer_debug(bs):
-        global state
-        # saves snips until the debug cache is full
-        if not bool(debug_cache.save_snip(bs)):
-            state.flags = STOP
+        def _transfer_buffer_debug(bs):
+            global state
+            # saves snips until the debug cache is full
+            if not bool(debug_cache.save_snip(bs)):
+                state.flags = STOP
 
-    # select the transfer function we are going to use from now on
-    if DEBUG:
-        transfer_buffer = _transfer_buffer_debug
-    else:
-        transfer_buffer = sys.stdout.buffer.write
+        # select the transfer function we are going to use from now on
+        if DEBUG:
+            transfer_buffer = _transfer_buffer_debug
+        else:
+            transfer_buffer = sys.stdout.buffer.write
 
-    PAGE_BOUNDARY = const(BUFFER_SIZE // 2)
-    # Now transfer half-buffers in turn and loop...
-    # Note that in DEBUG mode, transfer_buffer can pull us out of STREAMING
-    # mode, so we check that flag each time we finish writing the buffer.
-    while True:
-        # Wait while we fill page 0, then transfer it
-        while state.cell < PAGE_BOUNDARY:
-            continue
-        buffer_led.on()
-        transfer_buffer(p0_mv)
-        buffer_led.off()
-        if not state.flags & STREAMING:
-            break
-        # Wait while we fill page 1, then transfer it
-        while state.cell >= PAGE_BOUNDARY:
-            continue
-        buffer_led.on()
-        transfer_buffer(p1_mv)
-        buffer_led.off()
-        if not state.flags & STREAMING:
-            break
-        # Check to see if ADC readouts have latched to a constant value.
-        # Raise a flag if readings have latched: the other CPU core will then
-        # reset ADC comms.
-        if latch_test():
-            # raise RESYNC flag
-            state.flags = state.flags | RESYNC
+        # Now transfer half-buffers in turn and loop...
+        # Note that in DEBUG mode, transfer_buffer can pull us out of STREAMING
+        # mode, so we check that flag each time we finish writing the buffer.
+        PAGE_BOUNDARY = const(BUFFER_SIZE // 2)
+        while True:
+            # Wait while we fill page 0, then transfer it
+            while state.cell < PAGE_BOUNDARY:
+                continue
+            buffer_led.on()
+            transfer_buffer(p0_mv)
+            buffer_led.off()
+            if not state.flags & STREAMING:
+                break
+            # Wait while we fill page 1, then transfer it
+            while state.cell >= PAGE_BOUNDARY:
+                continue
+            buffer_led.on()
+            transfer_buffer(p1_mv)
+            buffer_led.off()
+            if not state.flags & STREAMING:
+                break
+            # Check to see if ADC readouts have latched to a constant value.
+            # Raise a flag if readings have latched: the other CPU core will then
+            # reset ADC comms.
+            if latch_test():
+                # raise RESYNC flag
+                state.flags = state.flags | RESYNC
 
-    if DEBUG:
-        print('Streaming_loop_core_0() exited.')
-        print('Here are the contents of debug buffer memory:')
-        print(debug_cache.as_text())
-    gc.collect()
+        if DEBUG:
+            print('Streaming_loop_core_0() exited.')
+            print('Here are the contents of debug buffer memory:')
+            print(debug_cache.as_text())
+        gc.collect()
+
+    except Exception as e:
+        raise Exception(f'Exception "{e}" within streaming_loop_core_0().')
 
 
 ########################################################
@@ -895,8 +914,9 @@ def read_arguments():
     #                      'cpu_frequency': 125000000 }
     argv = sys.argv
     capture_settings = DEFAULT_CAPTURE_SETTINGS
-    capture_settings_keys = [ 'gains', 'sample_rate', 'optimisation', 'spi_frequency', 'pico_cpu_frequency' ]
-    # brutal parser requires optional arguments to be provided in specific order above
+    capture_settings_keys = [ 'gains', 'sample_rate', 'optimisation', 'spi_frequency',
+        'pico_cpu_frequency' ]
+    # brutal parser requires optional arguments to be provided in the exact order given above
     try:
         if len(argv) >= 1:
             argv.pop(0)    # dispose of program name
@@ -908,8 +928,9 @@ def read_arguments():
             # if an argument can be cast into integer, it is stored as one
             while len(argv) >= 1:
                 capture_settings[capture_settings_keys.pop(0)] = try_int(argv.pop(0))
-    except:
-        print(f'There was an exception reading arguments {sys.argv}')
+
+    except Exception as e:
+        print(f'Exception "{e}" while reading arguments {sys.argv}.')
 
     print(f'stream.py started with parameters {capture_settings}.')
     return capture_settings
@@ -982,8 +1003,7 @@ def main():
 
     except Exception as e:
         # Catch other types of exception.
-        err_type = type(e)
-        print(f'There was an exception of type {err_type}.')
+        print(f'Exiting with exception {e}.')
         if DEBUG:
            state.flags = STOP
         else:

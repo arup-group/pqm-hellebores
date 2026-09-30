@@ -27,7 +27,6 @@ from micropython import const
 ########################################################
 ######### Configuration constants
 ########################################################
-
 # NB set the DEBUG flag to True when testing the code inside the Thonny REPL.
 # This maintains code paths as much as possible, but outputs progress and
 # diagnostic information. Instead of pushing sample data to stdout, it caches
@@ -83,9 +82,11 @@ INTR0           = const(IO_BANK0_BASE + 0x0F0)  # Interrupt Status (GPIO 0-7)
 FALL_EDGE_GPIO4 = const(0x40000)      # 1 << 18
 
 
-# Arrangement of bytes in the state bytearray
-# They are word aligned so that they can be accessed
-# and set atomically from both CPU cores
+# Arrangement of bytes in the state bytearray. They are word aligned so that
+# they can be accessed and set atomically from both CPU cores. This design is
+# also set up so that we can access these fast variables from micropython
+# (state.cell, state.flags) and directly by reading and writing to memory (ie
+# via the optimisers viper and asm_thumb: see core 1 loops).
 STATE_LAYOUT = {
     'cell': 0 | uctypes.UINT32,
     'flags': 4 | uctypes.UINT32,
@@ -145,16 +146,10 @@ class Pico_hardware:
     def set_cpu_frequency(self: object, freq: int) -> None:
         '''This function needs to be called early to allow SPI clock rates to
         be correctly computed. Pico supports speeds up to 200MHz.'''
-        try:
-            # For faster speeds, we need to increase cpu core voltage to 1.15V
-            if freq > 133000000:
-                set_cpu_core_voltage(1.15)
-            machine.freq(min(freq, MAX_CPU_FREQUENCY))
-
-        except:
-            print(f'There was an exception {e} setting the CPU frequency to {freq}.')
-            print(f'Defaulting to standard system frequency of 125MHz')
-            machine.freq(125000000)
+        # For faster speeds, we need to increase cpu core voltage to 1.15V
+        if freq > 133000000:
+            set_cpu_core_voltage(1.15)
+        machine.freq(min(freq, MAX_CPU_FREQUENCY))
 
 
     def configure_pins(self: object) -> None:
@@ -190,6 +185,8 @@ class Pico_hardware:
 
 
     def enable_reset_interrupt(self: object) -> None:
+        '''Sets up an interrupt on Pico that responds to rising edge
+        on the RESET pin on Pin 14 (Pi signalling to Pico)'''
         # We need this helper function, because we can't easily assign to
         # a global variable within a lambda expression
         def reset():
@@ -756,7 +753,8 @@ def streaming_loop_core_1(optimiser: str, adc: object) -> None:
             raise ValueError('Invalid optimiser parameter in streaming_loop_core_1()')
 
         # The RESYNC flag may be raised by Core 0 at any time, so we have to
-        # allow for it in the outer loop test here by using a bitmask filter.
+        # allow for it in the outer loop test here by using a bitmask filter,
+        # instead of an equality test.
         while state.flags & STREAMING:
             adc.lock()
             adc.start()
@@ -790,11 +788,15 @@ def make_latch_test(cell1: memoryview, cell2: memoryview) -> object:
     def _latch_test() -> bool:
         '''We rely on real AC electrical signals to always be changing:
         check if two successive cells are identical on all channels.'''
-        # SPI synchronisation can fail during a large power disturbance.
+        # SPI signal integrity can sometimes fail eg during a large power
+        # disturbance. causing loss of synchronisation of the continuous
+        # read operation.
         # If this happens, the ADC outputs will latch to the same values
-        # on successive SPI reads. So we compare all the readings from two
-        # samples to verify. Use native viper variables to access the cell
-        # locations. Two words (64 bits) contain one sample for all 4 channels
+        # on successive SPI reads. To check for this, we compare all the
+        # readings from two specified samples to see if they are the same.
+        # By using native viper variables to access the correct memory
+        # locations, and catching them in a closure, we can make this
+        # function really fast.
         cell1_ptr32 = ptr32(cell1)
         cell2_ptr32 = ptr32(cell2)
         if cell1[0] == cell2[0] and cell1[1] == cell2[1]:
@@ -857,8 +859,8 @@ def streaming_loop_core_0(buffer_led: object):
             if not state.flags & STREAMING:
                 break
             # Check to see if ADC readouts have latched to a constant value.
-            # Raise a flag if readings have latched: the other CPU core will then
-            # reset ADC comms.
+            # Raise a flag if readings have latched: core 1 loop will detect
+            # the flag and then reset ADC comms.
             if latch_test():
                 # raise RESYNC flag
                 state.flags = state.flags | RESYNC
@@ -973,16 +975,17 @@ def main():
             # Clear garbage from memory
             gc.collect()
             # Begin streaming
-            # Capture settings and SPI object are required for core 1 read functions
+            # Capture settings, pico and SPI object are required for core 1
+            # read functions
             stream(capture_settings, pico, adc)
-            # Inner sampling loops will exit if a rising edge pulse is detected
-            # on the 'reset_me' pin. This is to make it possible to restart the
-            # Pico via software, toggling this pin. However, this outer loop
-            # allows for automatic recovery if a reset edge was caused by an
-            # electrical disturbance (eg inrush). If the reset state is not
-            # sustained for a long enough period, we consider it spurious and
-            # we will restart the ADCs and continue streaming, instead of
-            # proceeding to reset the machine.
+            # Defensive programming check: Inner sampling loops will exit if a
+            # rising edge pulse is detected on the 'reset_me' pin. This is to
+            # make it possible for the Pi to reset the Pico via software, toggling
+            # this pin. However, this outer loop allows for automatic recovery in the
+            # case where a reset edge was caused by an electrical disturbance (eg inrush).
+            # If the reset state is not sustained for a long enough period, we consider
+            # it spurious and return to streaming, instead of proceeding to reset
+            # the machine.
             if state.flags & RESET:
                 # Show the world that we have a RESET situation...
                 pico.pins['pico_led'].high()

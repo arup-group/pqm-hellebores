@@ -66,21 +66,6 @@ RESET           = const(0b0010)       # initiate a machine reset
 RESYNC          = const(0b0100)       # perform a soft reset on the ADC
 STREAMING       = const(0b1000)       # fast ADC streaming using both cores
 
-########################################################
-######### RP2040 hardware constants used in
-######### Core 1 reader optimisation
-########################################################
-# Base address for the SPI interface that communicates with MCP3912 ADC
-SPI0_BASE       = const(0x4003c000)
-# Constants required to detect and hold edge transitions on the data request
-# (DR*) pin
-# Refer to Section 2.19.6.1 in RP2040 datasheet
-IO_BANK0_BASE   = const(0x40014000)   # IO_BANK0 Registers (Base: 0x40014000)
-PROC0_INTE0     = const(IO_BANK0_BASE + 0x100)  # CPU0 Interrupt Enable (GPIO 0-7)
-PROC1_INTE0     = const(IO_BANK0_BASE + 0x130)  # CPU1 Interrupt Enable (GPIO 0-7)
-INTR0           = const(IO_BANK0_BASE + 0x0F0)  # Interrupt Status (GPIO 0-7)
-FALL_EDGE_GPIO4 = const(0x40000)      # 1 << 18
-
 
 # Arrangement of bytes in the state bytearray. They are word aligned so that
 # they can be accessed and set atomically from both CPU cores. This design is
@@ -222,7 +207,7 @@ class ADC_hardware:
 
     def __init__(self: object, capture_settings: dict, pins: object) -> None:
         try:
-            # Retain a reference to pico pins and spi_adc interface function
+            # Retain a reference to pico pins and capture_settings
             self.pins = pins
             self.capture_settings = capture_settings
             self.configure_spi_adc_interface(capture_settings['spi_frequency'])
@@ -540,6 +525,23 @@ update program to work with this firmware.'
 
 
 ########################################################
+######### CORE 1 READING LOOP
+######### RP2040 hardware constants used in
+######### reader optimisation
+########################################################
+# Base address for the SPI interface that communicates with MCP3912 ADC
+SPI0_BASE       = const(0x4003c000)
+# Constants required to detect and hold edge transitions on the data request
+# (DR*) pin
+# Refer to Section 2.19.6.1 in RP2040 datasheet
+IO_BANK0_BASE   = const(0x40014000)   # IO_BANK0 Registers (Base: 0x40014000)
+PROC0_INTE0     = const(IO_BANK0_BASE + 0x100)  # CPU0 Interrupt Enable (GPIO 0-7)
+PROC1_INTE0     = const(IO_BANK0_BASE + 0x130)  # CPU1 Interrupt Enable (GPIO 0-7)
+INTR0           = const(IO_BANK0_BASE + 0x0F0)  # Interrupt Status (GPIO 0-7)
+FALL_EDGE_GPIO4 = const(0x40000)      # 1 << 18
+
+
+########################################################
 ######### CORE 1 READING LOOP: asm_thumb implementation
 ########################################################
 # 1. Assembly function, with fixed input parameters which will be set in a wrapper
@@ -554,7 +556,7 @@ def _asm_streaming_loop_inner_core(r0, r1, r2):
     # and loops back to run again.
     # r0 = state_addr  (0=cell, 4=flags)
     # r1 = p0_addr     (base address of Page 0)
-    # r2 = CONSTANTS   (INTR0, FALL_EDGE_GPIO4, SPI0_BASE, BUFFER_SIZE)
+    # r2 = CONSTANTS   (0:INTR0, 4:FALL_EDGE_GPIO4, 8:SPI0_BASE, 12:BUFFER_SIZE)
 
     # Allocate r3 to hold the cell index, for the life of the function
     ldr(r3, [r0, 0])       # r3 = state.cell
@@ -566,8 +568,8 @@ def _asm_streaming_loop_inner_core(r0, r1, r2):
 
     # 0. Set up constants
     # get INTR0 address into r4, and FALL_EDGE_GPIO4 into r5
-    ldr(r4, [r2, 0])       # INTR0
-    ldr(r5, [r2, 4])       # FALL_EDGE_GPIO4
+    ldr(r4, [r2, 0])       # r4 = INTR0
+    ldr(r5, [r2, 4])       # r5 = FALL_EDGE_GPIO4
     mov(r6, STREAMING)     # we can directly load this constant, because STREAMING <= 255
 
     # 1. Begin spin loop, waiting for a new sample to be ready
@@ -634,7 +636,7 @@ def _asm_streaming_loop_inner_core(r0, r1, r2):
 
     # In use: r0-r3, r4=target_addr, r5=SPI0_BASE
 
-    # 6. Read 8 bytes out of the receive FIFO and store to memory
+    # 6. Read 8 bytes out of the receive FIFO and store into calculated memory cell
     ldr(r6, [r5, 8])       # Ch 0, MSB earth leakage current
     strb(r6, [r4, 0])
     ldr(r6, [r5, 8])       # Ch 0, LSB earth leakage current
@@ -715,7 +717,8 @@ def _viper_streaming_loop_inner_core(cells_mv: object, spi_read_function: object
         # Clear the DR* latch
         machine.mem32[INTR0] = FALL_EDGE_GPIO4
 
-        # Read the data
+        # Read the data (this is slowwwww compared to the rest of the optimised
+        # function, because it has to lookup in a micropython tuple)
         spi_read_function(cells_mv[p_state[0]])
 
         # Increment the cell index, wrapping at BUFFER_SIZE
@@ -794,16 +797,16 @@ def make_latch_test(cell1: memoryview, cell2: memoryview) -> object:
         # If this happens, the ADC outputs will latch to the same values
         # on successive SPI reads. To check for this, we compare all the
         # readings from two specified samples to see if they are the same.
-        # By using native viper variables to access the correct memory
-        # locations, and catching them in a closure, we can make this
-        # function really fast.
-        cell1_ptr32 = ptr32(cell1)
-        cell2_ptr32 = ptr32(cell2)
-        if cell1[0] == cell2[0] and cell1[1] == cell2[1]:
+        # Because we use native viper variables to access the specified memory
+        # locations, and cache these locations in a closure, this function
+        # runs really fast.
+        c1 = ptr32(cell1)
+        c2 = ptr32(cell2)
+        if c1[0] == c2[0] and c1[1] == c2[1]:
             # force these successive cells to be different, in case we
             # happen to check them again before they are refreshed.
-            cell1[0] = uint(0xffffffff)
-            cell2[0] = uint(0x00000000)
+            c1[0] = uint(0xffffffff)
+            c2[0] = uint(0x00000000)
             return True
         else:
             return False
@@ -987,16 +990,12 @@ def main():
             # it spurious and return to streaming, instead of proceeding to reset
             # the machine.
             if state.flags & RESET:
-                # Show the world that we have a RESET situation...
-                pico.pins['pico_led'].high()
                 # If the pin is not held high, we will return to streaming
                 if not pico.reset_pin_held_high():
                     state.flags = STREAMING
-                    pico.pins['pico_led'].low()
 
-    except KeyboardInterrupt:
-        # Catch CTRL-C here.
-        print('Interrupted.')
+    except Exception as e:
+        print(f'Exiting with exception "{e}".')
         if DEBUG:
             # If we're debugging, stop the machine then return to REPL
             state.flags = STOP
@@ -1004,13 +1003,13 @@ def main():
             # otherwise soft reboot the machine
             state.flags = RESET
 
-    except Exception as e:
-        # Catch other types of exception.
-        print(f'Exiting with exception "{e}".')
+    except KeyboardInterrupt:
+        # This catches a CTRL-C over the serial interface and deals with it
+        # the same way as an exception
         if DEBUG:
-           state.flags = STOP
+            state.flags = STOP
         else:
-           state.flags = RESET
+            state.flags = RESET
 
     # In addition to the exceptions, we may also reach here if the
     # RESET pin was asserted by the Pi.
@@ -1019,7 +1018,6 @@ def main():
             print('The RESET flag was raised: resetting Pico shortly.')
             # allow time for the hardware reset pin to clear to normal
             time.sleep(1)
-            pins['pico_led'].low()
             machine.reset()
         elif state.flags & STOP:
             # Put everything back to normal, ready for REPL.

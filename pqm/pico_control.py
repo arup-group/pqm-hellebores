@@ -106,6 +106,7 @@ class Pico_control:
         try:
             if self.ser:
                 self.ser.close()
+                del self.ser
             return True
         except:
             print(f'{time.ctime()}: pico_control.py, Pico_control.disconnect(): '

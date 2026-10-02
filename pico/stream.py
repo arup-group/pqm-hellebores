@@ -559,7 +559,7 @@ def _asm_streaming_loop_inner_core(r0, r1, r2):
     # r2 = CONSTANTS   (0:INTR0, 4:FALL_EDGE_GPIO4, 8:SPI0_BASE, 12:BUFFER_SIZE)
 
     # Allocate r3 to hold the cell index, for the life of the function
-    ldr(r3, [r0, 0])       # r3 = state.cell
+    ldr(r3, [r0, 0])                 # r3 = state.cell
 
     # In use: r0-r3 are always in use and we do not clobber them at any point
 
@@ -568,100 +568,101 @@ def _asm_streaming_loop_inner_core(r0, r1, r2):
 
     # 0. Set up constants
     # get INTR0 address into r4, and FALL_EDGE_GPIO4 into r5
-    ldr(r4, [r2, 0])       # r4 = INTR0
-    ldr(r5, [r2, 4])       # r5 = FALL_EDGE_GPIO4
-    mov(r6, STREAMING)     # we can directly load this constant, because STREAMING <= 255
+    ldr(r4, [r2, 0])                 # r4 = INTR0
+    ldr(r5, [r2, 4])                 # r5 = FALL_EDGE_GPIO4
+    # we can directly load the next constant, because STREAMING <= 255
+    mov(r6, STREAMING)
 
     # 1. Begin spin loop, waiting for a new sample to be ready
     label(SPIN_LOOP_START)
 
     # 1a. Check that we are still in STREAMING mode...
-    ldr(r7, [r0, 4])       # r7 = state.flags
-    tst(r6, r7)            # r7 & STREAMING
-    beq(MAIN_LOOP_EXIT)    # if zero, we exit
+    ldr(r7, [r0, 4])                 # r7 = state.flags
+    tst(r6, r7)                      # r7 & STREAMING
+    beq(MAIN_LOOP_EXIT)              # if zero, we exit
 
     # 1b. ...then check for DR falling edge
-    ldr(r7, [r4, 0])       # r7 = contents of INTR0
-    tst(r7, r5)            # Test if GPIO4 (bit 18) is set
-    beq(SPIN_LOOP_START)   # if zero, loop back
+    ldr(r7, [r4, 0])                 # r7 = contents of INTR0
+    tst(r7, r5)                      # Test if GPIO4 (bit 18) is set
+    beq(SPIN_LOOP_START)             # if zero, loop back
 
     # 2. OK, we're clear to read from SPI. Clear the DR latch event
-    str(r5, [r4, 0])       # Write bit 18 back to INTR0, to clear the latch
+    str(r5, [r4, 0])                 # Write FALL_EDGE_GPIO4 back to INTR0, to clear the latch
 
     # 3. Target Address Calculation
     # 3a. Page boundary: r7 = BUFFER_SIZE // 2
-    ldr(r7, [r2, 12])      # r7 = BUFFER_SIZE
-    lsr(r7, r7, 1)         # r7 = r7 >> 1 (index at page boundary)
+    ldr(r7, [r2, 12])                # r7 = BUFFER_SIZE
+    lsr(r7, r7, 1)                   # r7 = r7 >> 1 (index at page boundary)
 
     # 3b. Sample offset within page: r5 = byte_offset_in_page
-    sub(r4, r7, 1)         # r4 = last cell of page 0, used as a page mask
-    mov(r5, r3)            # r5 = copy of current cell index
-    and_(r5, r4)           # r5 = index_within_page = cell & mask
-    lsl(r5, r5, 3)         # r5 = byte_offset_in_page (we stride at 8 bytes per sample)
+    sub(r4, r7, 1)                   # r4 = last cell of page 0, used as a page mask
+    mov(r5, r3)                      # r5 = copy of current cell index
+    and_(r5, r4)                     # r5 = index_within_page = cell & mask
+    lsl(r5, r5, 3)                   # r5 = byte_offset_in_page (we stride at 8 bytes per sample)
 
     # 3c. Page offset: r6 = page_offset:
-    mov(r6, 0)             # r6 = Page 0
-    tst(r3, r7)            # Tests if current index is within page 1
-    beq(ON_PAGE_0)         # Jump if result is zero, we stay on page 0 (r6 = 0x0)
-    mov(r6, 1)             # Otherwise, we're on Page 1
-    lsl(r6, r6, 16)        # r6 = 0x10000
+    mov(r6, 0)                       # r6 = Page 0
+    tst(r3, r7)                      # Tests if current index is within page 1
+    beq(ON_PAGE_0)                   # Jump if result is zero, we stay on page 0 (r6 = 0x0)
+    mov(r6, 1)                       # Otherwise, we're on Page 1
+    lsl(r6, r6, 16)                  # r6 = 0x10000
     label(ON_PAGE_0)
 
     # 3d. Total target RAM address = p0_addr + page_offset + byte_offset_in_page
-    add(r4, r5, r6)        # r4 = byte_offset_in_page + page_offset
-    add(r4, r1, r4)        # r4 = p0_addr + r4 (target_addr)
+    add(r4, r5, r6)                  # r4 = byte_offset_in_page + page_offset
+    add(r4, r1, r4)                  # r4 = p0_addr + r4 (target_addr)
 
     # In use: r0-r3, r4=target_addr for the current cell
 
     # 4. Drive the SPI bus
     # Helpfully, the hardware FIFO buffer is exactly 8 frames deep
     # Burst write 8 x dummy bytes (trigger 64 SCK cycles)
-    ldr(r5, [r2, 8])       # r5 = SPI0_BASE
+    ldr(r5, [r2, 8])                 # r5 = SPI0_BASE
     mov(r6, 0)
-    str(r6, [r5, 8])       # Byte 0
-    str(r6, [r5, 8])       # Byte 1
-    str(r6, [r5, 8])       # Byte 2
-    str(r6, [r5, 8])       # Byte 3
-    str(r6, [r5, 8])       # Byte 4
-    str(r6, [r5, 8])       # Byte 5
-    str(r6, [r5, 8])       # Byte 6
-    str(r6, [r5, 8])       # Byte 7
+    str(r6, [r5, 8])                 # Byte 0
+    str(r6, [r5, 8])                 # Byte 1
+    str(r6, [r5, 8])                 # Byte 2
+    str(r6, [r5, 8])                 # Byte 3
+    str(r6, [r5, 8])                 # Byte 4
+    str(r6, [r5, 8])                 # Byte 5
+    str(r6, [r5, 8])                 # Byte 6
+    str(r6, [r5, 8])                 # Byte 7
 
     # 5. Wait for SPI to complete the transmission that we started
-    mov(r7, 0x10)          # r7 = RFF bit mask (0b010000)
+    mov(r7, 0x10)                    # r7 = RFF bit mask (0b010000)
     label(WAIT_RX_FULL)
-    ldr(r6, [r5, 12])      # r6 = contents of SSPSR
-    tst(r6, r7)            # RFF is set only when all 8 transfers have finished
-    bne(WAIT_RX_FULL)      # Loop back until this is true
+    ldr(r6, [r5, 12])                # r6 = contents of SSPSR
+    tst(r6, r7)                      # RFF is set only when all 8 transfers have finished
+    bne(WAIT_RX_FULL)                # Loop back until this is true
 
     # In use: r0-r3, r4=target_addr, r5=SPI0_BASE
 
     # 6. Read 8 bytes out of the receive FIFO and store into calculated memory cell
-    ldr(r6, [r5, 8])       # Ch 0, MSB earth leakage current
+    ldr(r6, [r5, 8])                 # Ch 0, MSB earth leakage current
     strb(r6, [r4, 0])
-    ldr(r6, [r5, 8])       # Ch 0, LSB earth leakage current
+    ldr(r6, [r5, 8])                 # Ch 0, LSB earth leakage current
     strb(r6, [r4, 1])
-    ldr(r6, [r5, 8])       # Ch 1, MSB current low range
+    ldr(r6, [r5, 8])                 # Ch 1, MSB current low range
     strb(r6, [r4, 2])
-    ldr(r6, [r5, 8])       # Ch 1, LSB current low range
+    ldr(r6, [r5, 8])                 # Ch 1, LSB current low range
     strb(r6, [r4, 3])
-    ldr(r6, [r5, 8])       # Ch 2, MSB current full range
+    ldr(r6, [r5, 8])                 # Ch 2, MSB current full range
     strb(r6, [r4, 4])
-    ldr(r6, [r5, 8])       # Ch 2, LSB current full range
+    ldr(r6, [r5, 8])                 # Ch 2, LSB current full range
     strb(r6, [r4, 5])
-    ldr(r6, [r5, 8])       # Ch 3, MSB voltage
+    ldr(r6, [r5, 8])                 # Ch 3, MSB voltage
     strb(r6, [r4, 6])
-    ldr(r6, [r5, 8])       # Ch 3, LSB voltage
+    ldr(r6, [r5, 8])                 # Ch 3, LSB voltage
     strb(r6, [r4, 7])
 
     # In use: r0-r3 only
 
     # 7. Increment and wrap the cell pointer
     ldr(r4, [r2, 12])      # r4 = BUFFER_SIZE
-    sub(r4, r4, 1)         # r4 = final_cell_index (wrap mask)
-    add(r3, r3, 1)         # r3 = cell_index + 1 (increment the index)
-    and_(r3, r4)           # r3 = cell_index & final_cell_index (circulate the index)
-    str(r3, [r0, 0])       # save r3 to state.cell
+    sub(r4, r4, 1)                   # r4 = final_cell_index (wrap mask)
+    add(r3, r3, 1)                   # r3 = cell_index + 1 (increment the index)
+    and_(r3, r4)                     # r3 = cell_index & final_cell_index (circulate the index)
+    str(r3, [r0, 0])                 # save r3 to state.cell
 
     b(MAIN_LOOP_START)
 
@@ -674,10 +675,10 @@ def _asm_streaming_loop_inner_core(r0, r1, r2):
 def _asm_streaming_loop_inner(spi_adc: object) -> None:
     '''Passes some parameters into the core assembly function.'''
     CONSTANTS = array.array('I', [
-        INTR0,            # Offset 0 bytes
-        FALL_EDGE_GPIO4,  # Offset +4 bytes
-        SPI0_BASE,        # Offset +8 bytes
-        BUFFER_SIZE       # Offset +12 bytes
+        INTR0,                       # Offset 0 bytes
+        FALL_EDGE_GPIO4,             # Offset +4 bytes
+        SPI0_BASE,                   # Offset +8 bytes
+        BUFFER_SIZE                  # Offset +12 bytes
     ])
     p0_addr = uctypes.addressof(p0_mv)
     # Inner sampling loop -- inline assembly
@@ -697,18 +698,18 @@ def _viper_streaming_loop_inner_core(cells_mv: object, spi_read_function: object
     # look them up in globals(). The variables passed in as function parameters
     # must remain as micropython object references, because they are required for
     # the SPI library call.
-    p_state: ptr32 = ptr32(state_addr)
-        # p_state[0] = cell index
-        # p_state[1] = flags
-    wrap_mask: int = BUFFER_SIZE - 1
-    page_boundary: int = BUFFER_SIZE >> 1
+    s: ptr32 = ptr32(state_addr)
+        # s[0] = state.cell
+        # s[1] = state.flags
+
+    wrap_mask: int = const(BUFFER_SIZE - 1)
 
     # Main loop
     while True:
         # Spin loop, wait for DR*
         while True:
             # Exit the function if we're not STREAMING
-            if not (p_state[1] & STREAMING):
+            if not (s[1] & STREAMING):
                 return
             # Break out of the loop when the DR* pin fires
             if int(machine.mem32[INTR0]) & FALL_EDGE_GPIO4:
@@ -719,10 +720,10 @@ def _viper_streaming_loop_inner_core(cells_mv: object, spi_read_function: object
 
         # Read the data (this is slowwwww compared to the rest of the optimised
         # function, because it has to lookup in a micropython tuple)
-        spi_read_function(cells_mv[p_state[0]])
+        spi_read_function(cells_mv[s[0]])
 
         # Increment the cell index, wrapping at BUFFER_SIZE
-        p_state[0] = (p_state[0] + 1) & wrap_mask
+        s[0] = (s[0] + 1) & wrap_mask
 
 
 def _viper_streaming_loop_inner(spi_adc: object) -> None:
@@ -735,10 +736,9 @@ def _viper_streaming_loop_inner(spi_adc: object) -> None:
 ######### CORE 1 READING LOOP: calling function
 ########################################################
 def streaming_loop_core_1(optimiser: str, adc: object) -> None:
-    '''Watches for change in state.cell (incremented by the inline assembly interrupt
-    handler) and reads new data from the ADC into memory. Also watches for
-    change in state.flags variable to enable clean exit or recovery from RESYNC
-    condition.'''
+    '''Watches for change in state.cell and reads new data from the ADC into memory.
+    Also watches for change in state.flags variable to enable clean exit or
+    recovery from RESYNC condition.'''
     global state
 
     try:
@@ -978,8 +978,6 @@ def main():
             # Clear garbage from memory
             gc.collect()
             # Begin streaming
-            # Capture settings, pico and SPI object are required for core 1
-            # read functions
             stream(capture_settings, pico, adc)
             # Defensive programming check: Inner sampling loops will exit if a
             # rising edge pulse is detected on the 'reset_me' pin. This is to

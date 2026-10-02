@@ -184,6 +184,33 @@ class Pico_control:
             return False
 
 
+    def verify_file_match(self, filename, pico_filename=None):
+        '''Compares a file to the same file on the Pico flash storage by checking the
+        SHA256 checksum. Uses just the basename of the file as there are no
+        sub-directories on Pico.'''
+        try:
+            if not pico_filename:
+                pico_filename = os.path.basename(filename)
+            with open(filename, 'rb') as f:
+                file_contents = f.read()
+            file_hash = hashlib.sha256(file_contents).hexdigest()
+            # verify the file
+            self.send_command(f'SHA256 {pico_filename}')
+            response = self.receive_response().strip()
+            print(response)
+            if response.split('\n')[-1] == file_hash:
+                print('Files match.')
+                return True
+            else:
+                print('Files differ.')
+                return False
+
+        except Exception as e:
+            print(f'{time.ctime()}, pico_control.py, Pico_control.verify_file_match(): '
+                  f'failed ("{e}").')
+            return False
+
+
     def push_file(self, filename):
         '''Copies a file to the Pico flash storage interface, verifying correct upload.
         Uses just the basename of the file as there are no sub-directories on Pico.'''
@@ -202,10 +229,7 @@ class Pico_control:
             if response.split('\n')[-1] != 'OK':
                 raise Exception('failed SAVE')
             # verify the file
-            self.send_command(f'SHA256 _{pico_filename}')
-            response = self.receive_response().strip()
-            print(response)
-            if response.split('\n')[-1] != file_hash:
+            if not self.verify_file_match(filename, '_' + pico_filename):
                 raise Exception('failed SHA256 comparison')
             # rename the file
             self.send_command(f'RENAME _{pico_filename} {pico_filename}')
@@ -219,6 +243,16 @@ class Pico_control:
             print(f'{time.ctime()}, pico_control.py, Pico_control.push_file(): '
                   f'failed to push {filename} ("{e}").')
             return False
+
+
+    def push_file_if_needed(self, filename):
+        '''Checks file and only copys to Pico if checksum is different.'''
+        if self.verify_file_match(filename):
+            print('Skipping copy.')
+            return False
+        else:
+            self.push_file(filename)
+            return True
 
 
     def pull_file(self, filename):
@@ -281,13 +315,15 @@ class Pico_control:
 
 def get_command_args():
     cmd_parser = argparse.ArgumentParser(description='Communicate with command server on Pico microcontroller.')
-    cmd_parser.add_argument('--hard_reset', action='store_true', help='Toggles GPIO pin to reset the Pico via interrupt service')
+    cmd_parser.add_argument('--hard_reset', action='store_true', help='Toggles GPIO pin to reset the Pico via interrupt service.')
     cmd_parser.add_argument('--ctrl_c', action='store_true', help='Send a CONTROL-C to Pico.')
-    cmd_parser.add_argument('--command', help='Send a command string to Pico')
-    cmd_parser.add_argument('--send_file', help='Send contents of file to Pico')
-    cmd_parser.add_argument('--push_file', help='Copy contents of file from local to Pico storage')
-    cmd_parser.add_argument('--pull_file', help='Copy contents of file from Pico to local storage')
-    cmd_parser.add_argument('--no_response', action='store_true', help='Transmit only, do not attempt to read response from Pico')
+    cmd_parser.add_argument('--command', help='Send a command string to Pico.')
+    cmd_parser.add_argument('--send_file', help='Send contents of file to Pico.')
+    cmd_parser.add_argument('--verify_file_match', help='Verify local and remote file on Pico match.')
+    cmd_parser.add_argument('--push_file', help='Copy contents of file from local to Pico storage.')
+    cmd_parser.add_argument('--push_file_if_needed', help='If file is different, copy contents of file from local to Pico storage.')
+    cmd_parser.add_argument('--pull_file', help='Copy contents of file from Pico to local storage.')
+    cmd_parser.add_argument('--no_response', action='store_true', help='Transmit only, do not attempt to read response from Pico.')
     program_name = cmd_parser.prog
     args = cmd_parser.parse_args()
     return (program_name, args)
@@ -316,8 +352,12 @@ def main():
             # send_file deprecated, will be removed
             if args.send_file:
                 pico.send_file(args.send_file)
+            if args.verify_file_match:
+                pico.verify_file_match(args.verify_file_match)
             if args.push_file:
                 pico.push_file(args.push_file)
+            if args.push_file_if_needed:
+                pico.push_file_if_needed(args.push_file_if_needed)
             if args.pull_file:
                 pico.pull_file(args.pull_file)
             if not args.no_response:

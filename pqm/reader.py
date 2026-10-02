@@ -79,6 +79,7 @@ def main():
                 start_streaming(pico, pico_start_string)
                 # read_and_print() will continue indefinitely if there are no errors.
                 read_and_print(pico)
+            tries -= 1
 
         except serial.SerialException:
             print('Serial port may be hanging from a previous connection, close and retry...',

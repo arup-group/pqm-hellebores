@@ -41,6 +41,7 @@ import time
 import sys
 import os
 import argparse
+import hashlib
 import serial
 import serial.tools.list_ports
 
@@ -182,17 +183,47 @@ class Pico_control:
             return False
 
 
+    def copy_file(self, filename):
+        '''Copies a file to the serial interface, verifying correct upload.'''
+        try:
+            # tell the pico that we are uploading a file
+            file_size = os.path.getsize(filename)
+            self.send_command(f'SAVE _{filename} {file_size}') 
+            # upload the file
+            with open(filename, 'rb') as f:
+                file_contents = f.read()
+            self.ser.write(file_contents)
+            file_hash = hashlib.sha256(file_contents).hexdigest()
+            if self.receive_response().strip() != 'OK':
+                raise Exception('Failed SAVE')
+            # verify the file
+            self.send_command(f'SHA256 _{filename}')
+            if self.receive_response() != file_hash:
+                raise Exception('Failed SHA256 comparison')
+            # rename the file
+            self.send_command(f'RENAME _{filename} {filename}')
+            if self.receive_response().strip() != 'OK':
+                raise Exception('Failed RENAME')
+            return True
+        except:
+            print(f'{time.ctime()}, pico_control.py, Pico_control.copy_file(): '
+                  f'failed to copy {filename}.')
+            return False
+
+
     def receive_response(self):
         '''Receives response from serial. In case of short pauses, we try reading a
         few times before exiting. We break out immediately Pico says it is going to
         send a binary data stream.'''
-        wait_attempts = 20            # wait up to 2 seconds for something to arrive
+        # wait up to 2 seconds for something to arrive
+        wait_attempts = 20
         response = ''
         try:
             while wait_attempts > 0:
                 if self.ser.in_waiting:
                     _response = self.ser.readline().decode('utf-8').strip('\r\n')
-                    wait_attempts = 10    # wait up to 1 second after we have got something
+                    # wait up to 1 second after we have got something
+                    wait_attempts = 10
                     response += _response + '\n'
                     if _response == '**** STARTING BINARY STREAM ****':
                         break
@@ -212,6 +243,7 @@ def get_command_args():
     cmd_parser.add_argument('--ctrl_c', action='store_true', help='Send a CONTROL-C to Pico.')
     cmd_parser.add_argument('--command', help='Send a command string to Pico')
     cmd_parser.add_argument('--send_file', help='Send contents of file to Pico')
+    cmd_parser.add_argument('--copy_file', help='Copy contents of file to Pico storage')
     cmd_parser.add_argument('--no_response', action='store_true', help='Transmit only, do not attempt to read response from Pico')
     program_name = cmd_parser.prog
     args = cmd_parser.parse_args()
@@ -240,6 +272,8 @@ def main():
                 pico.send_command(args.command)
             if args.send_file:
                 pico.send_file(args.send_file)
+            if args.copy_file:
+                pico.copy_file(args.copy_file)
             if not args.no_response:
                 print(pico.receive_response(), end='')
         except OSError:

@@ -170,6 +170,7 @@ class Pico_control:
             return False
 
 
+    # DEPRECATED, TO BE REMOVED ONCE push_file AND pull_file ARE ESTABLISHED.
     def send_file(self, filename):
         '''Writes the contents of a file to the serial interface.'''
         try:
@@ -183,31 +184,72 @@ class Pico_control:
             return False
 
 
-    def copy_file(self, filename):
-        '''Copies a file to the serial interface, verifying correct upload.'''
+    def push_file(self, filename):
+        '''Copies a file to the Pico flash storage interface, verifying correct upload.
+        Uses just the basename of the file as there are no sub-directories on Pico.'''
         try:
             # tell the pico that we are uploading a file
             file_size = os.path.getsize(filename)
-            self.send_command(f'SAVE _{filename} {file_size}')
+            pico_filename = os.path.basename(filename)
+            self.send_command(f'SAVE _{pico_filename} {file_size}')
             # upload the file
             with open(filename, 'rb') as f:
                 file_contents = f.read()
             self.ser.write(file_contents)
             file_hash = hashlib.sha256(file_contents).hexdigest()
-            if self.receive_response().strip() != 'OK':
-                raise Exception('Failed SAVE')
+            response = self.receive_response().strip()
+            print(response)
+            if response.split('\n')[-1] != 'OK':
+                raise Exception('failed SAVE')
             # verify the file
-            self.send_command(f'SHA256 _{filename}')
-            if self.receive_response() != file_hash:
-                raise Exception('Failed SHA256 comparison')
+            self.send_command(f'SHA256 _{pico_filename}')
+            response = self.receive_response().strip()
+            print(response)
+            if response.split('\n')[-1] != file_hash:
+                raise Exception('failed SHA256 comparison')
             # rename the file
-            self.send_command(f'RENAME _{filename} {filename}')
-            if self.receive_response().strip() != 'OK':
-                raise Exception('Failed RENAME')
+            self.send_command(f'RENAME _{pico_filename} {pico_filename}')
+            response = self.receive_response().strip()
+            print(response)
+            if response.split('\n')[-1] != 'OK':
+                raise Exception('failed RENAME')
             return True
-        except:
-            print(f'{time.ctime()}, pico_control.py, Pico_control.copy_file(): '
-                  f'failed to copy {filename}.')
+
+        except Exception as e:
+            print(f'{time.ctime()}, pico_control.py, Pico_control.push_file(): '
+                  f'failed to push {filename} ("{e}").')
+            return False
+
+
+    def pull_file(self, filename):
+        '''Pulls file from Pico and writes to local filesystem, prepending '_' to the
+        filename.'''
+        try:
+            # get the required file from Pico
+            self.send_command(f'CAT {filename}')
+            response = self.receive_response().splitlines(keepends=True)
+            print(response[0].strip())
+            if 'Failed to read' in response[-1]:
+                print(response[-1])
+                raise Exception(f'failed to read {filename}')
+            else:
+                # remove the first line, which is an echo of the CAT command
+                file_contents = ''.join(response[1:]).encode('utf-8')
+            # verify we have copied it over correctly
+            file_hash = hashlib.sha256(file_contents).hexdigest()
+            self.send_command(f'SHA256 {filename}')
+            response = self.receive_response().strip()
+            print(response)
+            if response.split('\n')[-1] != file_hash:
+                raise Exception('failed SHA256 comparison')
+            # save to local, prepending '_' to guard against clobbering local source file
+            with open('_' + filename, 'wb') as f:
+                f.write(file_contents)
+            return True
+
+        except Exception as e:
+            print(f'{time.ctime()}, pico_control.py, Pico_control.pull_file(): '
+                  f'failed to pull {filename} ("{e}").')
             return False
 
 
@@ -243,7 +285,8 @@ def get_command_args():
     cmd_parser.add_argument('--ctrl_c', action='store_true', help='Send a CONTROL-C to Pico.')
     cmd_parser.add_argument('--command', help='Send a command string to Pico')
     cmd_parser.add_argument('--send_file', help='Send contents of file to Pico')
-    cmd_parser.add_argument('--copy_file', help='Copy contents of file to Pico storage')
+    cmd_parser.add_argument('--push_file', help='Copy contents of file from local to Pico storage')
+    cmd_parser.add_argument('--pull_file', help='Copy contents of file from Pico to local storage')
     cmd_parser.add_argument('--no_response', action='store_true', help='Transmit only, do not attempt to read response from Pico')
     program_name = cmd_parser.prog
     args = cmd_parser.parse_args()
@@ -270,10 +313,13 @@ def main():
                 time.sleep(2)
             if args.command:
                 pico.send_command(args.command)
+            # send_file deprecated, will be removed
             if args.send_file:
                 pico.send_file(args.send_file)
-            if args.copy_file:
-                pico.copy_file(args.copy_file)
+            if args.push_file:
+                pico.push_file(args.push_file)
+            if args.pull_file:
+                pico.pull_file(args.pull_file)
             if not args.no_response:
                 print(pico.receive_response(), end='')
         except OSError:

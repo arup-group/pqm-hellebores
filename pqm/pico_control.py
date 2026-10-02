@@ -188,7 +188,7 @@ class Pico_control:
         try:
             # tell the pico that we are uploading a file
             file_size = os.path.getsize(filename)
-            self.send_command(f'SAVE _{filename} {file_size}') 
+            self.send_command(f'SAVE _{filename} {file_size}')
             # upload the file
             with open(filename, 'rb') as f:
                 file_contents = f.read()

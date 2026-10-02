@@ -702,7 +702,7 @@ def _viper_streaming_loop_inner_core(cells_mv: object, spi_read_function: object
         # s[0] = state.cell
         # s[1] = state.flags
 
-    wrap_mask: int = const(BUFFER_SIZE - 1)
+    wrap_mask = const(BUFFER_SIZE - 1)
 
     # Main loop
     while True:

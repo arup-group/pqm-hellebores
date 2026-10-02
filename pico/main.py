@@ -167,18 +167,23 @@ try:
         command_string = read_command()
         process_command(command_string)
 
-except KeyError:
-    print('Interrupted.')
-
 except KeyboardInterrupt:
-        # Catch CTRL-C here and reset the machine
-        print('Resetting the machine shortly...')
-        time.sleep(1)
-        reset = True
+    # Catch CTRL-C here and reset the machine
+    print('Resetting the machine shortly...')
+    time.sleep(1)
+    reset = True
+
+except Exception as e:
+    print(f'Pico main(): Interrupted because of "{e}".')
+    print('Will proceed to reset in 60 seconds...')
+    # Enables break out if working from the REPL
+    time.sleep(60)
+    reset = True
 
 finally:
     pins['pico_led'].low()
-    # leave the reset interrupt enabled, even when returning to the REPL.
-    #configure_reset_interrupt('disable')
-    if reset:
+    # disable the reset interrupt if returning to the REPL.
+    if not reset:
+        configure_reset_interrupt('disable')
+    else:
         machine.reset()

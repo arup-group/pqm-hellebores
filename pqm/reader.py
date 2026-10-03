@@ -25,15 +25,22 @@ BLOCK_SIZE = BUFFER_SIZE * 8
 
 
 def start_streaming(pico, pico_start_string):
-    pico.send_command(pico_start_string)
-    response = pico.receive_response()
-    print(response, file=sys.stderr)
-    # This string returned from Pico means that initialisation was successful
-    if 'BINARY' in response:
-        return True
-    else:
+    try:
+        pico.send_command(pico_start_string)
+        # We tell the pico object to send us raw (binary) output, but
+        # decode the first line(s) to text ourselves until the binary
+        # stream starts
+        response = pico.receive_response()
+        print(response, file=sys.stderr)
+        # This string returned from Pico means that initialisation was successful
+        if 'BINARY' in response:
+            return True
+        else:
+            return False
+
+    except Exception as e:
         print(f'{time.ctime()} reader.py, start_streaming(): '
-              f'Failed to start streaming on Pico.', file=sys.stderr)
+              f'Failed to start streaming on Pico because of "{e}".', file=sys.stderr)
         return False
 
 

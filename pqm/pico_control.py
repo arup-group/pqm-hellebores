@@ -86,21 +86,13 @@ class Pico_control:
                     connection_success = True
                     break
                 time.sleep(sleeping[this_try])
-                this_try = this_try + 1
+                this_try += 1
+            return connection_success
 
         except:
-            # Catches anything that goes wrong, then proceeds directly to finally block.
-            pass
-
-        finally:
-            if connection_success:
-                print(f'{time.ctime()} pico_control.py, Pico_control:connect(): '
-                      f'Connected to {self.port_name}.', file=sys.stderr)
-                return True
-            else:
-                print(f'{time.ctime()}: pico_control.py, Pico_control.connect(): '
-                      f'Failed to connect serial interface.', file=sys.stderr)
-                return False
+            print(f'{time.ctime()}: pico_control.py, Pico_control.connect(): '
+                  f'Failed to connect serial interface "{self.port_name}".', file=sys.stderr)
+            return False
 
 
     def disconnect(self):
@@ -152,10 +144,21 @@ class Pico_control:
             # If we need to release the GPIO, use gp.cleanup() however this will
             # leave the connection with a pull-high via a resistor in the Pi.
             return True
+
         except ModuleNotFoundError:
             print(f'{time.ctime()}, pico_control.py, Pico_control.hard_reset(): '
                   f'will only work on PQM hardware.', file=sys.stderr)
             return False
+
+
+    def check_alive(self):
+            self.send_command(f'MACHINE')
+            response = self.receive_response()
+            print(response)
+            if 'Pico' in response:
+                return True
+            else:
+                return False
 
 
     def send_command(self, command):
@@ -167,20 +170,6 @@ class Pico_control:
         except:
             print(f'{time.ctime()}: pico_control.py, Pico_control.send_command(): '
                   f'Serial port to Pico is not open.', file=sys.stderr)
-            return False
-
-
-    # DEPRECATED, TO BE REMOVED ONCE push_file AND pull_file ARE ESTABLISHED.
-    def send_file(self, filename):
-        '''Writes the contents of a file to the serial interface.'''
-        try:
-            with open(filename, 'rb') as f:
-                file_contents = f.read()
-            self.ser.write(file_contents)
-            return True
-        except:
-            print(f'{time.ctime()}, pico_control.py, Pico_control.send_file(): '
-                  f'failed to send the contents of {filename}.')
             return False
 
 
@@ -196,13 +185,13 @@ class Pico_control:
             file_hash = hashlib.sha256(file_contents).hexdigest()
             # verify the file
             self.send_command(f'SHA256 {pico_filename}')
-            response = self.receive_response().strip()
+            response = self.receive_response()
             print(response)
             if response.split('\n')[-1] == file_hash:
-                print('Files match.')
+                print(f'Files match for "{pico_filename}".')
                 return True
             else:
-                print('Files differ.')
+                print(f'Files differ for "{pico_filename}".')
                 return False
 
         except Exception as e:
@@ -215,16 +204,16 @@ class Pico_control:
         '''Copies a file to the Pico flash storage interface, verifying correct upload.
         Uses just the basename of the file as there are no sub-directories on Pico.'''
         try:
-            # tell the pico that we are uploading a file
+            # read the file and get size and sha256 checksum
             file_size = os.path.getsize(filename)
             pico_filename = os.path.basename(filename)
-            self.send_command(f'SAVE _{pico_filename} {file_size}')
-            # upload the file
+            command = f'SAVE _{pico_filename} {file_size}\n'
             with open(filename, 'rb') as f:
                 file_contents = f.read()
-            self.ser.write(file_contents)
             file_hash = hashlib.sha256(file_contents).hexdigest()
-            response = self.receive_response().strip()
+            # upload the file
+            self.ser.write(command.encode('utf-8') + file_contents)
+            response = self.receive_response()
             print(response)
             if response.split('\n')[-1] != 'OK':
                 raise Exception('failed SAVE')
@@ -233,7 +222,7 @@ class Pico_control:
                 raise Exception('failed SHA256 comparison')
             # rename the file
             self.send_command(f'RENAME _{pico_filename} {pico_filename}')
-            response = self.receive_response().strip()
+            response = self.receive_response()
             print(response)
             if response.split('\n')[-1] != 'OK':
                 raise Exception('failed RENAME')
@@ -246,9 +235,9 @@ class Pico_control:
 
 
     def push_file_if_needed(self, filename):
-        '''Checks file and only copys to Pico if checksum is different.'''
+        '''Checks file and copies to Pico only if checksum is different.'''
         if self.verify_file_match(filename):
-            print('Skipping copy.')
+            print(f'Skipping copy.')
             return False
         else:
             self.push_file(filename)
@@ -261,14 +250,18 @@ class Pico_control:
         try:
             # get the required file from Pico
             self.send_command(f'CAT {filename}')
-            response = self.receive_response().splitlines(keepends=True)
-            print(response[0].strip())
-            if 'Failed to read' in response[-1]:
-                print(response[-1])
+            response = self.receive_response(as_text=False)
+            response_lines = response.decode('utf-8').splitlines(keepends=True)
+            # print the command echo
+            print(response_lines[0].strip())
+            # check for error message in last line of response
+            if 'Failed to read' in response_lines[-1]:
+                print(response_lines[-1].strip())
                 raise Exception(f'failed to read {filename}')
             else:
                 # remove the first line, which is an echo of the CAT command
-                file_contents = ''.join(response[1:]).encode('utf-8')
+                # and reconstruct the binary file
+                file_contents = b''.join(response_lines[1:])
             # verify we have copied it over correctly
             file_hash = hashlib.sha256(file_contents).hexdigest()
             self.send_command(f'SHA256 {filename}')
@@ -287,36 +280,44 @@ class Pico_control:
             return False
 
 
-    def receive_response(self):
+    def receive_response(self, as_text=True):
         '''Receives response from serial. In case of short pauses, we try reading a
         few times before exiting. We break out immediately Pico says it is going to
         send a binary data stream.'''
         # wait up to 2 seconds for something to arrive
         wait_attempts = 20
-        response = ''
+        response = b''
         try:
             while wait_attempts > 0:
                 if self.ser.in_waiting:
-                    _response = self.ser.readline().decode('utf-8').strip('\r\n')
+                    _response = self.ser.readline()
                     # wait up to 1 second after we have got something
                     wait_attempts = 10
-                    response += _response + '\n'
-                    if _response == '**** STARTING BINARY STREAM ****':
+                    response += _response
+                    if b'**** STARTING BINARY STREAM ****' in _response:
                         break
                 else:
                     time.sleep(0.1)
                     wait_attempts -= 1
+
         except:
             print(f'{time.ctime()}, pico_control.py, Pico_control.send_file(): '
                   f'failed to send the contents of {filename}.')
+
         finally:
-            return response
+            if as_text:
+                # For text responses, strip the trailing newline
+                return response.decode('utf-8').strip('\r\n')
+            else:
+                # For binary responses (eg file reads) return as-is
+                return response
 
 
 def get_command_args():
     cmd_parser = argparse.ArgumentParser(description='Communicate with command server on Pico microcontroller.')
     cmd_parser.add_argument('--hard_reset', action='store_true', help='Toggles GPIO pin to reset the Pico via interrupt service.')
     cmd_parser.add_argument('--ctrl_c', action='store_true', help='Send a CONTROL-C to Pico.')
+    cmd_parser.add_argument('--check_alive', action='store_true', help='Check if the Pico command server is responsive.')
     cmd_parser.add_argument('--command', help='Send a command string to Pico.')
     cmd_parser.add_argument('--send_file', help='Send contents of file to Pico.')
     cmd_parser.add_argument('--verify_file_match', help='Verify local and remote file on Pico match.')
@@ -340,31 +341,29 @@ def main():
     if args.hard_reset:
         pico.hard_reset()
         time.sleep(2)
+    status = False
     if pico.find_serial_device() and pico.connect():
         try:
-            # this order of processing allows 'SAVE' command to precede file transfer
-            # in a combined command line
             if args.ctrl_c:
-                pico.soft_reset()
+                status = pico.soft_reset()
                 time.sleep(2)
+            if args.check_alive:
+                status = pico.check_alive()
             if args.command:
-                pico.send_command(args.command)
-            # send_file deprecated, will be removed
-            if args.send_file:
-                pico.send_file(args.send_file)
+                status = pico.send_command(args.command) and print(pico.receive_response())
             if args.verify_file_match:
-                pico.verify_file_match(args.verify_file_match)
+                status = pico.verify_file_match(args.verify_file_match)
             if args.push_file:
-                pico.push_file(args.push_file)
+                status = pico.push_file(args.push_file)
             if args.push_file_if_needed:
-                pico.push_file_if_needed(args.push_file_if_needed)
+                status = pico.push_file_if_needed(args.push_file_if_needed)
             if args.pull_file:
-                pico.pull_file(args.pull_file)
-            if not args.no_response:
-                print(pico.receive_response(), end='')
+                status = pico.pull_file(args.pull_file)
+
         except OSError:
             print(f'{time.ctime()}, pico_control.py, main(): '
                   f'Error processing {args}.', file=sys.stderr)
+            status = False
         finally:
             # make sure we have closed the port if it was opened
             pico.disconnect()
@@ -372,6 +371,11 @@ def main():
         print(f'{time.ctime()}, pico_control.py, main(): '
               f'Could not find or connect to Pico.', file=sys.stderr)
 
+    # Return success or failure status to the shell
+    if status:
+        sys.exit(0)
+    else:
+        sys.exit(1)
 
 
 if __name__ == '__main__':

@@ -7,9 +7,13 @@ SCRIPT_DIR="$(realpath $(dirname $0))"
 PROGRAM_DIR="$(realpath $SCRIPT_DIR/../pqm)"
 PICO_DIR="$(realpath $SCRIPT_DIR/../pico)"
 
-"$PROGRAM_DIR/pico_control.py" --push_file_if_needed="$PICO_DIR/main.py"
-"$PROGRAM_DIR/pico_control.py" --push_file_if_needed="$PICO_DIR/stream.py"
+if $PROGRAM_DIR/pico_control.py --check_alive; then
+        $PROGRAM_DIR/pico_control.py --push_file_if_needed="$PICO_DIR/main.py"
+        $PROGRAM_DIR/pico_control.py --push_file_if_needed="$PICO_DIR/stream.py"
+else
+    echo "Pico is non-responsive."
+fi
 
-# Hard reset Pico again, so that we now run the new code
+# Hard reset Pico, so that we now run the new code or try again
 echo "Resetting Pico."
-"$PROGRAM_DIR/pico_control.py" --hard_reset
+$PROGRAM_DIR/pico_control.py --hard_reset

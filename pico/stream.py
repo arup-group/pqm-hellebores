@@ -658,7 +658,7 @@ def _asm_streaming_loop_inner_core(r0, r1, r2):
     # In use: r0-r3 only
 
     # 7. Increment and wrap the cell pointer
-    ldr(r4, [r2, 12])      # r4 = BUFFER_SIZE
+    ldr(r4, [r2, 12])                # r4 = BUFFER_SIZE
     sub(r4, r4, 1)                   # r4 = final_cell_index (wrap mask)
     add(r3, r3, 1)                   # r3 = cell_index + 1 (increment the index)
     and_(r3, r4)                     # r3 = cell_index & final_cell_index (circulate the index)

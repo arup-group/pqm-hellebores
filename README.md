@@ -85,7 +85,12 @@ mkdir /home/pi/.config/autostart
 ln -s /home/pi/pqm-hellebores/run/pqm-launcher.desktop /home/pi/.config/autostart/pqm-launcher.desktop
 ```
 
-10. Update the Raspberry Pi OS.
+10. Disable the swap space on SD card.
+```
+sudo sed -i 's/^#*.*CONF_SWAPSIZE.*/CONF_SWAPSIZE=0/' /etc/dphys-swapfile
+```
+
+11. Update the Raspberry Pi OS.
 
 The OS can be updated from the menu at the top. Alternatively, from a terminal:
 ```

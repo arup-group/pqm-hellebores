@@ -786,46 +786,30 @@ def streaming_loop_core_1(optimiser: str, adc: object) -> None:
 ########################################################
 ######### CORE 0: WRITING LOOP
 ########################################################
-def make_latch_test(cell1: memoryview, cell2: memoryview) -> object:
-    '''Bind in the cell memoryviews as a closure to avoid having to
-    look them up on every call, and return a viper function that
-    checks them.'''
-    @micropython.viper
-    def _latch_test() -> bool:
-        '''We rely on real AC electrical signals to always be changing:
-        check if two successive cells are identical on all channels.'''
-        # SPI signal integrity can sometimes fail eg during a large power
-        # disturbance. causing loss of synchronisation of the continuous
-        # read operation.
-        # If this happens, the ADC outputs will latch to the same values
-        # on successive SPI reads. To check for this, we compare all the
-        # readings from two specified samples to see if they are the same.
-        # Because we use native viper variables to access the specified memory
-        # locations, and cache these locations in a closure, this function
-        # runs really fast.
-        c1 = ptr32(cell1)
-        c2 = ptr32(cell2)
-        if c1[0] == c2[0] and c1[1] == c2[1]:
-            # force these successive cells to be different, in case we
-            # happen to check them again before they are refreshed.
-            c1[0] = uint(0xffffffff)
-            c2[0] = uint(0x00000000)
-            return True
-        else:
-            return False
-
-    return _latch_test
-
-
 # NB @micropython.native decorator doesn't work here because it somehow masks
 # incoming CTRL-C KeyboardInterrupt
 def streaming_loop_core_0(buffer_led: object):
     '''Prints data from memory to stdout in chunks.'''
     try:
-        # Make a latch check function that quickly checks the last two cells
-        # of the buffer
-        latch_test = make_latch_test(cells_mv[BUFFER_SIZE-2],
-                                 cells_mv[BUFFER_SIZE-1])
+        c1 = uctypes.addressof(cells_mv[BUFFER_SIZE-2])
+        c2 = uctypes.addressof(cells_mv[BUFFER_SIZE-1])
+
+        @micropython.viper
+        def _latch_test(c1: ptr32, c2: ptr32) -> bool:
+            '''We rely on real AC electrical signals to always be changing:
+            check if two successive cells are identical on all channels.'''
+            # SPI signal integrity can sometimes fail eg during a large power
+            # disturbance. causing loss of synchronisation of the continuous
+            # read operation.
+            # If this happens, the ADC outputs will latch to the same values
+            # on successive SPI reads. To check for this, we compare all the
+            # readings from two specified samples to see if they are the same.
+            if c1[0] == c2[0] and c1[1] == c2[1]:
+                c1[0] = uint(0xffffffff)
+                c2[0] = uint(0x00000000)
+                return True
+            else:
+                return False
 
         if DEBUG:
             # Create a cache for memorising output from a few sampling loops
@@ -867,7 +851,7 @@ def streaming_loop_core_0(buffer_led: object):
             # Check to see if ADC readouts have latched to a constant value.
             # Raise a flag if readings have latched: core 1 loop will detect
             # the flag and then reset ADC comms.
-            if latch_test():
+            if _latch_test(c1, c2):
                 # raise RESYNC flag
                 state.flags = state.flags | RESYNC
 

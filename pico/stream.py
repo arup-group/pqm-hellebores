@@ -305,6 +305,9 @@ class ADC_hardware:
         # Unlock registers, so that we can write to them
         self.unlock()
 
+        # Set the PHASE configuration register
+        self.set(PHASE, bytes([0x00, 0x00, 0x00]))
+
         # Set the gain configuration register 0x0b
         # 3 bits per channel (12 LSB in all)
         # XXXXXXXX XXXX---- --------

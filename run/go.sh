@@ -13,8 +13,8 @@ fi
 
 # Find current working directory and absolute paths of script and program file directories
 CWD="$(pwd)"
-SCRIPT_DIR="$(realpath $(dirname $0))"
-PROGRAM_DIR="$(realpath $SCRIPT_DIR/../pqm)"
+SCRIPT_DIR=$(realpath "$(dirname $0)")
+PROGRAM_DIR=$(realpath "$SCRIPT_DIR/../pqm")
 
 # Change to the program directory
 cd "$PROGRAM_DIR"

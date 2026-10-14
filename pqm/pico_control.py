@@ -347,34 +347,34 @@ def main():
     _, args = get_command_args()
     # Get an instance of Pico_control object
     pico = Pico_control()
-    status = False
+    status = True
     # if a hard reset is requested, attempt to reset Pico before checking to
     # see if the serial interface is up/exists 
     if args.hard_reset:
-        status = pico.hard_reset()
+        status &= pico.hard_reset()
         time.sleep(2)
     if pico.find_serial_device() and pico.connect():
         try:
             if args.ctrl_c:
-                status = pico.soft_reset()
+                status &= pico.soft_reset()
                 time.sleep(2)
             if args.check_alive:
-                status = pico.check_alive()
+                status &= pico.check_alive()
             if args.command:
-                status = pico.send_command(args.command) and print(pico.receive_response())
+                status &= pico.send_command(args.command) and print(pico.receive_response())
             if args.verify_file_match:
-                status = pico.verify_file_match(args.verify_file_match)
+                status &= pico.verify_file_match(args.verify_file_match)
             if args.push_file:
-                status = pico.push_file(args.push_file)
+                status &= pico.push_file(args.push_file)
             if args.push_file_if_needed:
-                status = pico.push_file_if_needed(args.push_file_if_needed)
+                status &= pico.push_file_if_needed(args.push_file_if_needed)
             if args.pull_file:
-                status = pico.pull_file(args.pull_file)
+                status &= pico.pull_file(args.pull_file)
 
         except OSError:
             print(f'{time.ctime()}, pico_control.py, main(): '
                   f'Error processing {args}.', file=sys.stderr)
-            status = False
+            status &= False
         finally:
             # make sure we have closed the port if it was opened
             pico.disconnect()

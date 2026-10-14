@@ -2,8 +2,11 @@
 # Copyright 2024 Arup
 # MIT License
 
-# Controls Pico via communicating with primitive command interface running in 'main.py'
-# on Pico, that implements a limited number of text commands.
+# Controls Pico via communication with a primitive command interface running in
+# 'main.py' on Pico, that implements a limited number of text commands. The
+# 'main.py' program is automatically started on power up and after the reset
+# commands, which are configured in the programs to fire an Exception that
+# restarts the microcontroller.
 
 # On Ubuntu and similar systems, the serial ports have root user permissions.
 # To change this, add ordinary user to the 'dialout' security group.
@@ -11,30 +14,36 @@
 
 # Example command line invocations:
 #
-# Commands to start the Pico ADC streamer program with and without paramaters
+# Check if Pico is connected and responsive
+#     ./pico_control.py --check_alive
+#
+# Reset Pico via remote command, USB serial, and GPIO/Pico interrupt handler.
+# Note that while "RESET" only works while in the main.py program, --ctrl_c
+# and --hard_reset also should work while running stream.py.
+#     ./pico_control.py --command="RESET"
+#     ./pico_control.py --ctrl_c
+#     ./pico_control.py --hard_reset
+#
+# Commands to start the Pico ADC streamer program with and without parameters
 #     ./pico_control.py --command="START stream.py 1x 1x 1x 1x 7.812k asm_thumb"
 #     ./pico_control.py --command="START stream.py"
 #
-# Reset Pico via USB serial
-#     ./pico_control.py --ctrl_c --no_response
-#
-# Reset Pico via GPIO and Pico interrupt handler
-#     ./pico_control.py --hard_reset --no_response
-#
 # Manage files stored on the Pico flash disk
 #     ./pico_control.py --command="RENAME stream.py stream_old.py"
-#     ./pico_control.py --command="SAVE stream.py [length]" --send_file="stream.py"
 #     ./pico_control.py --command="SHA256 stream.py"
 #     ./pico_control.py --command="CAT stream.py"
 #     ./pico_control.py --command="LISTDIR"
 #     ./pico_control.py --command="REMOVE stream_old.py"
+#     ./pico_control.py --push_file="../pico/stream.py"
+#     ./pico_control.py --push_file_if_needed="../pico/stream.py"
+#     ./pico_control.py --pull_file="stream.py"
+#     ./pico_control.py --verify_file_match="../pico/stream.py"
 #
 # Describe the machine and firmware level, and activate the bootloader to provide
-# mass storage mode to load new firmware
+# mass storage mode (to load new firmware)
 #     ./pico_control.py --command="MACHINE"
 #     ./pico_control.py --command="VERSION"
 #     ./pico_control.py --command="BOOTLOADER"
-#     ./pico_control.py --command="RESET
 
 
 import time
@@ -130,19 +139,22 @@ class Pico_control:
             RESET = 6
             gp.setmode(gp.BCM)
             gp.setup(RESET, gp.OUT)
-            # make sure we start asserted low
+            # Make sure we start asserted low
             gp.output(RESET, False)
-            # raise high to trigger the Pico ISR with a rising edge
+            time.sleep(0.05)
+            # Raise high to trigger the Pico ISR with a rising edge.
+            # The Pico verifies that the signal remains asserted high for a period
+            # of time to improve immunity to transient disturbances on the GPIO signal.
             gp.output(RESET, True)
-            # the Pico verifies that the signal remains asserted high for a period of time
             time.sleep(0.2)
             # return low
             gp.output(RESET, False)
             # We leave the output asserted low to enhance signal integrity on
             # the connection between Pi and Pico (both are ground referenced, but
             # have different power supply regulator sources).
-            # If we need to release the GPIO, use gp.cleanup() however this will
-            # leave the connection with a pull-high via a resistor in the Pi.
+            # If we need to release the GPIO, use gp.cleanup(): however this will
+            # reset the Pico a second time and leave the connection with a pull-high
+            # via a resistor in the Pi.
             return True
 
         except ModuleNotFoundError:
@@ -158,6 +170,7 @@ class Pico_control:
             if 'Pico' in response:
                 return True
             else:
+                print('Pico did not respond.')
                 return False
 
 
@@ -319,12 +332,10 @@ def get_command_args():
     cmd_parser.add_argument('--ctrl_c', action='store_true', help='Send a CONTROL-C to Pico.')
     cmd_parser.add_argument('--check_alive', action='store_true', help='Check if the Pico command server is responsive.')
     cmd_parser.add_argument('--command', help='Send a command string to Pico.')
-    cmd_parser.add_argument('--send_file', help='Send contents of file to Pico.')
-    cmd_parser.add_argument('--verify_file_match', help='Verify local and remote file on Pico match.')
-    cmd_parser.add_argument('--push_file', help='Copy contents of file from local to Pico storage.')
-    cmd_parser.add_argument('--push_file_if_needed', help='If file is different, copy contents of file from local to Pico storage.')
-    cmd_parser.add_argument('--pull_file', help='Copy contents of file from Pico to local storage.')
-    cmd_parser.add_argument('--no_response', action='store_true', help='Transmit only, do not attempt to read response from Pico.')
+    cmd_parser.add_argument('--verify_file_match', metavar='FILENAME', help='Verify local and remote file on Pico match.')
+    cmd_parser.add_argument('--push_file', metavar='FILENAME', help='Copy contents of file from local to Pico storage.')
+    cmd_parser.add_argument('--push_file_if_needed', metavar='FILENAME', help='If file is different, copy contents of file from local to Pico storage.')
+    cmd_parser.add_argument('--pull_file', metavar='FILENAME', help='Copy contents of file from Pico to local storage.')
     program_name = cmd_parser.prog
     args = cmd_parser.parse_args()
     return (program_name, args)
@@ -336,12 +347,12 @@ def main():
     _, args = get_command_args()
     # Get an instance of Pico_control object
     pico = Pico_control()
-    # if hard reset is requested, attempt to reset Pico before checking to
+    status = False
+    # if a hard reset is requested, attempt to reset Pico before checking to
     # see if the serial interface is up/exists 
     if args.hard_reset:
-        pico.hard_reset()
+        status = pico.hard_reset()
         time.sleep(2)
-    status = False
     if pico.find_serial_device() and pico.connect():
         try:
             if args.ctrl_c:

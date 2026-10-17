@@ -65,63 +65,106 @@ Download CSV data:    <b>scp $USER@$IP_ADDRESS:$TEMP/*csv .</b>
 </small></tt>
 _EOF_
 
-pico_update() {
-    x-terminal-emulator -e \
-        "echo 'Updating software stored on Pico...'; \
-        $SOFTWARE_PATH/tools/pico_update.sh; \
-        sleep 5"
-    exec "$0"
+
+access_logs() {
+    result=$(zenity --info \
+        --title "Power Quality Meter: access logs" \
+        --text "Software logs will open in a text editor. Logs are cached in RAMdisk \
+and do not persist across a reboot or power cycle." \
+        --ok-label "Error log" \
+        --extra-button "Software update log" \
+        --extra-button "Cancel")
+
+    case "$result" in
+        "Error log")
+            xdg-open "TEMP/error.log";;
+        "Software update log")
+            xdg-open "TEMP/update.log";; 
+        *)
+            echo "Returning to main menu.";;
+    esac
 }
+
+
+fetch_from_repo() {
+    # pkill -USR1 wvkbd hides the wayland keyboard so that the termrinal is
+    # fully visible
+    x-terminal-emulator -e bash -c "\
+        {
+            echo 'Updating software to Github branch origin/$GIT_BRANCH HEAD...'; \
+            pkill -USR1 wvkbd; \
+            cd $SOFTWARE_PATH; \
+            git fetch origin; \
+            git reset --hard origin/$GIT_BRANCH; \
+            sleep 2
+        } 2>&1 | tee -a '$TEMP/update.log'
+    "
+}
+
+
+pico_update() {
+    x-terminal-emulator -e bash -c "\
+        {
+            echo 'Updating software stored on Pico...'; \
+            pkill -USR1 wvkbd; \
+            $SOFTWARE_PATH/tools/pico_update.sh; \
+            sleep 2
+        } 2>&1 | tee -a '$TEMP/update.log'
+    "
+}
+
 
 software_update() {
     # DON'T run this option on a development computer
     # it will overwrite local changes and ruin your day
     result=$(zenity --info \
         --title "Power Quality Meter: software update" \
-        --text "The updater will check to see if $GIT_REMOTE is reachable. If you \
-encounter issues, check internet connection is good and try updating again. If the repository \
-is not available, you can try to 'switch remote'..." \
-        --ok-label "Software update" \
-        --extra-button "Switch remote")
+        --text "If you encounter issues, check internet connection is good and \
+try updating again. If you determine that the repository is not available, use \
+the 'Special...' option to switch remote. WAIT FOR REMOTE FETCH AND LOCAL UPDATE \
+(PICO) TO COMPLETE." \
+        --ok-label "UPDATE" \
+        --extra-button "Special..." \
+        --extra-button "Cancel")
 
     error_status=$?
     if [[ "$result" == "" ]]; then
         if [[ $error_status -ne 0 ]]; then
-            result="EXIT"
+            result="Cancel"
         else
             result="UPDATE"
         fi
     fi
 
     case "$result" in
-        "EXIT")
-            echo "Exiting launcher.";;
         "UPDATE")
             if git ls-remote "$GIT_REMOTE" &> /dev/null; then
-                x-terminal-emulator -e \
-                    "echo 'Updating software to Github branch origin/$GIT_BRANCH HEAD...'; \
-                    cd $SOFTWARE_PATH; \
-                    git fetch origin; \
-                    git reset --hard origin/$GIT_BRANCH; \
-                    sleep 5"
+                fetch_from_repo
+                pico_update
+                zenity --info \
+                    --title "Power Quality Meter: software update" \
+                    --text "Update completed." \
+                    --ok-label "OK" \
+                    --extra-button "View log"
             else
                 zenity --info \
                     --title "Power Quality Meter: software update" \
                     --text "Repository $GIT_REMOTE is not reachable. No update took place." \
                     --ok-label "OK"
-            fi
-            exec "$0";;
-        "Switch remote")
-            if [[ "$GIT_REMOTE" == "$REPO_1_ssh" ]]; then
-                git remote set-url origin "$REPO_2_ssh"
-            elif [[ "$GIT_REMOTE" == "$REPO_2_ssh" ]]; then
-                git remote set-url origin "$REPO_1_ssh"
-            elif [[ "$GIT_REMOTE" == "$REPO_1_https" ]]; then
-                git remote set-url origin "$REPO_2_https"
-            elif [[ "$GIT_REMOTE" == "$REPO_2_https" ]]; then
-                git remote set-url origin "$REPO_1_https"
-            fi
-            exec "$0";;
+            fi;;
+        "Special...")
+            # if [[ "$GIT_REMOTE" == "$REPO_1_ssh" ]]; then
+            #     git remote set-url origin "$REPO_2_ssh"
+            # elif [[ "$GIT_REMOTE" == "$REPO_2_ssh" ]]; then
+            #     git remote set-url origin "$REPO_1_ssh"
+            # elif [[ "$GIT_REMOTE" == "$REPO_1_https" ]]; then
+            #     git remote set-url origin "$REPO_2_https"
+            # elif [[ "$GIT_REMOTE" == "$REPO_2_https" ]]; then
+            #     git remote set-url origin "$REPO_1_https"
+            # fi
+            echo "Returning to main menu.";;
+        *)
+            echo "Returning to main menu.";;
     esac
 }
 
@@ -132,7 +175,6 @@ result=$(zenity --info \
                 --text "$information" \
                 --ok-label "START" \
                 --extra-button "Software update..." \
-                --extra-button "Pico update" \
                 --extra-button "Shutdown")
 
 # The primary/ok button does not return a value,
@@ -159,9 +201,11 @@ case "$result" in
     "EXIT")
         echo "Exiting launcher.";;
     "Software update...")
-        software_update;;
-    "Pico update")
-        pico_update;;
+        software_update
+        exec "$0";;
+    "Logs...")
+        access_logs
+        exec "$0";;
     "Shutdown")
         echo "Shutting down system."
         sudo shutdown -h now;;

@@ -79,7 +79,7 @@ and do not persist across a reboot or power cycle." \
         "Error log")
             xdg-open "TEMP/error.log";;
         "Software update log")
-            xdg-open "TEMP/update.log";; 
+            xdg-open "TEMP/update.log";;
         *)
             echo "Returning to main menu.";;
     esac

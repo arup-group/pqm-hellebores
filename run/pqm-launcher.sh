@@ -68,13 +68,12 @@ _EOF_
 
 access_logs() {
     result=$(zenity --info \
-        --title "Power Quality Meter: access logs" \
-        --text "Software logs will open in a text editor. Logs are cached in RAMdisk \
+                    --title "Power Quality Meter: access logs" \
+                    --text "Software logs will open in a text editor. Logs are cached in RAMdisk \
 and do not persist across a reboot or power cycle." \
-        --ok-label "Error log" \
-        --extra-button "Software update log" \
-        --extra-button "Cancel")
-
+                    --ok-label "Error log" \
+                    --extra-button "Software update log" \
+                    --extra-button "Cancel")
     case "$result" in
         "Error log")
             xdg-open "TEMP/error.log";;
@@ -118,15 +117,14 @@ software_update() {
     # DON'T run this option on a development computer
     # it will overwrite local changes and ruin your day
     result=$(zenity --info \
-        --title "Power Quality Meter: software update" \
-        --text "If you encounter issues, check internet connection is good and \
-try updating again. If you determine that the repository is not available, use \
-the 'Special...' option to switch remote. WAIT FOR REMOTE FETCH AND LOCAL UPDATE \
-(PICO) TO COMPLETE." \
-        --ok-label "UPDATE" \
-        --extra-button "Special..." \
-        --extra-button "Cancel")
-
+                    --title "Power Quality Meter: software update" \
+                    --text "Upstream: $GIT_REMOTE\n\nIf you encounter issues, check \
+internet connection is good and try updating again. If you determine that the repository \
+is not available, use the 'Special...' option to switch remote.\n\nWAIT FOR REMOTE FETCH \
+AND LOCAL UPDATE (PICO) TO COMPLETE." \
+                    --ok-label "UPDATE" \
+                    --extra-button "Special..." \
+                    --extra-button "Cancel")
     error_status=$?
     if [[ "$result" == "" ]]; then
         if [[ $error_status -ne 0 ]]; then
@@ -142,26 +140,49 @@ the 'Special...' option to switch remote. WAIT FOR REMOTE FETCH AND LOCAL UPDATE
                 fetch_from_repo
                 pico_update
                 zenity --info \
-                    --title "Power Quality Meter: software update" \
-                    --text "Update completed." \
-                    --ok-label "OK" \
-                    --extra-button "View log"
+                       --title "Power Quality Meter: software update" \
+                       --text "Update completed." \
+                       --ok-label "OK" \
+                       --extra-button "View log"
             else
                 zenity --info \
-                    --title "Power Quality Meter: software update" \
-                    --text "Repository $GIT_REMOTE is not reachable. No update took place." \
-                    --ok-label "OK"
+                       --title "Power Quality Meter: software update" \
+                       --text "Repository $GIT_REMOTE is not reachable. No update took place." \
+                       --ok-label "OK"
             fi;;
         "Special...")
-            # if [[ "$GIT_REMOTE" == "$REPO_1_ssh" ]]; then
-            #     git remote set-url origin "$REPO_2_ssh"
-            # elif [[ "$GIT_REMOTE" == "$REPO_2_ssh" ]]; then
-            #     git remote set-url origin "$REPO_1_ssh"
-            # elif [[ "$GIT_REMOTE" == "$REPO_1_https" ]]; then
-            #     git remote set-url origin "$REPO_2_https"
-            # elif [[ "$GIT_REMOTE" == "$REPO_2_https" ]]; then
-            #     git remote set-url origin "$REPO_1_https"
-            # fi
+            case $GIT_REMOTE in
+                "$REPO_1_ssh")
+                    columns="TRUE $REPO_1_ssh FALSE $REPO_2_ssh FALSE $REPO_1_https FALSE $REPO_2_https";;
+                "$REPO_2_ssh")
+                    columns="FALSE $REPO_1_ssh TRUE $REPO_2_ssh FALSE $REPO_1_https FALSE $REPO_2_https";;
+                "$REPO_1_https")
+                    columns="FALSE $REPO_1_ssh FALSE $REPO_2_ssh TRUE $REPO_1_https FALSE $REPO_2_https";;
+                "$REPO_1_https")
+                    columns="FALSE $REPO_1_ssh FALSE $REPO_2_ssh FALSE $REPO_1_https TRUE $REPO_2_https";;
+                *)
+                    columns="FALSE $REPO_1_ssh FALSE $REPO_2_ssh FALSE $REPO_1_https FALSE $REPO_2_https";;
+            esac
+            repository=$(zenity --title="Special" \
+                                --list --text='Select upstream Git repository'\
+                                --column='Selection' --column='Upstream repository' $columns \
+                                --radiolist)
+            case "$repository" in
+                "$REPO_1_ssh")
+                    echo "Repository changed to $REPO_1_ssh"
+                    git remote set-url origin "$REPO_1_ssh";;
+                "$REPO_2_ssh")
+                    echo "Repository changed to $REPO_2_ssh"
+                    git remote set-url origin "$REPO_2_ssh";;
+                "$REPO_1_https")
+                    echo "Repository changed to $REPO_1_https"
+                    git remote set-url origin "$REPO_1_https";;
+                "$REPO_2_https")
+                    echo "Repository changed to $REPO_2_https"
+                    git remote set-url origin "$REPO_2_https";;
+                *)
+                    echo "Repository $GIT_REMOTE unchanged.";;
+            esac
             echo "Returning to main menu.";;
         *)
             echo "Returning to main menu.";;
@@ -176,7 +197,6 @@ result=$(zenity --info \
                 --ok-label "START" \
                 --extra-button "Software update..." \
                 --extra-button "Shutdown")
-
 # The primary/ok button does not return a value,
 # so for clarity in the switch logic, we set one here
 # and also catch the window cancel button

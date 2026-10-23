@@ -176,7 +176,7 @@ AND LOCAL UPDATE (PICO) TO COMPLETE." \
 # Run zenity app to display dialog box with buttons
 result=$(zenity --info \
                 --width=680 \
-                --title "Launcher: Power Quality Meter" \
+                --title "Power Quality Meter: Launcher" \
                 --text "$information" \
                 --ok-label "START" \
                 --extra-button "Software update..." \

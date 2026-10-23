@@ -14,9 +14,7 @@ fi
 
 # Repository options. If one repository is not available, provides option
 # to switch to an alternative.
-REPO_1_ssh='git@github.com:arup-group/pqm-hellebores.git'
 REPO_1_https='https://github.com/arup-group/pqm-hellebores.git'
-REPO_2_ssh='git@github.com:adam4521/pqm-hellebores.git'
 REPO_2_https='https://github.com/adam4521/pqm-hellebores.git'
 
 # Now get other configuration information from local system
@@ -70,15 +68,15 @@ access_logs() {
     result=$(zenity --info \
                     --title "Power Quality Meter: access logs" \
                     --text "Software logs will open in a text editor. Logs are cached in RAMdisk \
-and do not persist across a reboot or power cycle." \
-                    --ok-label "Error log" \
+and don't persist across a reboot or power cycle." \
+                    --ok-label "Cancel" \
                     --extra-button "Software update log" \
-                    --extra-button "Cancel")
+                    --extra-button "Error log")
     case "$result" in
         "Error log")
-            xdg-open "TEMP/error.log";;
+            xdg-open "$TEMP/error.log";;
         "Software update log")
-            xdg-open "TEMP/update.log";;
+            xdg-open "$TEMP/update.log";;
         *)
             echo "Returning to main menu.";;
     esac
@@ -122,64 +120,50 @@ software_update() {
 internet connection is good and try updating again. If you determine that the repository \
 is not available, use the 'Special...' option to switch remote.\n\nWAIT FOR REMOTE FETCH \
 AND LOCAL UPDATE (PICO) TO COMPLETE." \
-                    --ok-label "UPDATE" \
+                    --ok-label "Cancel" \
                     --extra-button "Special..." \
-                    --extra-button "Cancel")
-    error_status=$?
-    if [[ "$result" == "" ]]; then
-        if [[ $error_status -ne 0 ]]; then
-            result="Cancel"
-        else
-            result="UPDATE"
-        fi
-    fi
-
+                    --extra-button "UPDATE")
     case "$result" in
         "UPDATE")
             if git ls-remote "$GIT_REMOTE" &> /dev/null; then
                 fetch_from_repo
                 pico_update
-                zenity --info \
-                       --title "Power Quality Meter: software update" \
-                       --text "Update completed." \
-                       --ok-label "OK" \
-                       --extra-button "View log"
+                result=$(zenity --info \
+                                --title "Power Quality Meter: software update" \
+                                --text "Update finished." \
+                                --ok-label "OK" \
+                                --extra-button "View log")
+                if [[ $result == "View log" ]]; then
+                    xdg-open "$TEMP/update.log"
+                fi
             else
-                zenity --info \
-                       --title "Power Quality Meter: software update" \
-                       --text "Repository $GIT_REMOTE is not reachable. No update took place." \
-                       --ok-label "OK"
+                result=$(zenity --info \
+                                --title "Power Quality Meter: software update" \
+                                --text "Repository $GIT_REMOTE is not reachable. No update took place." \
+                                --ok-label "OK")
             fi;;
         "Special...")
             case $GIT_REMOTE in
-                "$REPO_1_ssh")
-                    columns="TRUE $REPO_1_ssh FALSE $REPO_2_ssh FALSE $REPO_1_https FALSE $REPO_2_https";;
-                "$REPO_2_ssh")
-                    columns="FALSE $REPO_1_ssh TRUE $REPO_2_ssh FALSE $REPO_1_https FALSE $REPO_2_https";;
                 "$REPO_1_https")
-                    columns="FALSE $REPO_1_ssh FALSE $REPO_2_ssh TRUE $REPO_1_https FALSE $REPO_2_https";;
+                    columns="TRUE $REPO_1_https FALSE $REPO_2_https";;
                 "$REPO_1_https")
-                    columns="FALSE $REPO_1_ssh FALSE $REPO_2_ssh FALSE $REPO_1_https TRUE $REPO_2_https";;
+                    columns="FALSE $REPO_1_https TRUE $REPO_2_https";;
                 *)
-                    columns="FALSE $REPO_1_ssh FALSE $REPO_2_ssh FALSE $REPO_1_https FALSE $REPO_2_https";;
+                    columns="FALSE $REPO_1_https FALSE $REPO_2_https";;
             esac
             repository=$(zenity --title="Special" \
                                 --list --text='Select upstream Git repository'\
                                 --column='Selection' --column='Upstream repository' $columns \
-                                --radiolist)
+                                --radiolist \
+                                --width=500 \
+                                --height=300)
             case "$repository" in
-                "$REPO_1_ssh")
-                    echo "Repository changed to $REPO_1_ssh"
-                    git remote set-url origin "$REPO_1_ssh";;
-                "$REPO_2_ssh")
-                    echo "Repository changed to $REPO_2_ssh"
-                    git remote set-url origin "$REPO_2_ssh";;
                 "$REPO_1_https")
-                    echo "Repository changed to $REPO_1_https"
-                    git remote set-url origin "$REPO_1_https";;
+                    git remote set-url origin "$REPO_1_https"
+                    echo "Repository changed to $REPO_1_https";;
                 "$REPO_2_https")
-                    echo "Repository changed to $REPO_2_https"
-                    git remote set-url origin "$REPO_2_https";;
+                    git remote set-url origin "$REPO_2_https"
+                    echo "Repository changed to $REPO_2_https";;
                 *)
                     echo "Repository $GIT_REMOTE unchanged.";;
             esac
@@ -196,6 +180,7 @@ result=$(zenity --info \
                 --text "$information" \
                 --ok-label "START" \
                 --extra-button "Software update..." \
+                --extra-button "Logs..." \
                 --extra-button "Shutdown")
 # The primary/ok button does not return a value,
 # so for clarity in the switch logic, we set one here

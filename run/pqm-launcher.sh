@@ -72,17 +72,23 @@ SHOW_KEYBOARD="gdbus call --session --dest sm.puri.OSK0 --object-path /sm/puri/O
 access_logs() {
     result=$(zenity --info \
                     --title "Power Quality Meter: access logs" \
-                    --width=500 --height=200 \
                     --text "Software logs will open in a text editor. Logs are cached in RAMdisk \
 and don't persist across a reboot or power cycle." \
                     --ok-label "Cancel" \
-                    --extra-button "Software update log" \
-                    --extra-button "Error log")
+                    --extra-button "Update log" \
+                    --extra-button "Error log" \
+                    --width=600 --height=300)
     case "$result" in
         "Error log")
-            xdg-open "$TEMP/error.log" & $HIDE_KEYBOARD;;
-        "Software update log")
-            xdg-open "$TEMP/update.log" & $HIDE_KEYBOARD;;
+            zenity --text-info \
+                   --title="Power Quality Meter: Error Log" \
+                   --filename="$TEMP/error.log" \
+                   --width=600 --height=400;;
+        "Update log")
+            zenity --text-info \
+                   --title="Power Quality Meter: Update Log" \
+                   --filename="$TEMP/update.log" \
+                   --width=600 --height=400;;
         *)
             echo "Returning to main menu.";;
     esac
@@ -95,6 +101,7 @@ fetch_from_repo() {
     x-terminal-emulator -e bash -c "
         {
             echo 'Updating software to Github branch origin/$GIT_BRANCH HEAD...'
+            sleep 1
             $HIDE_KEYBOARD
             cd $SOFTWARE_PATH
             git fetch origin
@@ -109,6 +116,7 @@ pico_update() {
     x-terminal-emulator -e bash -c "
         {
             echo 'Updating software stored on Pico...'
+            sleep 1
             $HIDE_KEYBOARD
             $SOFTWARE_PATH/tools/pico_update.sh
             sleep 2
@@ -122,14 +130,14 @@ software_update() {
     # it will overwrite local changes and ruin your day
     result=$(zenity --info \
                     --title "Power Quality Meter: software update" \
-                    --width=500 --height=200 \
                     --text "Upstream: $GIT_REMOTE\n\nIf you encounter issues, check \
 internet connection is good and try updating again. If you determine that the repository \
 is not available, use the 'Special...' option to switch remote.\n\nWAIT FOR REMOTE FETCH \
 AND LOCAL UPDATE (PICO) TO COMPLETE." \
                     --ok-label "Cancel" \
                     --extra-button "Special..." \
-                    --extra-button "UPDATE")
+                    --extra-button "UPDATE" \
+                    --width=600 --height=300)
     case "$result" in
         "UPDATE")
             if git ls-remote "$GIT_REMOTE" &> /dev/null; then
@@ -140,9 +148,9 @@ AND LOCAL UPDATE (PICO) TO COMPLETE." \
             fi
             zenity --info \
                    --title "Power Quality Meter: software update" \
-                   --width=500 --height=200 \
                    --text "$message" \
-                   --ok-label "OK";;
+                   --ok-label "OK" \
+                   --width=600 --height=200
         "Special...")
             case $GIT_REMOTE in
                 "$REPO_1")
@@ -153,10 +161,10 @@ AND LOCAL UPDATE (PICO) TO COMPLETE." \
                     columns="FALSE $REPO_1 FALSE $REPO_2";;
             esac
             repository=$(zenity --title="Special" \
-                                --width=500 --height=200 \
                                 --list --text='Select upstream Git repository'\
                                 --column='Selection' --column='Upstream repository' $columns \
-                                --radiolist)
+                                --radiolist \
+                                --width=600 --height=300)
             case "$repository" in
                 "$REPO_1")
                     git remote set-url origin "$REPO_1"
@@ -176,12 +184,12 @@ AND LOCAL UPDATE (PICO) TO COMPLETE." \
 # Run zenity app to display dialog box with buttons
 result=$(zenity --info \
                 --title "Power Quality Meter: Launcher" \
-                --width=680 \
                 --text "$information" \
                 --ok-label "START" \
                 --extra-button "Software update..." \
                 --extra-button "Logs..." \
-                --extra-button "Shutdown")
+                --extra-button "Shutdown" \
+                --width=680)
 # The primary/ok button does not return a value,
 # so for clarity in the switch logic, we set one here
 # and also catch the window cancel button

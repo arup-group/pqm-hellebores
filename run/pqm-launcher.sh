@@ -72,6 +72,7 @@ SHOW_KEYBOARD="gdbus call --session --dest sm.puri.OSK0 --object-path /sm/puri/O
 access_logs() {
     result=$(zenity --info \
                     --title "Power Quality Meter: access logs" \
+                    --width=500 --height=200 \
                     --text "Software logs will open in a text editor. Logs are cached in RAMdisk \
 and don't persist across a reboot or power cycle." \
                     --ok-label "Cancel" \
@@ -79,11 +80,9 @@ and don't persist across a reboot or power cycle." \
                     --extra-button "Error log")
     case "$result" in
         "Error log")
-            xdg-open "$TEMP/error.log" &
-            $HIDE_KEYBOARD;;
+            xdg-open "$TEMP/error.log" & $HIDE_KEYBOARD;;
         "Software update log")
-            xdg-open "$TEMP/update.log" &
-            $HIDE_KEYBOARD;;
+            xdg-open "$TEMP/update.log" & $HIDE_KEYBOARD;;
         *)
             echo "Returning to main menu.";;
     esac
@@ -93,13 +92,13 @@ and don't persist across a reboot or power cycle." \
 fetch_from_repo() {
     # pkill -USR1 wvkbd hides the wayland keyboard so that the termrinal is
     # fully visible
-    x-terminal-emulator -e bash -c "\
+    x-terminal-emulator -e bash -c "
         {
-            echo 'Updating software to Github branch origin/$GIT_BRANCH HEAD...'; \
-            $HIDE_KEYBOARD; \ 
-            cd $SOFTWARE_PATH; \
-            git fetch origin; \
-            git reset --hard origin/$GIT_BRANCH; \
+            echo 'Updating software to Github branch origin/$GIT_BRANCH HEAD...'
+            $HIDE_KEYBOARD
+            cd $SOFTWARE_PATH
+            git fetch origin
+            git reset --hard origin/$GIT_BRANCH
             sleep 2
         } 2>&1 | tee -a '$TEMP/update.log'
     "
@@ -107,11 +106,11 @@ fetch_from_repo() {
 
 
 pico_update() {
-    x-terminal-emulator -e bash -c "\
+    x-terminal-emulator -e bash -c "
         {
-            echo 'Updating software stored on Pico...'; \
-            $HIDE_KEYBOARD; \
-            $SOFTWARE_PATH/tools/pico_update.sh; \
+            echo 'Updating software stored on Pico...'
+            $HIDE_KEYBOARD
+            $SOFTWARE_PATH/tools/pico_update.sh
             sleep 2
         } 2>&1 | tee -a '$TEMP/update.log'
     "
@@ -123,6 +122,7 @@ software_update() {
     # it will overwrite local changes and ruin your day
     result=$(zenity --info \
                     --title "Power Quality Meter: software update" \
+                    --width=500 --height=200 \
                     --text "Upstream: $GIT_REMOTE\n\nIf you encounter issues, check \
 internet connection is good and try updating again. If you determine that the repository \
 is not available, use the 'Special...' option to switch remote.\n\nWAIT FOR REMOTE FETCH \
@@ -133,23 +133,16 @@ AND LOCAL UPDATE (PICO) TO COMPLETE." \
     case "$result" in
         "UPDATE")
             if git ls-remote "$GIT_REMOTE" &> /dev/null; then
-                fetch_from_repo
-                pico_update
-                result=$(zenity --info \
-                                --title "Power Quality Meter: software update" \
-                                --text "Update finished." \
-                                --ok-label "OK" \
-                                --extra-button "View log")
-                if [[ $result == "View log" ]]; then
-                    xdg-open "$TEMP/update.log" &
-                    $HIDE_KEYBOARD
-                fi
+                fetch_from_repo; pico_update
+                message="Update finished."
             else
-                zenity --info \
-                       --title "Power Quality Meter: software update" \
-                       --text "Repository $GIT_REMOTE wasn't reachable. No update took place." \
-                       --ok-label "OK"
-            fi;;
+                message="Repository $GIT_REMOTE wasn't reachable. No update took place."
+            fi
+            zenity --info \
+                   --title "Power Quality Meter: software update" \
+                   --width=500 --height=200 \
+                   --text "$message" \
+                   --ok-label "OK";;
         "Special...")
             case $GIT_REMOTE in
                 "$REPO_1")
@@ -160,11 +153,10 @@ AND LOCAL UPDATE (PICO) TO COMPLETE." \
                     columns="FALSE $REPO_1 FALSE $REPO_2";;
             esac
             repository=$(zenity --title="Special" \
+                                --width=500 --height=200 \
                                 --list --text='Select upstream Git repository'\
                                 --column='Selection' --column='Upstream repository' $columns \
-                                --radiolist \
-                                --width=500 \
-                                --height=200)
+                                --radiolist)
             case "$repository" in
                 "$REPO_1")
                     git remote set-url origin "$REPO_1"
@@ -183,8 +175,8 @@ AND LOCAL UPDATE (PICO) TO COMPLETE." \
 
 # Run zenity app to display dialog box with buttons
 result=$(zenity --info \
-                --width=680 \
                 --title "Power Quality Meter: Launcher" \
+                --width=680 \
                 --text "$information" \
                 --ok-label "START" \
                 --extra-button "Software update..." \

@@ -70,10 +70,12 @@ SHOW_KEYBOARD="gdbus call --session --dest sm.puri.OSK0 --object-path /sm/puri/O
 
 
 access_logs() {
+    text=$(echo "Software logs will open in a text editor. \
+Logs are cached in RAMdisk and don't persist \
+across a reboot or power cycle." | fold -s -w 60)
     result=$(zenity --info \
                     --title "Power Quality Meter: access logs" \
-                    --text "Software logs will open in a text editor. Logs are cached in RAMdisk \
-and don't persist across a reboot or power cycle." \
+                    --text "$text" \
                     --ok-label "Cancel" \
                     --extra-button "Update log" \
                     --extra-button "Error log" \
@@ -140,12 +142,13 @@ pico_update() {
 software_update() {
     # DON'T run this option on a development computer
     # it will overwrite local changes and ruin your day
+    text=$(echo "Upstream: $GIT_REMOTE \n\nIf you encounter issues, check \
+internet connection is good and try updating again. If you determine that the repository \
+is not available, use the 'Special...' option to switch remote. \n\nWAIT FOR REMOTE FETCH \
+AND LOCAL UPDATE (PICO) TO COMPLETE." | fold -s -w 60)
     result=$(zenity --info \
                     --title "Power Quality Meter: software update" \
-                    --text "Upstream: $GIT_REMOTE\n\nIf you encounter issues, check \
-internet connection is good and try updating again. If you determine that the repository \
-is not available, use the 'Special...' option to switch remote.\n\nWAIT FOR REMOTE FETCH \
-AND LOCAL UPDATE (PICO) TO COMPLETE." \
+                    --text "$text" \
                     --ok-label "Cancel" \
                     --extra-button "Special..." \
                     --extra-button "UPDATE" \
@@ -156,7 +159,7 @@ AND LOCAL UPDATE (PICO) TO COMPLETE." \
                 fetch_from_repo; pico_update
                 message="Update finished."
             else
-                message="Repository $GIT_REMOTE wasn't reachable. No update took place."
+                message=$(echo "Repository $GIT_REMOTE wasn't reachable. No update took place." | fold -s -w 60)
             fi
             zenity --info \
                    --title "Power Quality Meter: software update" \
@@ -177,7 +180,7 @@ AND LOCAL UPDATE (PICO) TO COMPLETE." \
                                 --list \
                                 --column='Selection' --column='Upstream repository' $columns \
                                 --radiolist \
-                                --width=500)
+                                --width=500 --height=300)
             case "$repository" in
                 "$REPO_1")
                     git remote set-url origin "$REPO_1"

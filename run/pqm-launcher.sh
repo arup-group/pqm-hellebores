@@ -83,12 +83,24 @@ and don't persist across a reboot or power cycle." \
             zenity --text-info \
                    --title="Power Quality Meter: Error Log" \
                    --filename="$TEMP/error.log" \
-                   --width=600 --height=400;;
+                   --ok-label "OK" \
+                   --cancel-label "Copy to clipboard" \
+                   --width=600 --height=400
+            clicked=$?
+            if [[ $clicked -ne 0 ]]; then
+                cat "$TEMP/error.log" | xclip -selection "clip"
+            fi;;
         "Update log")
             zenity --text-info \
                    --title="Power Quality Meter: Update Log" \
                    --filename="$TEMP/update.log" \
-                   --width=600 --height=400;;
+                   --ok-label "OK" \
+                   --cancel-label "Copy to clipboard" \
+                   --width=600 --height=400
+            clicked=$?
+            if [[ $clicked -ne 0 ]]; then
+                cat "$TEMP/update.log" | xclip -selection "clip"
+            fi;;
         *)
             echo "Returning to main menu.";;
     esac
@@ -150,7 +162,7 @@ AND LOCAL UPDATE (PICO) TO COMPLETE." \
                    --title "Power Quality Meter: software update" \
                    --text "$message" \
                    --ok-label "OK" \
-                   --width=600 --height=200
+                   --width=600 --height=200;;
         "Special...")
             case $GIT_REMOTE in
                 "$REPO_1")
@@ -161,7 +173,8 @@ AND LOCAL UPDATE (PICO) TO COMPLETE." \
                     columns="FALSE $REPO_1 FALSE $REPO_2";;
             esac
             repository=$(zenity --title="Special" \
-                                --list --text='Select upstream Git repository'\
+                                --text='Select upstream Git repository'\
+                                --list \
                                 --column='Selection' --column='Upstream repository' $columns \
                                 --radiolist \
                                 --width=600 --height=300)
@@ -185,10 +198,10 @@ AND LOCAL UPDATE (PICO) TO COMPLETE." \
 result=$(zenity --info \
                 --title "Power Quality Meter: Launcher" \
                 --text "$information" \
-                --ok-label "START" \
+                --ok-label "Shutdown" \
                 --extra-button "Software update..." \
                 --extra-button "Logs..." \
-                --extra-button "Shutdown" \
+                --extra-button "START" \
                 --width=680)
 # The primary/ok button does not return a value,
 # so for clarity in the switch logic, we set one here
@@ -198,7 +211,7 @@ if [[ "$result" == "" ]]; then
     if [[ $error_status -ne 0 ]]; then
         result="EXIT"
     else
-        result="START"
+        result="Shutdown"
     fi
 fi
 

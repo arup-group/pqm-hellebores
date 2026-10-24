@@ -165,7 +165,7 @@ AND LOCAL UPDATE (PICO) TO COMPLETE." | fold -s -w 60)
                    --title "Power Quality Meter: software update" \
                    --text "$message" \
                    --ok-label "OK" \
-                   --width=500;;
+                   --width=200;;
         "Special...")
             case $GIT_REMOTE in
                 "$REPO_1")

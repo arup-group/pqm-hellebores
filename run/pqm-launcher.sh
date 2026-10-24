@@ -74,9 +74,9 @@ and don't persist across a reboot or power cycle." \
                     --extra-button "Error log")
     case "$result" in
         "Error log")
-            xdg-open "$TEMP/error.log";;
+            xdg-open "$TEMP/error.log" &;;
         "Software update log")
-            xdg-open "$TEMP/update.log";;
+            xdg-open "$TEMP/update.log"&;;
         *)
             echo "Returning to main menu.";;
     esac
@@ -134,19 +134,19 @@ AND LOCAL UPDATE (PICO) TO COMPLETE." \
                                 --ok-label "OK" \
                                 --extra-button "View log")
                 if [[ $result == "View log" ]]; then
-                    xdg-open "$TEMP/update.log"
+                    xdg-open "$TEMP/update.log" &
                 fi
             else
-                result=$(zenity --info \
-                                --title "Power Quality Meter: software update" \
-                                --text "Repository $GIT_REMOTE is not reachable. No update took place." \
-                                --ok-label "OK")
+                zenity --info \
+                       --title "Power Quality Meter: software update" \
+                       --text "Repository $GIT_REMOTE wasn't reachable. No update took place." \
+                       --ok-label "OK"
             fi;;
         "Special...")
             case $GIT_REMOTE in
                 "$REPO_1_https")
                     columns="TRUE $REPO_1_https FALSE $REPO_2_https";;
-                "$REPO_1_https")
+                "$REPO_2_https")
                     columns="FALSE $REPO_1_https TRUE $REPO_2_https";;
                 *)
                     columns="FALSE $REPO_1_https FALSE $REPO_2_https";;
@@ -156,16 +156,16 @@ AND LOCAL UPDATE (PICO) TO COMPLETE." \
                                 --column='Selection' --column='Upstream repository' $columns \
                                 --radiolist \
                                 --width=500 \
-                                --height=300)
+                                --height=200)
             case "$repository" in
                 "$REPO_1_https")
                     git remote set-url origin "$REPO_1_https"
-                    echo "Repository changed to $REPO_1_https";;
+                    echo "Upstream repository changed to $REPO_1_https";;
                 "$REPO_2_https")
                     git remote set-url origin "$REPO_2_https"
-                    echo "Repository changed to $REPO_2_https";;
+                    echo "Upstream repository changed to $REPO_2_https";;
                 *)
-                    echo "Repository $GIT_REMOTE unchanged.";;
+                    echo "Upstream repository $GIT_REMOTE unchanged.";;
             esac
             echo "Returning to main menu.";;
         *)

@@ -14,8 +14,8 @@ fi
 
 # Repository options. If one repository is not available, provides option
 # to switch to an alternative.
-REPO_1_https='https://github.com/arup-group/pqm-hellebores.git'
-REPO_2_https='https://github.com/adam4521/pqm-hellebores.git'
+REPO_1='https://github.com/arup-group/pqm-hellebores.git'
+REPO_2='https://github.com/adam4521/pqm-hellebores.git'
 
 # Now get other configuration information from local system
 IDENTITY="$(cat $SOFTWARE_PATH/configuration/identity 2>/dev/null)"
@@ -64,6 +64,11 @@ Download CSV data:    <b>scp $USER@$IP_ADDRESS:$TEMP/*csv .</b>
 _EOF_
 
 
+# Late Bookworm only
+HIDE_KEYBOARD="gdbus call --session --dest sm.puri.OSK0 --object-path /sm/puri/OSK0 --method sm.puri.OSK0.SetVisible false"
+SHOW_KEYBOARD="gdbus call --session --dest sm.puri.OSK0 --object-path /sm/puri/OSK0 --method sm.puri.OSK0.SetVisible true"
+
+
 access_logs() {
     result=$(zenity --info \
                     --title "Power Quality Meter: access logs" \
@@ -74,9 +79,11 @@ and don't persist across a reboot or power cycle." \
                     --extra-button "Error log")
     case "$result" in
         "Error log")
-            xdg-open "$TEMP/error.log" &;;
+            xdg-open "$TEMP/error.log" &
+            $HIDE_KEYBOARD;;
         "Software update log")
-            xdg-open "$TEMP/update.log"&;;
+            xdg-open "$TEMP/update.log" &
+            $HIDE_KEYBOARD;;
         *)
             echo "Returning to main menu.";;
     esac
@@ -89,7 +96,7 @@ fetch_from_repo() {
     x-terminal-emulator -e bash -c "\
         {
             echo 'Updating software to Github branch origin/$GIT_BRANCH HEAD...'; \
-            pkill -USR1 wvkbd; \
+            $HIDE_KEYBOARD; \ 
             cd $SOFTWARE_PATH; \
             git fetch origin; \
             git reset --hard origin/$GIT_BRANCH; \
@@ -103,7 +110,7 @@ pico_update() {
     x-terminal-emulator -e bash -c "\
         {
             echo 'Updating software stored on Pico...'; \
-            pkill -USR1 wvkbd; \
+            $HIDE_KEYBOARD; \
             $SOFTWARE_PATH/tools/pico_update.sh; \
             sleep 2
         } 2>&1 | tee -a '$TEMP/update.log'
@@ -135,6 +142,7 @@ AND LOCAL UPDATE (PICO) TO COMPLETE." \
                                 --extra-button "View log")
                 if [[ $result == "View log" ]]; then
                     xdg-open "$TEMP/update.log" &
+                    $HIDE_KEYBOARD
                 fi
             else
                 zenity --info \
@@ -144,12 +152,12 @@ AND LOCAL UPDATE (PICO) TO COMPLETE." \
             fi;;
         "Special...")
             case $GIT_REMOTE in
-                "$REPO_1_https")
-                    columns="TRUE $REPO_1_https FALSE $REPO_2_https";;
-                "$REPO_2_https")
-                    columns="FALSE $REPO_1_https TRUE $REPO_2_https";;
+                "$REPO_1")
+                    columns="TRUE $REPO_1 FALSE $REPO_2";;
+                "$REPO_2")
+                    columns="FALSE $REPO_1 TRUE $REPO_2";;
                 *)
-                    columns="FALSE $REPO_1_https FALSE $REPO_2_https";;
+                    columns="FALSE $REPO_1 FALSE $REPO_2";;
             esac
             repository=$(zenity --title="Special" \
                                 --list --text='Select upstream Git repository'\
@@ -158,12 +166,12 @@ AND LOCAL UPDATE (PICO) TO COMPLETE." \
                                 --width=500 \
                                 --height=200)
             case "$repository" in
-                "$REPO_1_https")
-                    git remote set-url origin "$REPO_1_https"
-                    echo "Upstream repository changed to $REPO_1_https";;
-                "$REPO_2_https")
-                    git remote set-url origin "$REPO_2_https"
-                    echo "Upstream repository changed to $REPO_2_https";;
+                "$REPO_1")
+                    git remote set-url origin "$REPO_1"
+                    echo "Upstream repository changed to $REPO_1";;
+                "$REPO_2")
+                    git remote set-url origin "$REPO_2"
+                    echo "Upstream repository changed to $REPO_2";;
                 *)
                     echo "Upstream repository $GIT_REMOTE unchanged.";;
             esac

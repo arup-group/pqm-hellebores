@@ -77,7 +77,7 @@ and don't persist across a reboot or power cycle." \
                     --ok-label "Cancel" \
                     --extra-button "Update log" \
                     --extra-button "Error log" \
-                    --width=600 --height=300)
+                    --width=500)
     case "$result" in
         "Error log")
             zenity --text-info \
@@ -149,7 +149,7 @@ AND LOCAL UPDATE (PICO) TO COMPLETE." \
                     --ok-label "Cancel" \
                     --extra-button "Special..." \
                     --extra-button "UPDATE" \
-                    --width=600 --height=300)
+                    --width=500)
     case "$result" in
         "UPDATE")
             if git ls-remote "$GIT_REMOTE" &> /dev/null; then
@@ -162,7 +162,7 @@ AND LOCAL UPDATE (PICO) TO COMPLETE." \
                    --title "Power Quality Meter: software update" \
                    --text "$message" \
                    --ok-label "OK" \
-                   --width=600 --height=200;;
+                   --width=500;;
         "Special...")
             case $GIT_REMOTE in
                 "$REPO_1")
@@ -177,7 +177,7 @@ AND LOCAL UPDATE (PICO) TO COMPLETE." \
                                 --list \
                                 --column='Selection' --column='Upstream repository' $columns \
                                 --radiolist \
-                                --width=600 --height=300)
+                                --width=500)
             case "$repository" in
                 "$REPO_1")
                     git remote set-url origin "$REPO_1"

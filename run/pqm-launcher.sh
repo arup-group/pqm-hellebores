@@ -73,69 +73,116 @@ access_logs() {
     text=$(echo "Software logs will open in a text editor. \
 Logs are cached in RAMdisk and don't persist \
 across a reboot or power cycle." | fold -s -w 60)
-    result=$(zenity --info \
-                    --title "Power Quality Meter: access logs" \
-                    --text "$text" \
-                    --ok-label "Cancel" \
-                    --extra-button "Update log" \
-                    --extra-button "Error log" \
-                    --width=500)
-    case "$result" in
-        "Error log")
-            zenity --text-info \
-                   --title="Power Quality Meter: Error Log" \
-                   --filename="$TEMP/error.log" \
-                   --ok-label "OK" \
-                   --cancel-label "Copy to clipboard" \
-                   --width=600 --height=400
-            clicked=$?
-            if [[ $clicked -ne 0 ]]; then
-                cat "$TEMP/error.log" | xclip -selection "clip"
-            fi;;
-        "Update log")
-            zenity --text-info \
-                   --title="Power Quality Meter: Update Log" \
-                   --filename="$TEMP/update.log" \
-                   --ok-label "OK" \
-                   --cancel-label "Copy to clipboard" \
-                   --width=600 --height=400
-            clicked=$?
-            if [[ $clicked -ne 0 ]]; then
-                cat "$TEMP/update.log" | xclip -selection "clip"
-            fi;;
-        *)
-            echo "Returning to main menu.";;
-    esac
+    while true; do
+        result=$(zenity --info \
+                        --title "Power Quality Meter: access logs" \
+                        --text "$text" \
+                        --ok-label "Cancel" \
+                        --extra-button "Update log" \
+                        --extra-button "Error log" \
+                        --width=600)
+        case "$result" in
+            "Error log")
+                zenity --text-info \
+                       --title="Power Quality Meter: error log" \
+                       --filename="$TEMP/error.log" \
+                       --ok-label "Copy to clipboard" \
+                       --width=600 --height=400
+                clicked=$?
+                if [[ $clicked -eq 0 ]]; then
+                    cat "$TEMP/error.log" | xclip -selection "clip"
+                fi;;
+            "Update log")
+                zenity --text-info \
+                       --title="Power Quality Meter: update log" \
+                       --filename="$TEMP/update.log" \
+                       --ok-label "Copy to clipboard" \
+                       --width=600 --height=400
+                clicked=$?
+                if [[ $clicked -eq 0 ]]; then
+                    cat "$TEMP/update.log" | xclip -selection "clip"
+                fi;;
+            *)
+                echo "Returning to main menu."
+                break;;
+        esac
+    done
 }
 
 
 fetch_from_repo() {
-    # pkill -USR1 wvkbd hides the wayland keyboard so that the termrinal is
+    # 1. Run commands in visible terminal window
+    # $HIDE_KEYBOARD hides the wayland keyboard so that the terminal is
     # fully visible
+    # Explicitly turn OFF pipefail so that our final manual 'exit \$STATUS'
+    # is what controls the terminal's exit code, not the 'tee' pipeline tool.
     x-terminal-emulator -e bash -c "
+        set +o pipefail
+
         {
+            STATUS=0
+
             echo 'Updating software to Github branch origin/$GIT_BRANCH HEAD...'
             sleep 1
             $HIDE_KEYBOARD
-            cd $SOFTWARE_PATH
-            git fetch origin
-            git reset --hard origin/$GIT_BRANCH
+
+            # Step A: Attempt to change directory
+            cd '$SOFTWARE_PATH' || STATUS=1
+
+            # Step B: Fetch updates
+            git fetch origin || STATUS=1
+
+            # Step C: Hard reset (Executes even if git fetch threw an error)
+            git reset --hard origin/$GIT_BRANCH || STATUS=1
+
             sleep 2
+
+            exit \$STATUS
+
         } 2>&1 | tee -a '$TEMP/update.log'
+
+        exit \${PIPESTATUS[0]}
     "
+
+    # 2. Check the exit status code of the terminal window
+    if [ $? -ne 0 ]; then
+        echo "Error: One or more steps failed during the update process."
+        return 1
+    fi
+
+    return 0
 }
 
 
 pico_update() {
+    # 1. Run commands in visible terminal window
     x-terminal-emulator -e bash -c "
+        set +o pipefail
+
         {
+            STATUS=0
+
             echo 'Updating software stored on Pico...'
             sleep 1
             $HIDE_KEYBOARD
-            $SOFTWARE_PATH/tools/pico_update.sh
+
+            # Update Pico microcontroller
+            $SOFTWARE_PATH/tools/pico_update.sh || STATUS=1
             sleep 2
-        } 2>&1 | tee -a '$TEMP/update.log'
+
+            exit \$STATUS
+
+         } 2>&1 | tee -a '$TEMP/update.log'
+
+        exit \${PIPESTATUS[0]}
     "
+    # 2. Check the exit status code of the terminal window
+    if [ $? -ne 0 ]; then
+        echo "Error: One or more steps failed during the update process."
+        return 1
+    fi
+
+    return 0
 }
 
 
@@ -156,8 +203,14 @@ AND LOCAL UPDATE (PICO) TO COMPLETE." | fold -s -w 60)
     case "$result" in
         "UPDATE")
             if git ls-remote "$GIT_REMOTE" &> /dev/null; then
-                fetch_from_repo; pico_update
-                message="Update finished."
+                STATUS=0
+                fetch_from_repo || STATUS=1
+                pico_update || STATUS=1
+                if [[ $STATUS -eq 0 ]]; then
+                    message="Update finished."
+                else
+                    message="There were errors during the update."
+                fi
             else
                 message=$(echo "Repository $GIT_REMOTE wasn't reachable. No update took place." | fold -s -w 60)
             fi
@@ -199,7 +252,7 @@ AND LOCAL UPDATE (PICO) TO COMPLETE." | fold -s -w 60)
 
 # Run zenity app to display dialog box with buttons
 result=$(zenity --info \
-                --title "Power Quality Meter: Launcher" \
+                --title "Power Quality Meter: launcher" \
                 --text "$information" \
                 --ok-label "Shutdown" \
                 --extra-button "Software update..." \

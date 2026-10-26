@@ -1,5 +1,12 @@
 #!/bin/bash
 
+#                              _                        _                   _
+#  _ __   __ _ _ __ ___       | | __ _ _   _ _ __   ___| |__   ___ _ __ ___| |__
+# | '_ \ / _` | '_ ` _ \ _____| |/ _` | | | | '_ \ / __| '_ \ / _ \ '__/ __| '_ \
+# | |_) | (_| | | | | | |_____| | (_| | |_| | | | | (__| | | |  __/ | _\__ \ | | |
+# | .__/ \__, |_| |_| |_|     |_|\__,_|\__,_|_| |_|\___|_| |_|\___|_|(_)___/_| |_|
+# |_|       |_|
+#
 # Get path information
 CWD="$(pwd)"
 SOFTWARE_PATH="$(realpath $(dirname $0)/..)"
@@ -65,48 +72,21 @@ _EOF_
 
 
 # Late Bookworm only
+# Sends signal to on screen keyboard session
 HIDE_KEYBOARD="gdbus call --session --dest sm.puri.OSK0 --object-path /sm/puri/OSK0 --method sm.puri.OSK0.SetVisible false"
 SHOW_KEYBOARD="gdbus call --session --dest sm.puri.OSK0 --object-path /sm/puri/OSK0 --method sm.puri.OSK0.SetVisible true"
 
 
-access_logs() {
-    text=$(echo "Software logs will open in a text editor. \
-Logs are cached in RAMdisk and don't persist \
-across a reboot or power cycle." | fold -s -w 60)
-    while true; do
-        result=$(zenity --info \
-                        --title "Power Quality Meter: access logs" \
-                        --text "$text" \
-                        --ok-label "Cancel" \
-                        --extra-button "Update log" \
-                        --extra-button "Error log" \
-                        --width=600)
-        case "$result" in
-            "Error log")
-                zenity --text-info \
-                       --title="Power Quality Meter: error log" \
-                       --filename="$TEMP/error.log" \
-                       --ok-label "Copy to clipboard" \
-                       --width=600 --height=400
-                clicked=$?
-                if [[ $clicked -eq 0 ]]; then
-                    cat "$TEMP/error.log" | xclip -selection "clip"
-                fi;;
-            "Update log")
-                zenity --text-info \
-                       --title="Power Quality Meter: update log" \
-                       --filename="$TEMP/update.log" \
-                       --ok-label "Copy to clipboard" \
-                       --width=600 --height=400
-                clicked=$?
-                if [[ $clicked -eq 0 ]]; then
-                    cat "$TEMP/update.log" | xclip -selection "clip"
-                fi;;
-            *)
-                echo "Returning to main menu."
-                break;;
-        esac
-    done
+access_log() {
+    zenity --text-info \
+           --title="Power Quality Meter: error log" \
+           --filename="$TEMP/error.log" \
+           --ok-label "Copy to clipboard" \
+           --width=600 --height=400
+    clicked=$?
+    if [[ $clicked -eq 0 ]]; then
+        cat "$TEMP/error.log" | xclip -selection "clip"
+    fi
 }
 
 
@@ -139,14 +119,14 @@ fetch_from_repo() {
 
             exit \$STATUS
 
-        } 2>&1 | tee -a '$TEMP/update.log'
+        } 2>&1 | tee -a '$TEMP/error.log'
 
         exit \${PIPESTATUS[0]}
     "
 
     # 2. Check the exit status code of the terminal window
     if [ $? -ne 0 ]; then
-        echo "Error: One or more steps failed during the update process."
+        echo "Error: One or more steps failed during the software update process." >> $TEMP/error.log
         return 1
     fi
 
@@ -178,7 +158,7 @@ pico_update() {
     "
     # 2. Check the exit status code of the terminal window
     if [ $? -ne 0 ]; then
-        echo "Error: One or more steps failed during the update process."
+        echo "Error: One or more steps failed during the Pico update process." >> $TEMP/error.log
         return 1
     fi
 
@@ -189,65 +169,70 @@ pico_update() {
 software_update() {
     # DON'T run this option on a development computer
     # it will overwrite local changes and ruin your day
-    text=$(echo "Upstream: $GIT_REMOTE \n\nIf you encounter issues, check \
+    while true; do
+        text=$(echo "Upstream: $GIT_REMOTE \n\nIf you encounter issues, check \
 internet connection is good and try updating again. If you determine that the repository \
 is not available, use the 'Special...' option to switch remote. \n\nWAIT FOR REMOTE FETCH \
 AND LOCAL UPDATE (PICO) TO COMPLETE." | fold -s -w 60)
-    result=$(zenity --info \
-                    --title "Power Quality Meter: software update" \
-                    --text "$text" \
-                    --ok-label "Cancel" \
-                    --extra-button "Special..." \
-                    --extra-button "UPDATE" \
-                    --width=500)
-    case "$result" in
-        "UPDATE")
-            if git ls-remote "$GIT_REMOTE" &> /dev/null; then
-                STATUS=0
-                fetch_from_repo || STATUS=1
-                pico_update || STATUS=1
-                if [[ $STATUS -eq 0 ]]; then
-                    message="Update finished."
+        result=$(zenity --info \
+                        --title "Power Quality Meter: software update" \
+                        --text "$text" \
+                        --ok-label "Cancel" \
+                        --extra-button "Special..." \
+                        --extra-button "UPDATE" \
+                        --width=500)
+        case "$result" in
+            "UPDATE")
+                if git ls-remote "$GIT_REMOTE" &> /dev/null; then
+                    STATUS=0
+                    fetch_from_repo || STATUS=1
+                    pico_update || STATUS=1
+                    if [[ $STATUS -eq 0 ]]; then
+                        message="Update finished."
+                    else
+                        message="There were errors during the update."
+                    fi
                 else
-                    message="There were errors during the update."
+                    message=$(echo "Repository $GIT_REMOTE wasn't reachable. No update took place." | fold -s -w 60)
                 fi
-            else
-                message=$(echo "Repository $GIT_REMOTE wasn't reachable. No update took place." | fold -s -w 60)
-            fi
-            zenity --info \
-                   --title "Power Quality Meter: software update" \
-                   --text "$message" \
-                   --ok-label "OK" \
-                   --width=200;;
-        "Special...")
-            case $GIT_REMOTE in
-                "$REPO_1")
-                    columns="TRUE $REPO_1 FALSE $REPO_2";;
-                "$REPO_2")
-                    columns="FALSE $REPO_1 TRUE $REPO_2";;
-                *)
-                    columns="FALSE $REPO_1 FALSE $REPO_2";;
-            esac
-            repository=$(zenity --title="Special" \
-                                --text='Select upstream Git repository'\
-                                --list \
-                                --column='Selection' --column='Upstream repository' $columns \
-                                --radiolist \
-                                --width=500 --height=300)
-            case "$repository" in
-                "$REPO_1")
-                    git remote set-url origin "$REPO_1"
-                    echo "Upstream repository changed to $REPO_1";;
-                "$REPO_2")
-                    git remote set-url origin "$REPO_2"
-                    echo "Upstream repository changed to $REPO_2";;
-                *)
-                    echo "Upstream repository $GIT_REMOTE unchanged.";;
-            esac
-            echo "Returning to main menu.";;
-        *)
-            echo "Returning to main menu.";;
-    esac
+                echo $message >> $TEMP/error.log
+                zenity --info \
+                       --title "Power Quality Meter: software update" \
+                       --text "$message" \
+                       --ok-label "OK" \
+                       --width=200
+                break;;
+            "Special...")
+                case $GIT_REMOTE in
+                    "$REPO_1")
+                        columns="TRUE $REPO_1 FALSE $REPO_2";;
+                    "$REPO_2")
+                        columns="FALSE $REPO_1 TRUE $REPO_2";;
+                    *)
+                        columns="FALSE $REPO_1 FALSE $REPO_2";;
+                esac
+                repository=$(zenity --title="Special" \
+                                    --text='Select upstream Git repository'\
+                                    --list \
+                                    --column='Selection' --column='Upstream repository' $columns \
+                                    --radiolist \
+                                    --width=500 --height=300)
+                case "$repository" in
+                    "$REPO_1")
+                        git remote set-url origin "$REPO_1"
+                        echo "Upstream repository changed to $REPO_1" >> $TEMP/error.log;;
+                    "$REPO_2")
+                        git remote set-url origin "$REPO_2"
+                        echo "Upstream repository changed to $REPO_2" >> $TEMP/error.log;;
+                    *)
+                        echo "Upstream repository $GIT_REMOTE unchanged." >> $TEMP/error.log;;
+                esac;;
+            *)
+                # Returns to main menu
+                break;;
+        esac
+        # Loops to software update menu
+   done
 }
 
 # Run zenity app to display dialog box with buttons
@@ -256,7 +241,7 @@ result=$(zenity --info \
                 --text "$information" \
                 --ok-label "Shutdown" \
                 --extra-button "Software update..." \
-                --extra-button "Logs..." \
+                --extra-button "View log..." \
                 --extra-button "START" \
                 --width=680)
 # The primary/ok button does not return a value,
@@ -277,22 +262,22 @@ fi
 cd "$CWD"
 case "$result" in
     "START")
-        echo "Starting PQM software."
+        echo "Starting PQM software." >> $TEMP/error.log
         "$SOFTWARE_PATH/run/go.sh"
         exec "$0";;
     "EXIT")
-        echo "Exiting launcher.";;
+        echo "Exiting launcher." >> $TEMP/error.log;;
     "Software update...")
         software_update
         exec "$0";;
-    "Logs...")
-        access_logs
+    "View log...")
+        access_log
         exec "$0";;
     "Shutdown")
-        echo "Shutting down system."
+        echo "Shutting down system." >> $TEMP/error.log
         sudo shutdown -h now;;
     *)
-        echo "Not implemented: $result"
+        echo "Not implemented: $result" >> $TEMP/error.log
         exec "$0";;
 esac
 

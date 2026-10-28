@@ -108,7 +108,7 @@ fetch_from_repo() {
 
             echo 'Updating software to Github branch origin/$GIT_BRANCH HEAD...'
             sleep 1
-            $HIDE_KEYBOARD
+            $HIDE_KEYBOARD > /dev/null && echo 'Hide on-screen keyboard.'
 
             # Step A: Attempt to change directory
             cd '$SOFTWARE_PATH' || STATUS=1
@@ -148,10 +148,10 @@ pico_update() {
 
             echo 'Updating software stored on Pico...'
             sleep 1
-            $HIDE_KEYBOARD
+            $HIDE_KEYBOARD > /dev/null && echo 'Hide on-screen keyboard.'
 
             # Update Pico microcontroller
-            $SOFTWARE_PATH/tools/pico_update.sh || STATUS=1
+            $SOFTWARE_PATH/run/pico_update.sh || STATUS=1
             sleep 2
 
             exit \$STATUS

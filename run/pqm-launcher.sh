@@ -156,7 +156,7 @@ pico_update() {
 
             exit \$STATUS
 
-         } 2>&1 | tee -a '$TEMP/update.log'
+         } 2>&1 | tee -a '$TEMP/error.log'
 
         exit \${PIPESTATUS[0]}
     "

@@ -1,0 +1,25 @@
+#!/bin/bash
+
+# Update Pico microcontroller from files in pico directory
+# STATUS flag is used to detect failure at any control or update step
+STATUS=0
+
+# Find current working directory and absolute paths of script and program file directories
+SCRIPT_DIR="$(realpath $(dirname $0))"
+PROGRAM_DIR="$(realpath $SCRIPT_DIR/../pqm)"
+PICO_DIR="$(realpath $SCRIPT_DIR/../pico)"
+
+if $PROGRAM_DIR/pico_control.py --check_alive; then
+    $PROGRAM_DIR/pico_control.py --push_file_if_needed="$PICO_DIR/main.py" || STATUS=1
+    $PROGRAM_DIR/pico_control.py --push_file_if_needed="$PICO_DIR/stream.py" || STATUS=1
+else
+    echo "Pico is non-responsive."
+    STATUS=1
+fi
+
+# Hard reset Pico, so that we now run the new code or try again
+echo "Resetting Pico."
+$PROGRAM_DIR/pico_control.py --hard_reset || STATUS=1
+
+# Exit with success/fail STATUS
+exit $STATUS

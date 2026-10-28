@@ -4,7 +4,7 @@ import sys
 import os
 import signal
 import json
-import psutil
+# import psutil     # imported locally inside the get_program_pids() function
 import time
 import glob
 import math
@@ -63,6 +63,7 @@ class Settings():
         self.analysis_max_min_reset                    = js['analysis_max_min_reset']
         self.analysis_accumulators_reset               = js['analysis_accumulators_reset']
         self.sample_rate                               = js['sample_rate']
+        self.pico_start_string                         = js['pico_start_string']
         self.time_axis_divisions                       = js['time_axis_divisions']
         self.time_axis_pre_trigger_divisions           = js['time_axis_pre_trigger_divisions']
         self.vertical_axis_divisions                   = js['vertical_axis_divisions']
@@ -97,6 +98,7 @@ class Settings():
         js['analysis_max_min_reset']                   = self.analysis_max_min_reset
         js['analysis_accumulators_reset']              = self.analysis_accumulators_reset
         js['sample_rate']                              = self.sample_rate
+        js['pico_start_string']                        = self.pico_start_string
         js['time_axis_divisions']                      = self.time_axis_divisions
         js['time_axis_pre_trigger_divisions']          = self.time_axis_pre_trigger_divisions
         js['vertical_axis_divisions']                  = self.vertical_axis_divisions
@@ -203,6 +205,10 @@ class Settings():
     def get_program_pids(self, other_programs):
         """Uses a function in the psutil module to find the PIDs of the other program. The
         try/except block catches permission errors that we see on macOS only at present."""
+        # import psutil module locally because it is only used here and requires a pip install.
+        # Shadowing the import inside a function enables the rest of the program to be used in
+        # a git hook without the .venv being activated.
+        import psutil
         pids = {}
         if other_programs != []:
             for p in psutil.process_iter():
@@ -276,6 +282,7 @@ default_settings = '''
     "analysis_max_min_reset": 0,
     "analysis_accumulators_reset": 0,
     "sample_rate": 7812.5,
+    "pico_start_string": "START stream.py 1x 1x 1x 1x 7.812k asm_thumb",
     "time_axis_divisions": 10,
     "time_axis_pre_trigger_divisions": 5,
     "vertical_axis_divisions": 8,

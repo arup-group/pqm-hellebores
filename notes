@@ -48,6 +48,7 @@ evtest
 # Mirror DSI touchscreen to HDMI
 xrandr --output DSI-1 --same-as --output HDMI-1 --scale-from 800x600
 
+
 #######
 ### DATADASH DEMONSTRATION EXAMPLE
 #######
@@ -68,8 +69,19 @@ pqm/rain_chooser.py | pqm/scaler.py | cat <(echo 'Time Voltage Current Power Ear
 #######
 enscript -Epython -fCourier6 --color=1 -C -o - sourcefile.py | ps2pdf - sourcefile.pdf
 
+
 #######
 ### FAULT FINDING EXAMPLE
 #######
 (checks for anomalous voltage changes (delta between samples larger than 15V)
 ./reader.py | ./scaler.py | sed -E 's/ +/ /g' | cut -d ' ' -f 3 | sed -E 's/\..+$//' | awk -W interactive '{if(NR>1){_d=_n-$0; if(_d>15 || _d<-15){print _d}};_n=$0}'
+
+
+#######
+### FIND RASPBERRY PI ON NETWORK
+#######
+(doesn't work on WSL2)
+sudo nmap -sn -T5 192.168.1.0/24 | awk '/^Nmap/{ip=$NF;name=$(NF-1)}/B8:27:EB/{print ip,$0}'
+sudo nmap -sn -T5 10.18.240.0/20 | awk '/^Nmap/{ip=$NF;name=$(NF-1)}/B8:27:EB/{print ip,$0}'
+(example output)
+(192.168.1.117) power-quality-meter.lan MAC Address: B8:27:EB:4A:C9:52 (Raspberry Pi Foundation)

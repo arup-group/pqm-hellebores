@@ -2,138 +2,391 @@
 # Copyright 2024 Arup
 # MIT License
 
-# Controls Pico via communicating with primitive command interface running in 'main.py'
-# on Pico, that implements a limited number of text commands.
+# Controls Pico via communication with a primitive command interface running in
+# 'main.py' on Pico, that implements a limited number of text commands. The
+# 'main.py' program is automatically started on power up and after the reset
+# commands, which are configured in the programs to fire an Exception that
+# restarts the microcontroller.
 
 # On Ubuntu and similar systems, the serial ports have root user permissions.
 # To change this, add ordinary user to the 'dialout' security group.
 # sudo usermod -a -G dialout $USER
 
+# Example command line invocations:
+#
+# Check if Pico is connected and responsive
+#     ./pico_control.py --check_alive
+#
+# Reset Pico via remote command, USB serial, and GPIO/Pico interrupt handler.
+# Note that while "RESET" only works while in the main.py program, --ctrl_c
+# and --hard_reset also should work while running stream.py.
+#     ./pico_control.py --command="RESET"
+#     ./pico_control.py --ctrl_c
+#     ./pico_control.py --hard_reset
+#
+# Commands to start the Pico ADC streamer program with and without parameters
+#     ./pico_control.py --command="START stream.py 1x 1x 1x 1x 7.812k asm_thumb"
+#     ./pico_control.py --command="START stream.py"
+#
+# Manage files stored on the Pico flash disk
+#     ./pico_control.py --command="RENAME stream.py stream_old.py"
+#     ./pico_control.py --command="SHA256 stream.py"
+#     ./pico_control.py --command="CAT stream.py"
+#     ./pico_control.py --command="LISTDIR"
+#     ./pico_control.py --command="REMOVE stream_old.py"
+#     ./pico_control.py --push_file="../pico/stream.py"
+#     ./pico_control.py --push_file_if_needed="../pico/stream.py"
+#     ./pico_control.py --pull_file="stream.py"
+#     ./pico_control.py --verify_file_match="../pico/stream.py"
+#
+# Describe the machine and firmware level, and activate the bootloader to provide
+# mass storage mode (to load new firmware)
+#     ./pico_control.py --command="MACHINE"
+#     ./pico_control.py --command="VERSION"
+#     ./pico_control.py --command="BOOTLOADER"
+
+
 import time
 import sys
 import os
 import argparse
+import hashlib
 import serial
 import serial.tools.list_ports
 
 
-def find_serial_device():
-    '''Determines the serial port that the Pico is connected to. On Ubuntu/Raspberry
-    Pi, serial ports are in the form '/dev/ttyUSBx' or '/dev/ttyACMx', where x is an
-    integer 0-7. On Windows, serial ports are in the form 'COMx' where x is an integer 1-8'''
-    ports = serial.tools.list_ports.comports()
-    port_name = None
-    for port in ports:
-        description = port.description
-        if 'board in fs mode' in description.lower() or 'serial' in description.lower():
-            port_name = port.device
-            break
-    if port_name == None:
-        print(f'Unable to find Pico on available serial ports.', file=sys.stderr)
-    return port_name
+class Pico_control:
+
+    def __init__(self):
+        self.ser = None
+        self.port_name = None
+
+
+    def find_serial_device(self):
+        '''Determines the serial port that the Pico is connected to. On Ubuntu/Raspberry
+        Pi, serial ports are in the form '/dev/ttyUSBx' or '/dev/ttyACMx', where x is an
+        integer 0-7. On Windows, serial ports are in the form 'COMx' where x is an integer 1-8'''
+        ports = serial.tools.list_ports.comports()
+        for port in ports:
+            description = port.description
+            if 'board in fs mode' in description.lower() or 'serial' in description.lower():
+                self.port_name = port.device
+                break
+        if self.port_name == None:
+            print(f'{time.ctime()}: pico_control.py, Pico_control.find_serial_device(): '
+                  f'Unable to find Pico on available serial ports.', file=sys.stderr)
+            return False
+        else:
+            return True
+
+
+    def connect(self):
+        '''Connects to serial port with re-try and backoff in case other services are
+        trying to probe the port.'''
+        sleeping = [ 0.2, 0.3, 0.5, 1.0, 2.0 ]
+        MAX_TRIES = 5
+        this_try = 0
+        # try to connect five times
+        try:
+            connection_success = False
+            while this_try < MAX_TRIES:
+                self.ser = serial.Serial(self.port_name, timeout=None)
+                if self.ser.is_open:
+                    connection_success = True
+                    break
+                time.sleep(sleeping[this_try])
+                this_try += 1
+            return connection_success
+
+        except:
+            print(f'{time.ctime()}: pico_control.py, Pico_control.connect(): '
+                  f'Failed to connect serial interface "{self.port_name}".', file=sys.stderr)
+            return False
+
+
+    def disconnect(self):
+        try:
+            if self.ser:
+                self.ser.close()
+                del self.ser
+            return True
+        except:
+            print(f'{time.ctime()}: pico_control.py, Pico_control.disconnect(): '
+                  f'Error attempting to disconnect serial interface.', file=sys.stderr)
+            return False
+
+
+    def soft_reset(self):
+        '''Pico software is configured to execute a hardware reset from software, if
+        it is running and receives a CTRL-C (SIGINT) \x03 character'''
+        try:
+            self.ser.write(b'\x03')
+            return True
+        except:
+            print(f'{time.ctime()}: pico_control.py, Pico_control.soft_reset(): '
+                  f'Serial port to Pico is not open.', file=sys.stderr)
+            return False
  
+
+    def hard_reset(self):
+        '''The Pico software has a hardware interrupt configured to monitor pin 6.
+        When a rising edge is detected, the ISR will stop and restart the software.
+        Running this function will cycle pin 6 thus triggering the reset routine.'''
+        try:
+            # We import on demand, so that the rest of the program will work on
+            # non Raspberry Pi hardware
+            import RPi.GPIO as gp
+            RESET = 6
+            gp.setmode(gp.BCM)
+            gp.setup(RESET, gp.OUT)
+            # Make sure we start asserted low
+            gp.output(RESET, False)
+            time.sleep(0.05)
+            # Raise high to trigger the Pico ISR with a rising edge.
+            # The Pico verifies that the signal remains asserted high for a period
+            # of time to improve immunity to transient disturbances on the GPIO signal.
+            gp.output(RESET, True)
+            time.sleep(0.2)
+            # return low
+            gp.output(RESET, False)
+            # We leave the output asserted low to enhance signal integrity on
+            # the connection between Pi and Pico (both are ground referenced, but
+            # have different power supply regulator sources).
+            # If we need to release the GPIO, use gp.cleanup(): however this will
+            # reset the Pico a second time and leave the connection with a pull-high
+            # via a resistor in the Pi.
+            return True
+
+        except ModuleNotFoundError:
+            print(f'{time.ctime()}, pico_control.py, Pico_control.hard_reset(): '
+                  f'will only work on PQM hardware.', file=sys.stderr)
+            return False
+
+
+    def check_alive(self):
+            self.send_command(f'MACHINE')
+            response = self.receive_response()
+            print(response)
+            if 'Pico' in response:
+                return True
+            else:
+                print('Pico did not respond.')
+                return False
+
+
+    def send_command(self, command):
+        '''Writes the command to the serial interface'''
+        try:
+            command += '\n'
+            self.ser.write(command.encode('utf-8'))
+            return True
+        except:
+            print(f'{time.ctime()}: pico_control.py, Pico_control.send_command(): '
+                  f'Serial port to Pico is not open.', file=sys.stderr)
+            return False
+
+
+    def verify_file_match(self, filename, pico_filename=None):
+        '''Compares a file to the same file on the Pico flash storage by checking the
+        SHA256 checksum. Uses just the basename of the file as there are no
+        sub-directories on Pico.'''
+        try:
+            if not pico_filename:
+                pico_filename = os.path.basename(filename)
+            with open(filename, 'rb') as f:
+                file_contents = f.read()
+            file_hash = hashlib.sha256(file_contents).hexdigest()
+            # verify the file
+            self.send_command(f'SHA256 {pico_filename}')
+            response = self.receive_response()
+            print(response)
+            if response.split('\n')[-1] == file_hash:
+                print(f'Files match for "{pico_filename}".')
+                return True
+            else:
+                print(f'Files differ for "{pico_filename}".')
+                return False
+
+        except Exception as e:
+            print(f'{time.ctime()}, pico_control.py, Pico_control.verify_file_match(): '
+                  f'failed ("{e}").')
+            return False
+
+
+    def push_file(self, filename):
+        '''Copies a file to the Pico flash storage interface, verifying correct upload.
+        Uses just the basename of the file as there are no sub-directories on Pico.'''
+        try:
+            # read the file and get size and sha256 checksum
+            file_size = os.path.getsize(filename)
+            pico_filename = os.path.basename(filename)
+            command = f'SAVE _{pico_filename} {file_size}\n'
+            with open(filename, 'rb') as f:
+                file_contents = f.read()
+            file_hash = hashlib.sha256(file_contents).hexdigest()
+            # upload the file
+            self.ser.write(command.encode('utf-8') + file_contents)
+            response = self.receive_response()
+            print(response)
+            if response.split('\n')[-1] != 'OK':
+                raise Exception('failed SAVE')
+            # verify the file
+            if not self.verify_file_match(filename, '_' + pico_filename):
+                raise Exception('failed SHA256 comparison')
+            # rename the file
+            self.send_command(f'RENAME _{pico_filename} {pico_filename}')
+            response = self.receive_response()
+            print(response)
+            if response.split('\n')[-1] != 'OK':
+                raise Exception('failed RENAME')
+            return True
+
+        except Exception as e:
+            print(f'{time.ctime()}, pico_control.py, Pico_control.push_file(): '
+                  f'failed to push {filename} ("{e}").')
+            return False
+
+
+    def push_file_if_needed(self, filename):
+        '''Checks file and copies to Pico only if checksum is different.'''
+        if self.verify_file_match(filename):
+            print(f'Skipping copy.')
+            return False
+        else:
+            self.push_file(filename)
+            return True
+
+
+    def pull_file(self, filename):
+        '''Pulls file from Pico and writes to local filesystem, prepending '_' to the
+        filename.'''
+        try:
+            # get the required file from Pico
+            self.send_command(f'CAT {filename}')
+            response = self.receive_response(as_text=False)
+            response_lines = response.decode('utf-8').splitlines(keepends=True)
+            # print the command echo
+            print(response_lines[0].strip())
+            # check for error message in last line of response
+            if 'Failed to read' in response_lines[-1]:
+                print(response_lines[-1].strip())
+                raise Exception(f'failed to read {filename}')
+            else:
+                # remove the first line, which is an echo of the CAT command
+                # and reconstruct the binary file
+                file_contents = b''.join(response_lines[1:])
+            # verify we have copied it over correctly
+            file_hash = hashlib.sha256(file_contents).hexdigest()
+            self.send_command(f'SHA256 {filename}')
+            response = self.receive_response().strip()
+            print(response)
+            if response.split('\n')[-1] != file_hash:
+                raise Exception('failed SHA256 comparison')
+            # save to local, prepending '_' to guard against clobbering local source file
+            with open('_' + filename, 'wb') as f:
+                f.write(file_contents)
+            return True
+
+        except Exception as e:
+            print(f'{time.ctime()}, pico_control.py, Pico_control.pull_file(): '
+                  f'failed to pull {filename} ("{e}").')
+            return False
+
+
+    def receive_response(self, as_text=True):
+        '''Receives response from serial. In case of short pauses, we try reading a
+        few times before exiting. We break out immediately Pico says it is going to
+        send a binary data stream.'''
+        # wait up to 2 seconds for something to arrive
+        wait_attempts = 20
+        response = b''
+        try:
+            while wait_attempts > 0:
+                if self.ser.in_waiting:
+                    _response = self.ser.readline()
+                    # wait up to 1 second after we have got something
+                    wait_attempts = 10
+                    response += _response
+                    if b'**** STARTING BINARY STREAM ****' in _response:
+                        break
+                else:
+                    time.sleep(0.1)
+                    wait_attempts -= 1
+
+        except:
+            print(f'{time.ctime()}, pico_control.py, Pico_control.send_file(): '
+                  f'failed to send the contents of {filename}.')
+
+        finally:
+            if as_text:
+                # For text responses, strip the trailing newline
+                return response.decode('utf-8').strip('\r\n')
+            else:
+                # For binary responses (eg file reads) return as-is
+                return response
+
 
 def get_command_args():
     cmd_parser = argparse.ArgumentParser(description='Communicate with command server on Pico microcontroller.')
-    cmd_parser.add_argument('--hard_reset', action='store_true', help='Toggles GPIO pin to reset the Pico via interrupt service')
+    cmd_parser.add_argument('--hard_reset', action='store_true', help='Toggles GPIO pin to reset the Pico via interrupt service.')
     cmd_parser.add_argument('--ctrl_c', action='store_true', help='Send a CONTROL-C to Pico.')
-    cmd_parser.add_argument('--command', help='Send a command string to Pico')
-    cmd_parser.add_argument('--send_file', help='Send contents of file to Pico')
-    cmd_parser.add_argument('--no_response', action='store_true', help='Transmit only, do not attempt to read response from Pico')
+    cmd_parser.add_argument('--check_alive', action='store_true', help='Check if the Pico command server is responsive.')
+    cmd_parser.add_argument('--command', help='Send a command string to Pico.')
+    cmd_parser.add_argument('--verify_file_match', metavar='FILENAME', help='Verify local and remote file on Pico match.')
+    cmd_parser.add_argument('--push_file', metavar='FILENAME', help='Copy contents of file from local to Pico storage.')
+    cmd_parser.add_argument('--push_file_if_needed', metavar='FILENAME', help='If file is different, copy contents of file from local to Pico storage.')
+    cmd_parser.add_argument('--pull_file', metavar='FILENAME', help='Copy contents of file from Pico to local storage.')
     program_name = cmd_parser.prog
     args = cmd_parser.parse_args()
     return (program_name, args)
 
 
-def hard_reset():
-    '''The Pico software has a hardware interrupt configured to monitor pin 6.
-    When a rising edge is detected, the ISR will stop and restart the software.
-    Running this function will cycle pin 6 thus triggering the reset routine.'''
-    try:
-        # We import on demand, so that the rest of the program will work on
-        # non Raspberry Pi hardware
-        import RPi.GPIO as gp
-        RESET = 6
-        gp.setmode(gp.BCM)
-        gp.setup(RESET, gp.OUT)
-        # make sure we start asserted low
-        gp.output(RESET, False)
-        # raise high to trigger the Pico ISR with a rising edge
-        gp.output(RESET, True)
-        # the Pico verifies that the signal remains asserted high for a period of time
-        time.sleep(0.2)
-        # return low
-        gp.output(RESET, False)
-        # We leave the output asserted low to enhance signal integrity on
-        # the connection between Pi and Pico (both are ground referenced, but
-        # have different power supply regulator sources).
-        # If we need to release the GPIO, use gp.cleanup() however this will
-        # leave the connection with a pull-high via a resistor in the Pi.
-    except ModuleNotFoundError:
-        print(f'{program_name}, hard_reset(): will only work on PQM hardware.', file=sys.stderr)
-    
-
-def send_command(ser, command):
-    '''Writes the command to the serial interface'''
-    command += '\n'
-    ser.write(command.encode('utf-8'))
-
-
-def send_file(ser, filename):
-    '''Writes the contents of a file to the serial interface.'''
-    try:
-        with open(filename, 'rb') as f:
-            file_contents = f.read()
-        ser.write(file_contents)
-    except OSError:
-        print(f'{program_name}, send_file(): failed to send the contents of {filename}.')
- 
-
-def receive_response(ser):
-    '''Receives response from serial. In case of short pauses, we try reading a
-    few times before exiting'''
-    wait_attempts = 20
-    while wait_attempts > 0:
-        while ser.in_waiting:
-            # We get rid of Pico style CRLF endings and add system native line-endings
-            response = ser.readline().decode('utf-8').strip('\r\n')
-            print(response)
-            wait_attempts = 20
-        time.sleep(0.1)
-        wait_attempts -= 1
-
-
 def main():
     '''Reads command line and resets Pico and/or sends a command to the primitive
     server program running on Pico at startup.'''
-    global program_name
-    program_name, args = get_command_args()
-    # if hard reset is requested, attempt to reset Pico before checking to
+    _, args = get_command_args()
+    # Get an instance of Pico_control object
+    pico = Pico_control()
+    status = True
+    # if a hard reset is requested, attempt to reset Pico before checking to
     # see if the serial interface is up/exists 
     if args.hard_reset:
-        hard_reset()
+        status &= pico.hard_reset()
         time.sleep(2)
-    port_name = find_serial_device()
-    if port_name:
+    if pico.find_serial_device() and pico.connect():
         try:
-            # this order of processing allows 'SAVE' command to precede file transfer
-            # in a combined command line
-            ser = serial.Serial(port_name)
             if args.ctrl_c:
-                ser.write(b'\x03')
+                status &= pico.soft_reset()
+                time.sleep(2)
+            if args.check_alive:
+                status &= pico.check_alive()
             if args.command:
-                send_command(ser, args.command)
-            if args.send_file:
-                send_file(ser, args.send_file)
-            if not args.no_response:
-                receive_response(ser)
+                status &= pico.send_command(args.command) and print(pico.receive_response())
+            if args.verify_file_match:
+                status &= pico.verify_file_match(args.verify_file_match)
+            if args.push_file:
+                status &= pico.push_file(args.push_file)
+            if args.push_file_if_needed:
+                status &= pico.push_file_if_needed(args.push_file_if_needed)
+            if args.pull_file:
+                status &= pico.pull_file(args.pull_file)
+
         except OSError:
-            print(f'{program_name}, main(): Serial comms error.', file=sys.stderr)
-            sys.exit(1)
+            print(f'{time.ctime()}, pico_control.py, main(): '
+                  f'Error processing {args}.', file=sys.stderr)
+            status &= False
         finally:
             # make sure we have closed the port if it was opened
-            if 'ser' in locals():
-                ser.close()
+            pico.disconnect()
+    else:
+        print(f'{time.ctime()}, pico_control.py, main(): '
+              f'Could not find or connect to Pico.', file=sys.stderr)
+
+    # Return success or failure status to the shell
+    if status:
+        sys.exit(0)
+    else:
+        sys.exit(1)
 
 
 if __name__ == '__main__':

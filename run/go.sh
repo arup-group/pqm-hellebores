@@ -1,5 +1,28 @@
 #!/bin/bash
 
+#
+#                   _
+#   __ _  ___   ___| |__
+#  / _` |/ _ \ / __| '_ \
+# | (_| | (_) |\__ \ | | |
+#  \__, |\___(_)___/_| |_|
+#  |___/
+#
+
+redirect_errors () {
+    # stderr file descriptor is number 2. Duplicate this file descriptor 2 to 4
+    # (ie save a copy of it) then redirect 2 to file, so that we catch error
+    # messages in a log file
+    exec 4>&2 2>>"$1"
+}
+
+
+restore_errors () {
+    # Restore stderr file descriptor 2 from saved state on 4, then delete fd 4
+    exec 2>&4 4>&-
+}
+
+
 # Increase the number of file descriptors that we can have in the current shell
 ulimit -n 2048
 
@@ -13,8 +36,8 @@ fi
 
 # Find current working directory and absolute paths of script and program file directories
 CWD="$(pwd)"
-SCRIPT_DIR="$(realpath $(dirname $0))"
-PROGRAM_DIR="$(realpath $SCRIPT_DIR/../pqm)"
+SCRIPT_DIR=$(realpath "$(dirname $0)")
+PROGRAM_DIR=$(realpath "$SCRIPT_DIR/../pqm")
 
 # Change to the program directory
 cd "$PROGRAM_DIR"
@@ -30,10 +53,8 @@ export PYGAME_HIDE_SUPPORT_PROMPT=hide
 # Figure out if we are running on real hardware or not
 grep --ignore-case raspberry '/sys/firmware/devicetree/base/model' &> /dev/null
 if [[ $? -eq 0 ]]; then
-    real_hardware=true
     READER="./reader.py"
 else
-    real_hardware=false
     READER="./rain_chooser.py"
 fi
 
@@ -69,12 +90,9 @@ ANALYSIS_PIPE="$TEMP/analysis_pipe"
 ANALYSIS_LOG_FILE="$TEMP/pqm.$$.csv"
 ERROR_LOG_FILE="$TEMP/error.log"
 
-# Clear old log file
-[[ -e "$ERROR_LOG_FILE" ]] && rm "$ERROR_LOG_FILE"
-# stderr file descriptor is number 2. Duplicate this file descriptor 2 to 4
-# (ie save a copy of it) then redirect 2 to file, so that we catch error
-# messages in a log file
-exec 4>&2 2>"$ERROR_LOG_FILE"
+# Redirect stderr to the ERROR_LOG_FILE
+redirect_errors $ERROR_LOG_FILE
+
 
 # If they don't already exist, create named pipes (fifos) to receive data from
 # the waveform and calculation processes
@@ -82,6 +100,7 @@ for PIPE_FILE in "$WAVEFORM_PIPE" "$ANALYSIS_PIPE"; do
     [[ -e "$PIPE_FILE" ]] || mkfifo "$PIPE_FILE"
     if [[ $? -ne 0 ]]; then
         echo "$0: There was an error creating a pipe file. Check your filesystem supports this." 1>&2
+        restore_errors
         exit 1
     fi
 done
@@ -90,13 +109,12 @@ done
 ./version.py && echo ""
 ./settings.py && echo ""
 
-# Run the capture and analysis, feeding two pipe files,
-# then pass both pipes as parameters to the GUI
-echo "Starting processing..."
-echo "Measurement source   : $READER"
-echo "Analysis log file    : $ANALYSIS_LOG_FILE"
-echo "Waveform pipe file   : $WAVEFORM_PIPE"
-echo "Analysis pipe file   : $ANALYSIS_PIPE"
+
+echo "Starting processing..." | tee -a /dev/fd/2
+echo "Measurement source   : $READER" | tee -a /dev/fd/2
+echo "Analysis log file    : $ANALYSIS_LOG_FILE" | tee -a /dev/fd/2
+echo "Waveform pipe file   : $WAVEFORM_PIPE" | tee -a /dev/fd/2
+echo "Analysis pipe file   : $ANALYSIS_PIPE" | tee -a /dev/fd/2
 
 ####
 # This is where we actually start the programs
@@ -108,12 +126,8 @@ echo "Analysis pipe file   : $ANALYSIS_PIPE"
 # pipelines moving.
 ####
 
-# Reset the Pico and start streaming.
-if $real_hardware; then
-    ./pico_control.py --hard_reset
-    ./pico_control.py --command "START stream.py 1x 1x 1x 1x 7.812k" --no_response
-fi
-
+# Run the capture and analysis, feeding two pipe files,
+# then pass both pipes as parameters to the GUI
 # Plumbing, pipe, pipe, pipe...
 "$READER" \
     | ./scaler.py | tee >(./framer.py > "$WAVEFORM_PIPE") \
@@ -130,16 +144,15 @@ fi
 # We'll check it's status shortly
 exit_code=$?
 
-# Restore stderr file descriptor 2 from saved state on 4, then delete fd 4
-exec 2>&4 4>&-
 
 # Now check the exit code
 # 2: Restart
 if [[ $exit_code -eq 2 ]]; then
     # Trampoline: reload the launch script (this file) and run again
-    echo "Restarting $0 in 5s..."
+    echo "Restarting $0 in 5s..." 1>&2
     sleep 5
     cd "$CWD"
+    restore_errors
     exec "$0"
 
 # 3: Software update
@@ -150,32 +163,31 @@ elif [[ $exit_code -eq 3 ]]; then
     if [[ $? -ne 0 ]]; then
         branch="main"
     fi
-    echo "Updating software to Github $branch branch HEAD..."
+    echo "Updating software to Github $branch branch HEAD..." 1>&2
     git fetch origin
     git reset --hard "origin/$branch"
     # Trampoline: reload the launch script and run again
-    echo "Restarting $0 in 5s..."
+    echo "Restarting $0 in 5s..." 1>&2
     sleep 5
     cd "$CWD"
+    restore_errors
     exec $0
 
 # 4: Shutdown
 elif [[ $exit_code -eq 4 ]]; then
-    echo "Shutting down system..."
+    echo "Shutting down system..." 1>&2
+    restore_errors
     exec sudo shutdown -h now
 
 # Some other exit code: We have no idea what happened
 elif [[ $exit_code -ne 0 ]]; then
-    echo "The program quit with an unexpected exit code $exit_code. Not good."
-    echo "Here's the error log file $ERROR_LOG_FILE, hope it helps :-)"
-    cat "$ERROR_LOG_FILE"
-    sleep 60
+    echo "The program quit with an unexpected exit code $exit_code. Not good." 1>&2
     cd "$CWD"
+    restore_errors
     exit $exit_code
 fi
 
 # 0: Exit normally
 cd "$CWD"
-echo "Exited."
-
-
+echo "Exited." 1>&2
+restore_errors

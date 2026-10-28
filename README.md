@@ -85,7 +85,23 @@ mkdir /home/pi/.config/autostart
 ln -s /home/pi/pqm-hellebores/run/pqm-launcher.desktop /home/pi/.config/autostart/pqm-launcher.desktop
 ```
 
-10. Update the Raspberry Pi OS.
+10. Disable the swap space.
+```
+sudo sed -i 's/^#*.*CONF_SWAPSIZE.*/CONF_SWAPSIZE=0/' /etc/dphys-swapfile
+```
+
+11. Limit logging capacity and do not write to SD card.
+```
+sudo sed -i \
+  -e 's/^#*Storage=.*/Storage=volatile/' \
+  -e 's/^#*RuntimeMaxUse=.*/RuntimeMaxUse=16M/' \
+  -e 's/^#*ForwardToConsole=.*/ForwardToConsole=no/' \
+  -e 's/^#*ForwardToWall=.*/ForwardToWall=no/' \
+  /etc/systemd/journald.conf
+sudo rm -rf /var/log/journal && sudo systemctl restart systemd-journald
+```
+
+12. Update the Raspberry Pi OS.
 
 The OS can be updated from the menu at the top. Alternatively, from a terminal:
 ```

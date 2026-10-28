@@ -5,6 +5,8 @@ import sys
 import os
 import math
 import json
+import re
+import select
 
 # local
 from constants import *
@@ -18,13 +20,13 @@ DISCARD_SAMPLES           = 5000
 READER                    = 'reader.py'
 READER_TEST               = 'rain_chooser.py'    # use this for testing
 WIP_FILE                  = 'calibrator_wip.json'
-
+MULTIMETER_PIPE_FILE      = '/run/shm/pqm-hellebores/multimeter_pipe_file'
 
 
 class WIP:
-    # calibration constants for channels 0-3
-    # these local constants are cached in a file so that they can be accessed
-    # during successive runs of calibrator.py
+    """work-in-progress calibration constants for channels 0-3.
+    These local constants are cached in a file so that they can be accessed
+    during successive runs of calibrator.py"""
     offsets = [ 0, 0, 0, 0 ]
     gains = [ 1.0, 1.0, 1.0, 1.0 ]
     skew_times = [ 0.0, 0.0, 0.0, 0.0 ]
@@ -38,26 +40,43 @@ class WIP:
         self.identity = st.identity
         self.read()
 
+    def calibration_dictionary(self):
+        return {f'{self.identity}':{'offsets':self.offsets, 'gains':self.gains, 'skew_times':self.skew_times}}
+
     def write(self):
         try:
             with open(WIP_FILE, 'w') as f:
-                f.write(json.dumps({'offsets':self.offsets, 'gains':self.gains,
-                    'skew_times':self.skew_times}))
-            print(f"calibrator.py: work in progress written.", file=sys.stderr)
+                f.write(json.dumps(self.calibration_dictionary()))
+                f.write('\n')
+            print(f"calibrator.py: work-in-progress file {WIP_FILE} written.")
         except:
             print(f"calibrator.py, WIP.write(): Couldn't write "
                 f"to cache file {WIP_FILE}.", file=sys.stderr)
 
     def read(self):
-        status = False
         try:
             with open(WIP_FILE, 'r') as f:
                 wip_file = json.loads(f.read())
-                self.offsets, self.gains, self.skew_times = wip_file.values()
+                # the first and only key should be the identity
+                self.identity = list(wip_file.keys())[0]
+                # then the values are keyed on the identity
+                self.offsets = wip_file[self.identity]['offsets']
+                self.gains = wip_file[self.identity]['gains']
+                self.skew_times = wip_file[self.identity]['skew_times']
             status = True
         except:
-            print(f"calibrator.py: no work in progress found.", file=sys.stderr)
+            print(f"calibrator.py: no work-in-progress found.")
+            status = False
         return status
+
+    def set(self, channel, text):
+        try:
+            value = float(text)
+            # keep the setting truncated to 3dp
+            self.gains[channel] = round(value * 1000) / 1000.0
+        except ValueError:
+            print(f"calibrator.py, WIP.set(): Value entered wasn't recognised.", file=sys.stderr)
+
 
 def is_raspberry_pi():
     try:
@@ -73,13 +92,28 @@ def resolve_path(path, file):
     return os.path.abspath(file_path)
 
 
+def get_average_reading_from_multimeter(multimeter_pipe_file):
+    """Using a given pipe file, return all the readings in it as a list of strings."""
+    try:
+        with open(multimeter_pipe_file, 'r') as f:
+            multimeter_readings = []
+            # only read if there is some data waiting, don't block
+            while select.select([f], [], [], 0)[0] != []:
+                multimeter_readings.append(float(f.readline()))
+        average_multimeter_reading = sum(multimeter_readings) / len(multimeter_readings)
+    except (FileNotFoundError, IOError, ValueError):
+        average_multimeter_reading = None
+    return average_multimeter_reading
+
+
 def get_lines_from_reader(number_of_lines):
+    """Retrieves a specific number of sample lines from the reader program, which is
+    run as a sub-process."""
     pyth = sys.executable
     if is_raspberry_pi():
         reader = resolve_path('.', READER)
     else:
         reader = resolve_path('.', READER_TEST)
-    print('Receiving', end='')
     # receive the measurements
     try:
         process = subprocess.Popen(f'{pyth} {reader}',
@@ -93,7 +127,7 @@ def get_lines_from_reader(number_of_lines):
         lines = []
         for i in range(number_of_lines):
             if i % 2000 == 0:
-                sys.stdout.write('.')
+                sys.stdout.write('-')
                 sys.stdout.flush()
             line = process.stdout.readline()
             # check if readline() returned empty bytestring: indicates subprocess terminated
@@ -102,7 +136,7 @@ def get_lines_from_reader(number_of_lines):
                 raise EOFError
             else:
                 lines.append(line)
-        print(f' {len(lines)} samples, done.\n')
+        sys.stdout.write('>')
     except EOFError:
         print(f'{os.path.basename(__file__)}, get_lines_from_reader(): Reader program terminated.', file=sys.stderr)
         raise ValueError    # bump the error to caller, we need to exit.
@@ -112,7 +146,7 @@ def get_lines_from_reader(number_of_lines):
 
 
 def lines_to_samples(lines):
-
+    """Converts from two's complement hex words to real number integer values"""
     def from_twos_complement(v):
         return -(v & 0x8000) | (v & 0x7fff)
 
@@ -127,14 +161,19 @@ def lines_to_samples(lines):
 
 
 def scaled(wip, samples):
+    """Applies work-in-progress calibration constants to an array of samples."""
     scaled_samples = []
-    for ns in samples:
-        scaled_samples.append([ h*g*(n+o) for h,g,o,n
-            in zip(HARDWARE_SCALE_FACTORS, wip.gains, wip.offsets, ns) ])
+    for vs in samples:
+        # The sample values in each line are first zipped into tuples with the appropriate
+        # calibration contants and then an adjusted value calculated
+        scaled_samples.append([ h*g*(v+o) for h,g,o,v
+            in zip(HARDWARE_SCALE_FACTORS, wip.gains, wip.offsets, vs) ])
     return scaled_samples
 
 
 def samples_to_rms(wip, samples):
+    """Using a work-in-progress calibration object and list of samples, determines the RMS
+    amplitude of the samples for each channel."""
     number_of_samples = len(samples)
     scaled_samples = scaled(wip, samples)
     sum_of_squares = [0,0,0,0]
@@ -146,11 +185,13 @@ def samples_to_rms(wip, samples):
 
 
 def samples_to_offsets(samples):
+    """From an array of samples, calculates the average dc value and corrective offset
+    required for the sum to be zero."""
     number_of_samples = len(samples)
     accumulators = [0,0,0,0]
     for ns in samples:
         accumulators = [ a+n for a,n in zip(accumulators, ns) ]
-    offsets = [ round(-n/number_of_samples) for n in accumulators ]
+    offsets = [ round(-acc/number_of_samples) for acc in accumulators ]
     return offsets
 
 
@@ -205,27 +246,52 @@ Select option, or 'q' to quit:
 
 def offset_calibration(wip):
     # offset report
+    input(f'Offsets O[0-3] = {wip.offsets}. Press Enter to start.')
     samples = lines_to_samples(get_lines_from_reader(ONE_MINUTE_OF_SAMPLES))
-    offsets = samples_to_offsets(samples)
-    print(f'Calculated O[0-3] = {offsets}')
+    wip.offsets = samples_to_offsets(samples)
+    print(f' New calculated offsets O[0-3] = {wip.offsets}')
 
-def voltage_calibration(wip):
+def gain_calibration(wip, channel):
+    input(f'O{channel} = {wip.offsets[channel]}, G{channel} = {wip.gains[channel]}. Press Enter to start.')
     while 1:
-        choice = input("'h' to increase, 'l' to lower, 'Enter' to repeat, 'q' to quit. ")
-        if choice == 'q':
-            break
+        print(f'O{channel} = {wip.offsets[channel]}, G{channel} = {wip.gains[channel]}: ', end='')
+        # discard any readings that may be present in the multimeter pipe
+        get_average_reading_from_multimeter(MULTIMETER_PIPE_FILE)
+        # retrieve a block of readings from the PQM reader
         samples = lines_to_samples(get_lines_from_reader(TEN_SECONDS_OF_SAMPLES))
         rmses = samples_to_rms(wip, samples)
-        print(f'Voltage with O3 = {wip.cal_offsets[3]}, G3 = {wip.cal_gains[3]}: {rmses[3]}')
+        print(f' Adjusted reading = {rmses[channel]:5g}', end='')
+        # if there is a multimeter pipe, get the average reading over the same period and display it
+        # for comparison
+        average_multimeter_reading = get_average_reading_from_multimeter(MULTIMETER_PIPE_FILE)
+        if average_multimeter_reading != None:
+            error = (rmses[channel] - average_multimeter_reading) / average_multimeter_reading * 100
+            print(f', multimeter reading = {average_multimeter_reading}', end='')
+            if error > 0.05:
+                print(f', {error}%, adjust 👇')
+            elif error < -0.05:
+                print(f', {error}%, adjust 👆')
+            else:
+                print(', {error}% ✋')
+        else:
+            print('')
+        choice = input(f"Enter a new value for G{channel} (empty to repeat) or 'q' to quit. ")
+        if choice == 'q':
+            break
+        elif re.match(r'^[0-9]+\.[0-9]*$', choice):
+            wip.set(channel, choice)
+
+def voltage_calibration(wip):
+    gain_calibration(wip, 3)
 
 def current_full_calibration(wip):
-    pass
+    gain_calibration(wip, 2)
 
 def current_low_calibration(wip):
-    pass
+    gain_calibration(wip, 1)
 
 def current_earthleakage_calibration(wip):
-    pass
+    gain_calibration(wip, 0)
 
 
 def main():
@@ -236,7 +302,8 @@ def main():
                               current_earthleakage_calibration ]
     calibration_functions[index](wip)
     wip.write()
-    print("When you are done with calibrating, copy the values in calibrator_wip.json to "
+    print(wip.calibration_dictionary())
+    print("When you are done with calibrating, transfer the values to "
           "configuration/calibrations.json and commit to repository.")
 
 if __name__ == '__main__':

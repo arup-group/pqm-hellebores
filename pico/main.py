@@ -141,7 +141,8 @@ def process_command(command_string):
         try:
             with open(filename) as f:
                 file_contents = f.read()
-            command_status = file_contents
+            print(file_contents, end='')
+            command_status = ''
         except:
             command_status = f'Failed to read {filename}'
     elif command == 'MACHINE' and len(arguments) == 0:
@@ -153,19 +154,36 @@ def process_command(command_string):
         machine.bootloader()
     else:
         command_status = f'Error: failed to parse {words}.'
-    print(command_status)
+    if command_status != '':
+        print(command_status)
 
    
 # Run from here
 try:
     configure_reset_interrupt('enable')
     print('Control program main.py started on Pico.')
+    reset = False
     while True:
         command_string = read_command()
         process_command(command_string)
-except KeyError:
-    print('Interrupted.')
+
+except KeyboardInterrupt:
+    # Catch CTRL-C here and reset the machine
+    print('Resetting the machine shortly...')
+    time.sleep(1)
+    reset = True
+
+except Exception as e:
+    print(f'Pico main(): Interrupted because of "{e}".')
+    print('Will proceed to reset in 60 seconds...')
+    # Enables break out if working from the REPL
+    time.sleep(60)
+    reset = True
+
 finally:
     pins['pico_led'].low()
-    # leave the reset interrupt enabled, even when returning to the REPL.
-    #configure_reset_interrupt('disable')
+    # disable the reset interrupt if returning to the REPL.
+    if not reset:
+        configure_reset_interrupt('disable')
+    else:
+        machine.reset()

@@ -44,7 +44,7 @@ To open the notebook, navigate to this folder on your computer and type `jupyter
 | :---------------------------- | :---------------------------- |
 | `analysis_pipe` | Named pipe that transmits measurements from `analyser.py` to `hellebores.py`. |
 | `waveform_pipe` | Named pipe that transmits waveforms from `framer.py` to `hellebores.py`. |
-| `error.log` | Output to `stderr` is redirected to this file by the `go.sh` script. The file can help with tracing bugs. |
+| `error.log` | Output to `stderr` is redirected to this file by the `go.sh` and `pqm-launcher.sh` scripts. The file can help with tracing bugs. |
 | `pqm.nnnn.csv` | CSV file with a log of measurement results from `analyser.py`. nnnn corresponds to the PID of analysis_to_csv.py. |
 | `settings.json` | Copy of `configuration/settings.json` but updated dynamically according to user input. This is the means of communicating changes of settings to programs in the pipeline. |
 
@@ -61,7 +61,6 @@ To open the notebook, navigate to this folder on your computer and type `jupyter
 | :---------------------------- | :---------------------------- |
 | `reader.py` | Receives binary data from the USB serial port and outputs as hex text, four channels per line. |
 | `scaler.py` | Converts data received from `reader.py` to floating point decimal. Applies scaling and calibration constants. Adds 'time axis' and instantaneous power to the stream. |
-| `scaler_np.py` | Alternative implementation of `scaler.py` that uses numpy to do the transformation in an array. Turned out slower than native solution. Not used, but retained for reference. |
 | `framer.py` | Receives data from `scaler.py` and processes into waveform 'frames'. Implements a trigger to align successive frames on screen. Outputs pixel coordinates that are used for plotting waveforms. |
 | `analyser.py` | Receives data from `scaler.py` and processes to calculate electrical measurements. |
 | `analysis_to_csv.py` | Receives data from `analyser.py` and formats for `.csv` file. |
@@ -89,6 +88,7 @@ To open the notebook, navigate to this folder on your computer and type `jupyter
 | `go.bat` | Run script for Windows, sorts out working directory and environment, then hands off to `go.py`. |
 | `go.py` | Run script for Windows. |
 | `pqm-launcher.sh` | Launcher script that presents version information and startup buttons. |
+| `pico_update.sh` | Script to verify files stored on the Pico flash storage and update to current version if necessary. Communicates with `main.py` running on Pico to do this. |
 | `pqm-launcher.desktop` | Desktop file for `pqm-launcher.sh` that is added to the menu and autostart feature of Pi. |
 | `hellebores.desktop` | Desktop file for `go.sh` that is added to the menu of Pi. |
 | `pqm.ico` | Project icon. |
@@ -103,4 +103,5 @@ To open the notebook, navigate to this folder on your computer and type `jupyter
 | `line_speed.py` | Attached to the end of a pipeline, reports on the number of lines per second received. Used to help verify performance of processing. |
 | `raw_reader.py` | Reads from serial port in raw binary format, and passes through to `stdout`. |
 | `push_settings.sh` | Sends the `SIGUSR1` signal. Used for testing the `settings.py` update functions. |
-| `pico_update.sh` | Script to verify files stored on the Pico flash storage and update to current version if necessary. Communicates with `main.py` running on Pico to do this. |
+| `pdf_it.sh` | One-liner bash command to convert `.py` files to `.pdf` files. |
+| `fluke_reader.py` | Program to read at intervals from a Fluke 45 multimeter. |
